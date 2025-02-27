@@ -1,5 +1,60 @@
+@import url('https://fonts.googleapis.com/css2?family=Keania+One&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Saira+Stencil+One&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Genos', sans-serif;
+    background-color: #FFFFFF;
+    color: #2C3333 !important;
+}
+
+.quantifore-heading {
+    font-family: 'Keania One', cursive;
+}
+
+.allow-sidebar-overlap {
+    z-index: 10;
+    position: relative;
+}
+
+.sidebar {
+    z-index: 5;
+}
+
+:root {
+  --body-bg: var(--background);
+  --navbar-bg: var(--navbar);
+  --navbar-text: var(--background);
+  
+  --main-node: var(--main-node);
+  --node-1: var(--node-color-1);
+  --node-2: var(--node-color-2);
+  --node-3: var(--node-color-3);
+  --node-glow: rgba(106, 149, 143, 0.2);
+  
+  --button-primary: var(--button-primary);
+  --button-hover: #587b76;
+  --button-text: var(--background);
+  
+  --text-primary: #2C3333;
+  --text-secondary: #5C6B6B;
+  
+  --card-bg: var(--background);
+  --card-border: var(--light-gray);
+  --hover-effect: rgba(106, 149, 143, 0.1);
+}
+
+.navbar {
+  background-color: var(--navbar-bg) !important;
+  color: var(--navbar-text) !important;
+}
+
+.button {
+  background-color: var(--button-primary) !important;
+  color: var(--button-text) !important;
+}

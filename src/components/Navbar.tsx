@@ -18,21 +18,21 @@ const Navbar: React.FC<NavbarProps> = ({ showLogo = true, showTabs = true, onSig
   };
 
   return (
-    <nav className="navbar bg-slate-800 text-slate-300 shadow-md p-4 flex justify-between items-center" style={{ minHeight: "75px" }}>
-      {showLogo && <div className="navbar-brand text-2xl font-bold quantifore-heading">QUANTIFORE</div>}
+    <nav className="bg-navbar text-text-primary shadow-md p-4 flex justify-between items-center" style={{ minHeight: "75px" }}>
+      {showLogo && <div className="navbar-brand text-4xl font-bold tracking-widest" style={{ fontFamily: 'Saira Stencil One, sans-serif' }}>QUANTIFORE</div>}
 
       {showTabs ? (
-        <div className="navbar-tabs flex gap-8">
-          <Link to="/main" className="tab cursor-pointer hover:text-white">Graph</Link>
-          <Link to="/playground" className="tab cursor-pointer hover:text-white">Playground</Link>
-          <Link to="/contact" className="tab cursor-pointer hover:text-white">Contact</Link>
-          <button onClick={handleSignOut} className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+        <div className="navbar-tabs flex gap-8 items-center">
+          <Link to="/main" className="tab cursor-pointer hover:text-sage-green">Graph</Link>
+          <Link to="/playground" className="tab cursor-pointer hover:text-sage-green">Playground</Link>
+          <Link to="/contact" className="tab cursor-pointer hover:text-sage-green">Contact</Link>
+          <button onClick={handleSignOut} className="bg-button-primary hover:bg-dark-button text-white font-bold py-2 px-4 rounded">
             Sign Out
           </button>
         </div>
       ) : (
         onSignOut && (
-          <button onClick={handleSignOut} className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+          <button onClick={handleSignOut} className="bg-button-primary hover:bg-dark-button text-white font-bold py-2 px-4 rounded">
             Sign Out
           </button>
         )

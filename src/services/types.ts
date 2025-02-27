@@ -3,11 +3,14 @@ export interface Relationship {
     weight: number;
     flow: number;
   }
-  
+  interface value{
+    value:number,
+    unit:string
+  }
   export interface Stock {
     guid: string;
     name: string;
-    value?: string;
+    value?: string| number;
     context?: string;
     relationship?: Relationship;
   }
@@ -22,12 +25,12 @@ export interface Relationship {
     y: string | number | boolean | readonly (string | number)[] | null;
     id: string;
     name: string;
-    value?: string;
+    value?: value;
     context?: string;
     isCenter?: boolean;
     relationship?: Relationship;
   }
-  
+
   export interface LinkData {
     source: string;
     target: string;
