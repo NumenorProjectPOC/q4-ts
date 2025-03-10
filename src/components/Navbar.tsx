@@ -11,6 +11,7 @@ const Navbar: React.FC<NavbarProps> = ({ showLogo = true, showTabs = true, onSig
   const navigate = useNavigate();
 
   const handleSignOut = () => {
+    sessionStorage.clear();
     if (onSignOut) {
       onSignOut();
     }
