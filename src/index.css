@@ -89,3 +89,18 @@ body {
   background-color: var(--button-primary) !important;
   color: var(--button-text) !important;
 }
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(to right, #3b82f6, #ec4899);
+  cursor: pointer;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.2), 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+input[type=range]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 0 5px rgba(59, 130, 246, 0.2);
+}

@@ -1,20 +1,26 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import * as d3 from 'd3';
 import { GraphData, NodeData, LinkData } from '../services/types';
-import formatStockName from '../utils/utility';
+import { formatLargeNumber, formatStockName } from '../utils/utility';
 
 interface GraphComponentProps {
     graphData: GraphData | null;
     selectedElement: NodeData | LinkData | null;
     setSelectedElement: (element: NodeData | LinkData | null) => void;
     sidebarWidth: number;
+    nodeValueChangeCallback: (nodeId: string, newValue: number) => void;
+    simulationSettings: { value: number, timeUnit: string };
+    simulationValue: number;
+    runSimulation: boolean;
 }
 
-const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElement, setSelectedElement, sidebarWidth }) => {
+const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElement, setSelectedElement, sidebarWidth, nodeValueChangeCallback, simulationSettings, simulationValue, runSimulation }) => {
     const svgRef = useRef<SVGSVGElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [nodeColors, setNodeColors] = useState<Record<string, [string, string]>>({});
     const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
+    const [animatedValues, setAnimatedValues] = useState<Record<string, number>>({});
+    const [initialRender, setInitialRender] = useState(true);
 
     // Calculate container dimensions and observe changes
     useEffect(() => {
@@ -47,7 +53,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
     const nodes: any[] = useMemo(() => {
         if (!graphData) return [];
 
-        return [
+        const primaryNodes = [
             {
                 id: graphData.stock.guid,
                 name: graphData.stock.name,
@@ -63,12 +69,29 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
                 relationship: stock.relationship
             }))
         ];
+
+        // Add secondary related stocks with faded styling
+        const secondaryNodes = graphData.related_stocks.flatMap(stock => {
+            if (stock.related_stocks) {
+                return stock.related_stocks.map(secondaryStock => ({
+                    id: secondaryStock.guid,
+                    name: secondaryStock.name,
+                    value: secondaryStock.value,
+                    context: secondaryStock.context,
+                    relationship: secondaryStock.relationship,
+                    isSecondary: true // Flag to apply different styling
+                }));
+            }
+            return [];
+        });
+
+        return [...primaryNodes, ...secondaryNodes];
     }, [graphData]);
 
     const links: any[] = useMemo(() => {
         if (!graphData) return [];
 
-        return graphData.related_stocks.map(stock => ({
+        const primaryLinks = graphData.related_stocks.map(stock => ({
             source: graphData.stock.guid,
             target: stock.guid,
             impact: stock.relationship?.impact || 'neutral',
@@ -76,27 +99,54 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
             flow: stock.relationship?.flow || 0,
             name: `Influence from ${graphData.stock.name} to ${stock.name}`
         }));
+
+        // Add links from related stocks to their related stocks
+        const secondaryLinks = graphData.related_stocks.flatMap(stock => {
+            if (stock.related_stocks) {
+                return stock.related_stocks.map(secondaryStock => ({
+                    source: stock.guid,
+                    target: secondaryStock.guid,
+                    impact: secondaryStock.relationship?.impact || 'neutral',
+                    weight: secondaryStock.relationship?.weight || 0,
+                    flow: secondaryStock.relationship?.flow || 0,
+                    name: `Influence from ${stock.name} to ${secondaryStock.name}`,
+                    isSecondary: true // Flag to apply different styling
+                }));
+            }
+            return [];
+        });
+
+        return [...primaryLinks, ...secondaryLinks];
     }, [graphData]);
 
     useEffect(() => {
         if (!graphData) return;
 
-        // Cyberpunk color palette
         const availableColors: [string, string][] = [
-            ['#00FFFF', '#0088FF'], // Cyan to blue
-            ['#FF00FF', '#FF0088'], // Magenta to pink
-            ['#121212', '#2A2A2A'], // Dark gray gradient
+            ['#B8D7D9', d3.color('#B8D7D9')!.darker(0.7).toString()],
+            ['#F5D6D6', d3.color('#F5D6D6')!.darker(0.7).toString()],
+            ['#E5E5E5', d3.color('#E5E5E5')!.darker(0.7).toString()],
         ];
 
-        const initialNodeColors: Record<string, [string, string]> = {};
+        let initialNodeColors: Record<string, [string, string]> = {};
         const storedNodeColors = localStorage.getItem('nodeColors');
 
         if (storedNodeColors) {
-            setNodeColors(JSON.parse(storedNodeColors));
-        } else {
+            try {
+                initialNodeColors = JSON.parse(storedNodeColors);
+                setNodeColors(initialNodeColors);
+            } catch (error) {
+                console.error("Error parsing node colors from local storage:", error);
+                // If parsing fails, proceed with initial color assignment
+                initialNodeColors = {};
+            }
+        }
+
+        // Assign colors if not found in local storage or after parsing failure
+        if (Object.keys(initialNodeColors).length === 0) {
             nodes.forEach(node => {
                 if (node.isCenter) {
-                    initialNodeColors[node.id] = ['#1E1E1E', '#3A3A3A']; // Dark center node
+                    initialNodeColors[node.id] = ['#6A958F', d3.color('#6A958F')!.darker(0.7).toString()];
                 } else {
                     const colorIndex = Math.floor(Math.random() * availableColors.length);
                     initialNodeColors[node.id] = availableColors[colorIndex];
@@ -105,47 +155,28 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
 
             localStorage.setItem('nodeColors', JSON.stringify(initialNodeColors));
             setNodeColors(initialNodeColors);
+        } else {
+            // Ensure that all nodes have a color assigned, and if not, assign a default color
+            nodes.forEach(node => {
+                if (!initialNodeColors[node.id]) {
+                    if (node.isCenter) {
+                        initialNodeColors[node.id] = ['#6A958F', d3.color('#6A958F')!.darker(0.7).toString()];
+                    } else {
+                        const colorIndex = Math.floor(Math.random() * availableColors.length);
+                        initialNodeColors[node.id] = availableColors[colorIndex];
+                    }
+                }
+            });
+            setNodeColors(initialNodeColors);
         }
     }, [nodes, graphData]);
 
     useEffect(() => {
+
         if (!graphData || !svgRef.current || containerDimensions.width === 0) return;
 
         const svg = d3.select(svgRef.current);
         svg.selectAll("*").remove();
-
-        // Add dark background for cyberpunk feel
-        svg.append("rect")
-            .attr("width", "100%")
-            .attr("height", "100%")
-            .attr("fill", "#0A0A0A");
-
-        // Add subtle grid pattern
-        const gridSize = 30;
-        const gridOpacity = 0.1;
-        const gridGroup = svg.append("g").attr("class", "grid");
-
-        for (let x = 0; x < containerDimensions.width; x += gridSize) {
-            gridGroup.append("line")
-                .attr("x1", x)
-                .attr("y1", 0)
-                .attr("x2", x)
-                .attr("y2", containerDimensions.height)
-                .attr("stroke", "#00FFFF")
-                .attr("stroke-width", 0.5)
-                .attr("opacity", gridOpacity);
-        }
-
-        for (let y = 0; y < containerDimensions.height; y += gridSize) {
-            gridGroup.append("line")
-                .attr("x1", 0)
-                .attr("y1", y)
-                .attr("x2", containerDimensions.width)
-                .attr("y2", y)
-                .attr("stroke", "#00FFFF")
-                .attr("stroke-width", 0.5)
-                .attr("opacity", gridOpacity);
-        }
 
         const width = containerDimensions.width;
         const height = containerDimensions.height;
@@ -166,44 +197,12 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
             };
         }
 
-        // Cyberpunk edge colors
         const edgeColor = d3.scaleOrdinal<string>()
             .domain(['positive', 'negative', 'neutral'])
-            .range(['#00FFFF', '#FF00FF', '#FFFFFF']);
+            .range(['#6A958F', '#DC143C', '#888']);
 
         const defs = svg.append("defs");
 
-        // Create neon glow filter
-        const filter = defs.append("filter")
-            .attr("id", "neon-glow")
-            .attr("height", "300%")
-            .attr("width", "300%")
-            .attr("x", "-100%")
-            .attr("y", "-100%");
-            
-        filter.append("feGaussianBlur")
-            .attr("stdDeviation", "5")
-            .attr("result", "blur");
-            
-        filter.append("feFlood")
-            .attr("flood-color", "#00FFFF")
-            .attr("flood-opacity", "0.3")
-            .attr("result", "color");
-            
-        filter.append("feComposite")
-            .attr("in", "color")
-            .attr("in2", "blur")
-            .attr("operator", "in")
-            .attr("result", "glow");
-            
-        filter.append("feMerge")
-            .selectAll("feMergeNode")
-            .data([null, null])
-            .enter()
-            .append("feMergeNode")
-            .attr("in", (d, i) => i === 0 ? "glow" : "SourceGraphic");
-
-        // Center node gradient
         const centerInnerGradient = defs.append("linearGradient")
             .attr("id", "centerInnerGradient")
             .attr("x1", "0%")
@@ -213,13 +212,12 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
 
         centerInnerGradient.append("stop")
             .attr("offset", "0%")
-            .attr("stop-color", "#3A3A3A");
+            .attr("stop-color", "#B8D7D9");
 
         centerInnerGradient.append("stop")
             .attr("offset", "100%")
-            .attr("stop-color", "#1E1E1E");
+            .attr("stop-color", "#F5D6D6");
 
-        // Create gradients for each node
         Object.entries(nodeColors).forEach(([key, [colorStart, colorEnd]]) => {
             const gradient = defs.append("linearGradient")
                 .attr("id", `nodeGradient-${key}`)
@@ -237,71 +235,67 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
                 .attr("stop-color", colorEnd);
         });
 
+
+        // Load saved positions if available
+        const storedNodePositions = localStorage.getItem('nodePositions');
+        let initialPositions: Record<string, { x: number; y: number }> = {};
+        if (storedNodePositions) {
+            initialPositions = JSON.parse(storedNodePositions);
+        }
+
+        // Initialize node positions (randomly or from localStorage)
+        nodes.forEach(node => {
+            if (initialPositions[node.id]) {
+                node.fx = initialPositions[node.id].x;
+                node.fy = initialPositions[node.id].y;
+            } else {
+                // Random initial positions
+                node.x = Math.random() * (width - leftMargin - rightMargin) + leftMargin;
+                node.y = Math.random() * (height - topMargin - bottomMargin) + topMargin;
+            }
+        });
+
+
         const simulation = d3.forceSimulation(nodes)
             .force("link", d3.forceLink(links).id((d: any) => d.id).distance(200))
             .force("charge", d3.forceManyBody().strength(-1000))
             .force("center", d3.forceCenter((width - sidebarWidth) / 2, height / 2))
             .force("x", d3.forceX((width - sidebarWidth) / 2).strength(0.1))
-            .force("y", d3.forceY(height / 2).strength(0.1));
+            .force("y", d3.forceY(height / 2).strength(0.1))
+            .force(
+                "collide",
+                d3.forceCollide((d: any) => (d.isCenter ? centerNodeRadius : nodeRadius) + nodeBuffer).iterations(16)
+            );
 
-        // Create links with animated dash effect
+
+
         const link = svg.append("g")
             .selectAll("line")
             .data(links)
             .join("line")
             .attr("stroke", (d: any) => edgeColor(d.impact))
             .attr("stroke-width", 2)
-            .attr("stroke-opacity", 0.8)
-            .attr("stroke-dasharray", "5,3")
+            .attr("opacity", (d: any) => d.isSecondary ? 0.2 : 0.6) // Adjust opacity for secondary links
             .attr("class", "link")
             .style("cursor", "pointer")
             .on("click", (event: any, d: any) => {
                 setSelectedElement(d);
             });
 
-        // Create subtle flowing animation for links
-        svg.append("style").text(`
-            @keyframes dash {
-                to {
-                    stroke-dashoffset: 8;
-                }
-            }
-            .link {
-                animation: dash 1.5s linear infinite;
-            }
-        `);
-
         const centerGroup = svg.append("g")
             .selectAll("g")
             .data(nodes.filter((d: any) => d.isCenter))
             .join("g");
 
-        // Outer ring for center node
         centerGroup.append("circle")
             .attr("r", centerNodeRadius + 10)
-            .attr("fill", "none")
-            .attr("stroke", "#00FFFF")
-            .attr("stroke-width", 1)
-            .attr("opacity", 0.8)
-            .style("filter", "url(#neon-glow)")
-            .style("cursor", "pointer")
-            .on("click", (event: any, d: any) => {
-                setSelectedElement(d);
-            });
-
-        // Main center node
-        centerGroup.append("circle")
-            .attr("r", centerNodeRadius)
             .attr("fill", (d: any) => `url(#nodeGradient-${d.id})`)
-            .attr("stroke", "#00FFFF")
-            .attr("stroke-width", 2)
-            .style("filter", "url(#neon-glow)")
+            .style("filter", "drop-shadow(0px 0px 10px rgba(106, 149, 143, 0.5))")
             .style("cursor", "pointer")
             .on("click", (event: any, d: any) => {
                 setSelectedElement(d);
             });
 
-        // Inner center node
         centerGroup.append("circle")
             .attr("r", centerNodeRadius - 10)
             .attr("fill", "url(#centerInnerGradient)");
@@ -310,7 +304,8 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
         centerGroup.each(function (d: any) {
             const group = d3.select(this);
 
-            const roundedValue = Math.round(d.value.value);
+            const animatedValue = animatedValues[d.id];
+            const roundedValue = animatedValue !== undefined ? Math.round(animatedValue) : Math.round(d.value.value);
 
             // Display the formatted name
             group.append("text")
@@ -318,21 +313,21 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
                 .attr("dy", "1em")
                 .attr("class", "node-name")
                 .style("font-size", "10px")
-                .style("fill", "#FFFFFF")
-                .style("font-family", "'Courier New', monospace")
+                .style("fill", "#2C3333")
                 .style("font-weight", "normal")
                 .text(formatStockName(d.name));
 
-            // Display value with cyberpunk styling
+            // Display value and unit on one line with icons on the right
             group.append("text")
                 .attr("text-anchor", "middle")
                 .attr("dy", "-0.35em")
                 .attr("class", "node-value")
                 .style("font-size", "16px")
-                .style("fill", "#00FFFF")
-                .style("font-family", "'Courier New', monospace")
+                .style("fill", "#2C3333")
                 .style("font-weight", "bold")
-                .text(`${roundedValue}`);
+                .text(formatLargeNumber(roundedValue)) // Use formatLargeNumber here
+                .append("title") // Add title for hover effect
+                .text(`${roundedValue} ${d.value.unit}`);
         });
 
         const nodeGroups = svg.append("g")
@@ -340,35 +335,28 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
             .data(nodes.filter((d: any) => !d.isCenter))
             .join("g");
 
-        // Regular nodes with neon border
         nodeGroups.append("circle")
             .attr("r", nodeRadius)
-            .attr("fill", (d: any) => `url(#nodeGradient-${d.id})`)
-            .attr("stroke", (d: any) => {
-                // Get first color from node gradient for matching stroke
-                return nodeColors[d.id]?.[0] || "#00FFFF";
+            .attr("fill", (d: any) => {
+                if (d.isSecondary) {
+                    // Apply a faded fill (e.g., light gray)
+                    return "#ddd"; // Or any light color
+                } else {
+                    return `url(#nodeGradient-${d.id})`;
+                }
             })
-            .attr("stroke-width", 2)
-            .style("filter", "url(#neon-glow)")
+            .style("filter", (d: any) => `drop-shadow(0px 0px 10px ${nodeColors[d.id]?.[0]})`)
             .style("cursor", "pointer")
+            .attr("opacity", (d: any) => d.isSecondary ? 0.5 : 1) // Adjust opacity for secondary nodes
             .on("click", (event: any, d: any) => {
                 setSelectedElement(d);
             });
 
-        // Add thin ring around nodes
-        nodeGroups.append("circle")
-            .attr("r", nodeRadius + 5)
-            .attr("fill", "none")
-            .attr("stroke", (d: any) => {
-                return nodeColors[d.id]?.[0] || "#00FFFF";
-            })
-            .attr("stroke-width", 0.5)
-            .attr("opacity", 0.5);
-
         nodeGroups.each(function (d: any) {
             const group = d3.select(this);
 
-            const roundedValue = Math.round(d.value.value);
+            const animatedValue = animatedValues[d.id];
+            const roundedValue = animatedValue !== undefined ? Math.round(animatedValue) : Math.round(d.value.value);
 
             // Display the formatted name
             group.append("text")
@@ -376,8 +364,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
                 .attr("dy", "1em")
                 .attr("class", "node-name")
                 .style("font-size", "10px")
-                .style("fill", "#FFFFFF")
-                .style("font-family", "'Courier New', monospace")
+                .style("fill", "#2C3333")
                 .style("font-weight", "normal")
                 .text(formatStockName(d.name));
 
@@ -387,13 +374,11 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
                 .attr("dy", "-0.35em")
                 .attr("class", "node-value")
                 .style("font-size", "16px")
-                .style("fill", (d: any) => {
-                    // Match text color to node color for cyberpunk effect
-                    return nodeColors[d.id]?.[0] || "#00FFFF";
-                })
-                .style("font-family", "'Courier New', monospace")
+                .style("fill", "#2C3333")
                 .style("font-weight", "bold")
-                .text(`${roundedValue}`);
+                .text(formatLargeNumber(roundedValue)) // Use formatLargeNumber here
+                .append("title") // Add title for hover effect
+                .text(`${roundedValue} ${d.value.unit}`);
         });
 
         function dragstarted(event: any, d: any) {
@@ -438,25 +423,14 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
             .on("drag", dragged)
             .on("end", dragended) as any);
 
-        // Load saved positions if available
-        const storedNodePositions = localStorage.getItem('nodePositions');
-        if (storedNodePositions) {
-            const parsedPositions = JSON.parse(storedNodePositions);
-            nodes.forEach(node => {
-                const storedPosition = parsedPositions[node.id];
-                if (storedPosition) {
-                    // Make sure loaded positions respect current bounds
-                    const nodeR = node.isCenter ? centerNodeRadius : nodeRadius;
-                    const constrained = constrain(storedPosition.x, storedPosition.y, nodeR);
-                    node.fx = constrained.x;
-                    node.fy = constrained.y;
-                }
-            });
-        }
-
         simulation.on("tick", () => {
             nodeGroups.attr("transform", (d: any) => {
-                // Apply constraints on each tick
+                // If the position is fixed, don't apply constraints.
+                if (d.fx !== undefined && d.fy !== undefined) {
+                    return `translate(${d.fx},${d.fy})`;
+                }
+
+                // Apply constraints only if the position is not fixed.
                 const constrained = constrain(d.x, d.y, nodeRadius);
                 d.x = constrained.x;
                 d.y = constrained.y;
@@ -465,6 +439,10 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
 
             centerGroup.attr("transform", (d: any) => {
                 // Apply constraints on each tick
+                if (d.fx !== undefined && d.fy !== undefined) {
+                    return `translate(${d.fx},${d.fy})`;
+                }
+
                 const constrained = constrain(d.x, d.y, centerNodeRadius);
                 d.x = constrained.x;
                 d.y = constrained.y;
@@ -479,6 +457,66 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
         });
 
     }, [graphData, nodeColors, links, setSelectedElement, nodes, containerDimensions, sidebarWidth]);
+
+
+    useEffect(() => {
+        if (initialRender) {
+            setInitialRender(false);
+            return;
+        }
+
+        if (!graphData || !runSimulation) return;
+
+
+        const startValues = nodes.reduce((acc, node) => {
+            acc[node.id] = node.value.value;
+            return acc;
+        }, {} as Record<string, number>);
+
+        let yearEquivalent = 0;
+        switch (simulationSettings.timeUnit) {
+            case "days":
+                yearEquivalent = simulationValue / 365;
+                break;
+            case "weeks":
+                yearEquivalent = simulationValue / 52;
+                break;
+            case "months":
+                yearEquivalent = simulationValue / 12;
+                break;
+            case "years":
+                yearEquivalent = simulationValue;
+                break;
+        }
+
+        const targetValues = nodes.reduce((acc, node) => {
+            const growthFactor = 0.02; // Example growth factor
+
+            acc[node.id] = node.value.value * Math.pow(1 + growthFactor, yearEquivalent);
+            return acc;
+        }, {} as Record<string, number>);
+
+        const startTime = performance.now();
+        const duration = 2000; // 2000ms duration for animation
+
+        const animate = (currentTime: number) => {
+            const elapsedTime = currentTime - startTime;
+            const progress = Math.min(elapsedTime / duration, 1);
+
+            const newValues = nodes.reduce((acc, node) => {
+                acc[node.id] = startValues[node.id] + (targetValues[node.id] - startValues[node.id]) * progress;
+                return acc;
+            }, {} as Record<string, number>);
+
+            setAnimatedValues(newValues);
+
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            }
+        };
+
+        requestAnimationFrame(animate);
+    }, [runSimulation, graphData, nodes, simulationValue, simulationSettings]);
 
     // Use a container div to measure available space
     return (
