@@ -61,7 +61,7 @@ const Playground: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const stockName = "kerala-population";
+    const stockName = "India-population";
     fetchGraphData(stockName)
       .then((data: any) => {
         console.log(data, "Data fetched from API");

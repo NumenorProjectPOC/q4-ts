@@ -14,7 +14,7 @@ const MainPage: React.FC = () => {
     const fetchData = async () => {
       try {
         const guids = ["111", "114", "187"]; // Example GUIDs
-        const response = await axios.get("http://localhost:8000/users/stocks/?guids=111&guids=114&guids=876",);
+        const response = await axios.get("http://localhost:8000/users/stocks/?guids=21377984-fe94-445c-934b-3b3e0c1cdabe&guids=7951d219-4fdc-4f51-a21e-bf6000b4421f&guids=bcf7252b-c427-4cbf-8274-f892ceb5b0ed",);
         setData(response.data);
         setGridCount(response.data.length);
         

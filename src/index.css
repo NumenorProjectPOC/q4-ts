@@ -18,13 +18,13 @@
   text-align: center;
   white-space: nowrap;
   position: relative;
-  background: rgba(10, 10, 10, 0.8); /* Dark semi-transparent background */
+  /* background: rgba(10, 10, 10, 0.8); Dark semi-transparent background */
 
   /* Glowing Neon Border */
-  border: 2px solid transparent;
+  /* border: 2px solid transparent;
   border-image: linear-gradient(90deg, #ff00ff, #00ffff, #ff00ff) 1;
   background-clip: padding-box;
-  box-shadow: 0 0 5px #ff00ff, 0 0 10px #00ffff; /* Neon Glow Effect */
+  box-shadow: 0 0 5px #ff00ff, 0 0 10px #00ffff; Neon Glow Effect */
 
   /* Animation */
   animation: glow-flicker 1.5s infinite alternate;

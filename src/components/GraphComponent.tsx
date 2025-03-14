@@ -81,10 +81,11 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
     useEffect(() => {
         if (!graphData) return;
 
+        // Cyberpunk color palette
         const availableColors: [string, string][] = [
-            ['#B8D7D9', d3.color('#B8D7D9')!.darker(0.7).toString()],
-            ['#F5D6D6', d3.color('#F5D6D6')!.darker(0.7).toString()],
-            ['#E5E5E5', d3.color('#E5E5E5')!.darker(0.7).toString()],
+            ['#00FFFF', '#0088FF'], // Cyan to blue
+            ['#FF00FF', '#FF0088'], // Magenta to pink
+            ['#121212', '#2A2A2A'], // Dark gray gradient
         ];
 
         const initialNodeColors: Record<string, [string, string]> = {};
@@ -95,7 +96,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
         } else {
             nodes.forEach(node => {
                 if (node.isCenter) {
-                    initialNodeColors[node.id] = ['#6A958F', d3.color('#6A958F')!.darker(0.7).toString()];
+                    initialNodeColors[node.id] = ['#1E1E1E', '#3A3A3A']; // Dark center node
                 } else {
                     const colorIndex = Math.floor(Math.random() * availableColors.length);
                     initialNodeColors[node.id] = availableColors[colorIndex];
@@ -108,11 +109,43 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
     }, [nodes, graphData]);
 
     useEffect(() => {
-
         if (!graphData || !svgRef.current || containerDimensions.width === 0) return;
 
         const svg = d3.select(svgRef.current);
         svg.selectAll("*").remove();
+
+        // Add dark background for cyberpunk feel
+        svg.append("rect")
+            .attr("width", "100%")
+            .attr("height", "100%")
+            .attr("fill", "#0A0A0A");
+
+        // Add subtle grid pattern
+        const gridSize = 30;
+        const gridOpacity = 0.1;
+        const gridGroup = svg.append("g").attr("class", "grid");
+
+        for (let x = 0; x < containerDimensions.width; x += gridSize) {
+            gridGroup.append("line")
+                .attr("x1", x)
+                .attr("y1", 0)
+                .attr("x2", x)
+                .attr("y2", containerDimensions.height)
+                .attr("stroke", "#00FFFF")
+                .attr("stroke-width", 0.5)
+                .attr("opacity", gridOpacity);
+        }
+
+        for (let y = 0; y < containerDimensions.height; y += gridSize) {
+            gridGroup.append("line")
+                .attr("x1", 0)
+                .attr("y1", y)
+                .attr("x2", containerDimensions.width)
+                .attr("y2", y)
+                .attr("stroke", "#00FFFF")
+                .attr("stroke-width", 0.5)
+                .attr("opacity", gridOpacity);
+        }
 
         const width = containerDimensions.width;
         const height = containerDimensions.height;
@@ -133,12 +166,44 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
             };
         }
 
+        // Cyberpunk edge colors
         const edgeColor = d3.scaleOrdinal<string>()
             .domain(['positive', 'negative', 'neutral'])
-            .range(['#6A958F', '#DC143C', '#888']);
+            .range(['#00FFFF', '#FF00FF', '#FFFFFF']);
 
         const defs = svg.append("defs");
 
+        // Create neon glow filter
+        const filter = defs.append("filter")
+            .attr("id", "neon-glow")
+            .attr("height", "300%")
+            .attr("width", "300%")
+            .attr("x", "-100%")
+            .attr("y", "-100%");
+            
+        filter.append("feGaussianBlur")
+            .attr("stdDeviation", "5")
+            .attr("result", "blur");
+            
+        filter.append("feFlood")
+            .attr("flood-color", "#00FFFF")
+            .attr("flood-opacity", "0.3")
+            .attr("result", "color");
+            
+        filter.append("feComposite")
+            .attr("in", "color")
+            .attr("in2", "blur")
+            .attr("operator", "in")
+            .attr("result", "glow");
+            
+        filter.append("feMerge")
+            .selectAll("feMergeNode")
+            .data([null, null])
+            .enter()
+            .append("feMergeNode")
+            .attr("in", (d, i) => i === 0 ? "glow" : "SourceGraphic");
+
+        // Center node gradient
         const centerInnerGradient = defs.append("linearGradient")
             .attr("id", "centerInnerGradient")
             .attr("x1", "0%")
@@ -148,12 +213,13 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
 
         centerInnerGradient.append("stop")
             .attr("offset", "0%")
-            .attr("stop-color", "#B8D7D9");
+            .attr("stop-color", "#3A3A3A");
 
         centerInnerGradient.append("stop")
             .attr("offset", "100%")
-            .attr("stop-color", "#F5D6D6");
+            .attr("stop-color", "#1E1E1E");
 
+        // Create gradients for each node
         Object.entries(nodeColors).forEach(([key, [colorStart, colorEnd]]) => {
             const gradient = defs.append("linearGradient")
                 .attr("id", `nodeGradient-${key}`)
@@ -178,33 +244,64 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
             .force("x", d3.forceX((width - sidebarWidth) / 2).strength(0.1))
             .force("y", d3.forceY(height / 2).strength(0.1));
 
+        // Create links with animated dash effect
         const link = svg.append("g")
             .selectAll("line")
             .data(links)
             .join("line")
             .attr("stroke", (d: any) => edgeColor(d.impact))
             .attr("stroke-width", 2)
-            .attr("opacity", 0.6)
+            .attr("stroke-opacity", 0.8)
+            .attr("stroke-dasharray", "5,3")
             .attr("class", "link")
             .style("cursor", "pointer")
             .on("click", (event: any, d: any) => {
                 setSelectedElement(d);
             });
 
+        // Create subtle flowing animation for links
+        svg.append("style").text(`
+            @keyframes dash {
+                to {
+                    stroke-dashoffset: 8;
+                }
+            }
+            .link {
+                animation: dash 1.5s linear infinite;
+            }
+        `);
+
         const centerGroup = svg.append("g")
             .selectAll("g")
             .data(nodes.filter((d: any) => d.isCenter))
             .join("g");
 
+        // Outer ring for center node
         centerGroup.append("circle")
             .attr("r", centerNodeRadius + 10)
-            .attr("fill", (d: any) => `url(#nodeGradient-${d.id})`)
-            .style("filter", "drop-shadow(0px 0px 10px rgba(106, 149, 143, 0.5))")
+            .attr("fill", "none")
+            .attr("stroke", "#00FFFF")
+            .attr("stroke-width", 1)
+            .attr("opacity", 0.8)
+            .style("filter", "url(#neon-glow)")
             .style("cursor", "pointer")
             .on("click", (event: any, d: any) => {
                 setSelectedElement(d);
             });
 
+        // Main center node
+        centerGroup.append("circle")
+            .attr("r", centerNodeRadius)
+            .attr("fill", (d: any) => `url(#nodeGradient-${d.id})`)
+            .attr("stroke", "#00FFFF")
+            .attr("stroke-width", 2)
+            .style("filter", "url(#neon-glow)")
+            .style("cursor", "pointer")
+            .on("click", (event: any, d: any) => {
+                setSelectedElement(d);
+            });
+
+        // Inner center node
         centerGroup.append("circle")
             .attr("r", centerNodeRadius - 10)
             .attr("fill", "url(#centerInnerGradient)");
@@ -221,19 +318,21 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
                 .attr("dy", "1em")
                 .attr("class", "node-name")
                 .style("font-size", "10px")
-                .style("fill", "#2C3333")
+                .style("fill", "#FFFFFF")
+                .style("font-family", "'Courier New', monospace")
                 .style("font-weight", "normal")
                 .text(formatStockName(d.name));
 
-            // Display value and unit on one line with icons on the right
+            // Display value with cyberpunk styling
             group.append("text")
                 .attr("text-anchor", "middle")
                 .attr("dy", "-0.35em")
                 .attr("class", "node-value")
                 .style("font-size", "16px")
-                .style("fill", "#2C3333")
+                .style("fill", "#00FFFF")
+                .style("font-family", "'Courier New', monospace")
                 .style("font-weight", "bold")
-                .text(`${roundedValue}`);// for unit ${d.value.unit}
+                .text(`${roundedValue}`);
         });
 
         const nodeGroups = svg.append("g")
@@ -241,14 +340,30 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
             .data(nodes.filter((d: any) => !d.isCenter))
             .join("g");
 
+        // Regular nodes with neon border
         nodeGroups.append("circle")
             .attr("r", nodeRadius)
             .attr("fill", (d: any) => `url(#nodeGradient-${d.id})`)
-            .style("filter", (d: any) => `drop-shadow(0px 0px 10px ${nodeColors[d.id]?.[0]})`)
+            .attr("stroke", (d: any) => {
+                // Get first color from node gradient for matching stroke
+                return nodeColors[d.id]?.[0] || "#00FFFF";
+            })
+            .attr("stroke-width", 2)
+            .style("filter", "url(#neon-glow)")
             .style("cursor", "pointer")
             .on("click", (event: any, d: any) => {
                 setSelectedElement(d);
             });
+
+        // Add thin ring around nodes
+        nodeGroups.append("circle")
+            .attr("r", nodeRadius + 5)
+            .attr("fill", "none")
+            .attr("stroke", (d: any) => {
+                return nodeColors[d.id]?.[0] || "#00FFFF";
+            })
+            .attr("stroke-width", 0.5)
+            .attr("opacity", 0.5);
 
         nodeGroups.each(function (d: any) {
             const group = d3.select(this);
@@ -261,7 +376,8 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
                 .attr("dy", "1em")
                 .attr("class", "node-name")
                 .style("font-size", "10px")
-                .style("fill", "#2C3333")
+                .style("fill", "#FFFFFF")
+                .style("font-family", "'Courier New', monospace")
                 .style("font-weight", "normal")
                 .text(formatStockName(d.name));
 
@@ -271,9 +387,13 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
                 .attr("dy", "-0.35em")
                 .attr("class", "node-value")
                 .style("font-size", "16px")
-                .style("fill", "#2C3333")
+                .style("fill", (d: any) => {
+                    // Match text color to node color for cyberpunk effect
+                    return nodeColors[d.id]?.[0] || "#00FFFF";
+                })
+                .style("font-family", "'Courier New', monospace")
                 .style("font-weight", "bold")
-                .text(`${roundedValue}`);// for unit ${d.value.unit}
+                .text(`${roundedValue}`);
         });
 
         function dragstarted(event: any, d: any) {
