@@ -29,9 +29,8 @@ const LoginPage: React.FC = () => {
   }, []);
 
   const handleLogin = async () => {
-    navigate("/regions");
     setError("");
-return
+
     if (!loginId.trim() || !password.trim()) {
       setError("Username and password cannot be empty.");
       return;
@@ -55,7 +54,7 @@ return
 
       sessionStorage.setItem("access_token", data.access_token);
       sessionStorage.setItem("org_id", data.org_id);
-
+      navigate("/regions");
     } catch (err: any) {
       setError(err.message);
     } finally {
