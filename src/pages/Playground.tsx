@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import GraphComponent from '../components/GraphComponent';
 import { fetchGraphData } from '../services/quantiforeApi';
 import Navbar from "../components/Navbar";
@@ -35,11 +35,27 @@ const Playground: React.FC = () => {
     const [graphData, setGraphData] = useState<GraphData | null>(null);
     const [selectedNode, setSelectedNode] = useState<NodeData | null>(null);
     const [selectedEdge, setSelectedEdge] = useState<LinkData | null>(null);
+    const setSelectedElement = useCallback((element: NodeData | LinkData | null) => {
+        if (element && 'source' in element) {
+            // If the element is an edge
+            setSelectedNode(null);
+            setSelectedEdge(element as LinkData);
+        } else if (element && 'id' in element) {
+            // If the element is a node
+            setSelectedNode(element as NodeData);
+            setSelectedEdge(null);
+        } else {
+            // If the element is null
+            setSelectedNode(null);
+            setSelectedEdge(null);
+        }
+    }, [setSelectedNode, setSelectedEdge]);
     const [simulationSettings, setSimulationSettings] = useState<SimulationSettings>({
         timeUnit: "years",
         value: 0
     });
     const [simulationValue, setSimulationValue] = useState<number>(0); // New state for slider value
+    const [animatedSimulationValue, setAnimatedSimulationValue] = useState<number>(0); // Animated value for the slider
     const [sidebarWidth, setSidebarWidth] = useState(0);
     const sidebarRef = useRef<HTMLDivElement>(null);
     const [isPaused, setIsPaused] = useState(false);
@@ -82,18 +98,17 @@ const Playground: React.FC = () => {
     }, [currentStockName]);
 
     // Rest of your functions (updateValue, animateSimulation, etc.)
-    const updateValue = (increment: boolean) => {
+    const updateValue = useCallback((increment: boolean) => {
         if (!selectedNode || !graphData) return;
-        const newGraphData = { ...graphData };
 
         // Function to recursively update related stocks
         const updateRelatedStocks = (stockGuid: string, change: number, isMainStock: boolean = false) => {
             // Find the stock being updated
             let stockToUpdate;
             if (isMainStock) {
-                stockToUpdate = newGraphData.stock;
+                stockToUpdate = graphData.stock;
             } else {
-                stockToUpdate = newGraphData.related_stocks.find(stock => stock.guid === stockGuid);
+                stockToUpdate = graphData.related_stocks.find((stock: Stock) => stock.guid === stockGuid);
             }
 
             if (!stockToUpdate) return; // Stock not found
@@ -102,40 +117,29 @@ const Playground: React.FC = () => {
             const currentValue = typeof stockToUpdate.value === 'object' ? stockToUpdate.value.value : 0;
             const unit = typeof stockToUpdate.value === 'object' ? stockToUpdate.value.unit : '';
             stockToUpdate.value = { value: currentValue + change, unit: unit };
-
-            // If updating the main stock, update related stocks based on impact
-            if (isMainStock) {
-                newGraphData.related_stocks.forEach(relatedStock => {
-                    if (!relatedStock.relationship) return;
-                    const weight = relatedStock.relationship.weight / 100;
-                    const isPositive = relatedStock.relationship.impact === "positive";
-                    const valueChange = change * weight * (isPositive ? 1 : -1);
-                    updateRelatedStocks(relatedStock.guid, valueChange); // Recursive call
-                });
-            }
         };
 
         // Determine which stock to update and initiate recursive updates
-        if (selectedNode.id === newGraphData.stock.guid) {
+        if (selectedNode.id === graphData.stock.guid) {
             const change = increment ? 1 : -1;
-            updateRelatedStocks(newGraphData.stock.guid, change, true); // True means this is the main stock
+            updateRelatedStocks(graphData.stock.guid, change, true); // True means this is the main stock
         } else {
             const change = increment ? 1 : -1;
             updateRelatedStocks(selectedNode.id, change);
         }
 
         // Update state with new graph data
-        setGraphData(newGraphData);
+        setGraphData({ ...graphData });
 
         // Update selected node
-        if (selectedNode.id === newGraphData.stock.guid) {
+        if (selectedNode.id === graphData.stock.guid) {
             setSelectedNode({
                 ...selectedNode,
-                value: newGraphData.stock.value
+                value: graphData.stock.value
             });
         } else {
-            const updatedStock = newGraphData.related_stocks.find(
-                stock => stock.guid === selectedNode.id
+            const updatedStock = graphData.related_stocks.find(
+                (stock: Stock) => stock.guid === selectedNode.id
             );
             if (updatedStock) {
                 setSelectedNode({
@@ -144,87 +148,128 @@ const Playground: React.FC = () => {
                 });
             }
         }
-    };
+    }, [graphData, selectedNode]);
 
-    const animateSimulation = (targetValue: number, duration: number) => {
+    const animateSimulation = useCallback((targetValue: number, duration: number) => {
         setRunSimulation(true);
         setIsSimulating(true);
-        setTimeout(() => {
-            setRunSimulation(false);
-            setIsSimulating(false);
-        }, duration);
 
-        setSimulationSettings((prevSettings) => ({
-            ...prevSettings,
-            value: targetValue,
-        }));
-    };
+        // Animate the slider
+        const startTime = performance.now();
+        const animateSlider = (currentTime: number) => {
+            const elapsedTime = currentTime - startTime;
+            const progress = Math.min(elapsedTime / duration, 1);
+            const newValue = simulationValue + (targetValue - simulationValue) * progress;
+            setAnimatedSimulationValue(newValue); // Update animated slider value
 
-    const handlePause = () => {
+            if (progress < 1) {
+                requestAnimationFrame(animateSlider);
+            } else {
+                // Animation complete, set the actual value
+                setSimulationValue(targetValue);
+                setAnimatedSimulationValue(targetValue);
+                setRunSimulation(false);
+                setIsSimulating(false);
+            }
+        };
+
+        requestAnimationFrame(animateSlider);
+
+        // No need to update simulationSettings.value here.
+
+        // setTimeout(() => {
+        //     setRunSimulation(false);
+        //     setIsSimulating(false);
+        // }, duration);
+
+        // setSimulationSettings((prevSettings) => ({
+        //     ...prevSettings,
+        //     value: targetValue,
+        // }));
+    }, [simulationValue]); // Removed simulationSettings, targetValue from dependencies
+    //useCallback dependancy issues were fixed here
+
+    const handlePause = useCallback(() => {
         setIsPaused(!isPaused);
-    };
+    }, [isPaused]);
 
-    const handleReset = () => {
-        setSimulationSettings({
-            ...simulationSettings,
+    const handleReset = useCallback(() => {
+        setSimulationSettings(prevSettings => ({
+            ...prevSettings,
             value: 0
-        });
-    };
+        }));
+    }, []);
 
-    const handleTimeUnitChange = (unit: "days" | "weeks" | "months" | "years") => {
-        setSimulationSettings({
-            ...simulationSettings,
+    const handleTimeUnitChange = useCallback((unit: "days" | "weeks" | "months" | "years") => {
+        setSimulationSettings(prevSettings => ({
+            ...prevSettings,
             timeUnit: unit,
             value: 0
-        });
-    };
+        }));
+    }, []);
 
-    const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleSliderChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const newValue = parseInt(e.target.value);
         setSimulationValue(newValue); // Update separate state variable
-    };
+    }, []);
 
-    const handleSave = () => {
+    const handleNodeValueChange = useCallback((nodeId: string, newValue: number) => {
+        setGraphData((prevGraphData) => {
+            if (!prevGraphData) return prevGraphData;
+            // Function to recursively update related stocks
+            const updateRelatedStocks = (stockGuid: string, change: number, isMainStock: boolean = false) => {
+                // Find the stock being updated
+                let stockToUpdate;
+                if (isMainStock) {
+                    stockToUpdate = prevGraphData.stock;
+                } else {
+                    stockToUpdate = prevGraphData.related_stocks.find((stock: Stock) => stock.guid === stockGuid);
+                }
+
+                if (!stockToUpdate) return; // Stock not found
+
+                // Update the stock's value directly
+                const unit = typeof stockToUpdate.value === 'object' ? stockToUpdate.value.unit : '';
+                stockToUpdate.value = { value: newValue, unit: unit };
+            };
+
+            // Determine which stock to update and initiate recursive updates
+            if (nodeId === prevGraphData.stock.guid) {
+                updateRelatedStocks(prevGraphData.stock.guid, newValue, true); // True means this is the main stock
+            } else {
+                updateRelatedStocks(nodeId, newValue);
+            }
+
+
+            return { ...prevGraphData };
+        });
+    }, []);
+
+    const handleSave = useCallback(() => {
         if (selectedNode && editedValue !== null) {
             handleNodeValueChange(selectedNode?.id, editedValue);
             setEditedValue(null);
         }
-    };
+    }, [selectedNode, editedValue, handleNodeValueChange]);
 
-    const handleNodeValueChange = (nodeId: string, newValue: number) => {
-        setGraphData((prevGraphData) => {
-            if (!prevGraphData) return prevGraphData;
-
-            const updatedGraphData = { ...prevGraphData };
-
-            if (updatedGraphData.stock.guid === nodeId) {
-                updatedGraphData.stock.value = { ...updatedGraphData.stock.value, value: newValue };
-            } else {
-                const relatedStockIndex = updatedGraphData.related_stocks.findIndex((stock) => stock.guid === nodeId);
-                if (relatedStockIndex !== -1) {
-                    updatedGraphData.related_stocks[relatedStockIndex].value = {
-                        ...updatedGraphData.related_stocks[relatedStockIndex].value,
-                        value: newValue,
-                    };
-                }
-            }
-            return updatedGraphData;
-        });
-    };
-
-    const handleDiveIntoNode = () => {
+    const handleDiveIntoNode = useCallback(() => {
         if (selectedNode && !selectedNode.isCenter) {
             setCurrentStockName(selectedNode.id);
         }
-    };
+    }, [selectedNode]);
+
+    // Memoize simulationSettings
+    const memoizedSimulationSettings = useMemo(() => simulationSettings, [simulationSettings]);
+
+    const memoizedSelectedElement = useMemo(() => selectedNode || selectedEdge, [selectedNode, selectedEdge]);
 
     return (
-        <div className="h-screen bg-background text-text-primary flex flex-col">
+        <div className="h-screen text-text-primary flex flex-col font-poppins">
             <Navbar showLogo={true} showTabs={true} />
             <div className="main-content flex flex-1">
                 {isLoading ? (
                     <div className="flex-grow flex items-center justify-center">
-                        <h2 className="text-4xl font-bold font-mono bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-pink-500">
+                        <h2 className="text-4xl font-bold font-nunito bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-pink-500">
                             Loading stocks...
                         </h2>
                     </div>
@@ -233,30 +278,22 @@ const Playground: React.FC = () => {
                         <div className="graph-container flex-grow bg-transparent flex justify-center items-center overflow-hidden">
                             {graphData && (
                                 <GraphComponent
-                                    simulationSettings={simulationSettings}
+                                    simulationSettings={memoizedSimulationSettings}
                                     simulationValue={simulationValue}
                                     graphData={graphData}
-                                    selectedElement={selectedNode || selectedEdge}
-                                    setSelectedElement={(element) => {
-                                        if (element && 'id' in element) {
-                                            setSelectedNode(element);
-                                            setSelectedEdge(null);
-                                        } else if (element) {
-                                            setSelectedEdge(element);
-                                            setSelectedNode(null);
-                                        }
-                                    }}
+                                    selectedElement={memoizedSelectedElement}
+                                    setSelectedElement={setSelectedElement}
                                     sidebarWidth={sidebarWidth}
                                     nodeValueChangeCallback={handleNodeValueChange}
                                     runSimulation={runSimulation}
                                 />
                             )}
                         </div>
-                        <div className="sidebar w-80 p-8 sidebar bg-gradient-to-b from-white to-gray-50" ref={sidebarRef}>
+                        <div className="sidebar w-80 p-8 sidebar bg-gradient-to-b from-white to-gray-50" style={{ position: 'relative' }} ref={sidebarRef}>
                             <div className="sidebar-content">
-                                <h2 className="text-xl font-mono font-semibold text-blue-700 mb-4 tracking-tight">Stock Details</h2>
+                                <h2 className="text-xl font-semibold text-blue-700 mb-4 tracking-tight">Stock Details</h2>
                                 {!selectedNode && !selectedEdge && (
-                                    <p className="text-gray-600 font-mono">Click on a node or edge to see details.</p>
+                                    <p className="text-gray-600">Click on a node or edge to see details.</p>
                                 )}
                                 {selectedNode && (
                                     <>
@@ -264,7 +301,7 @@ const Playground: React.FC = () => {
                                             {/* Cyberpunk decorative element - top glow bar */}
                                             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-pink-500"></div>
 
-                                            <h3 className="text-lg font-mono font-medium text-blue-700 mb-2 relative z-10">
+                                            <h3 className="text-lg font-medium text-blue-700 mb-2 relative z-10">
                                                 <strong>
                                                     {formatStockName(selectedNode.name || "")}
                                                 </strong>
@@ -273,21 +310,21 @@ const Playground: React.FC = () => {
 
                                             {/* Node Selected */}
                                             {selectedNode.value !== undefined && (
-                                                <div className="text-gray-700 mb-1 flex items-center font-mono">
+                                                <div className="text-gray-700 mb-1 flex items-center">
                                                     <span>Value:</span>
                                                     <div className="flex items-center ml-6">
                                                         <input
                                                             type="number"
                                                             value={editedValue !== null ? editedValue : Math.round(selectedNode.value.value)}
                                                             onChange={(e) => setEditedValue(parseInt(e.target.value))}
-                                                            className="w-16 text-center border border-gray-300 rounded font-mono focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                                                            className="w-16 text-center border border-gray-300 rounded focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                                                         />
                                                     </div>
                                                 </div>
                                             )}
                                             {/* Details for value and unit */}
                                             {selectedNode.value !== undefined && (
-                                                <div className="text-gray-700 mb-1 flex items-center justify-between font-mono">
+                                                <div className="text-gray-700 mb-1 flex items-center justify-between">
                                                     <div>
                                                         <br />
                                                         {`Unit: ${selectedNode.value.unit}`}
@@ -296,7 +333,7 @@ const Playground: React.FC = () => {
                                             )}
                                             <div className="flex justify-between mt-4">
                                                 <button
-                                                    className="py-2 px-4 rounded font-medium font-mono transition-all duration-300 relative overflow-hidden bg-gradient-to-r from-blue-500 to-pink-500 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 focus:outline-none flex-grow"
+                                                    className="py-2 px-4 rounded font-medium transition-all duration-300 relative overflow-hidden bg-gradient-to-r from-blue-500 to-pink-500 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 focus:outline-none flex-grow"
                                                     onClick={handleSave}
                                                 >
                                                     <span className="relative z-10">Save</span>
@@ -306,7 +343,7 @@ const Playground: React.FC = () => {
                                             </div>
                                             {selectedNode && !selectedNode.isCenter && (
                                                 <button
-                                                    className="w-full py-2 px-4 mt-2 rounded font-medium font-mono transition-all duration-300 relative overflow-hidden bg-gradient-to-r from-green-400 to-blue-500 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 focus:outline-none flex-grow"
+                                                    className="w-full py-2 px-4 mt-2 rounded font-medium transition-all duration-300 relative overflow-hidden bg-gradient-to-r from-green-400 to-blue-500 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 focus:outline-none flex-grow"
                                                     onClick={handleDiveIntoNode}
                                                 >
                                                     <span className="relative z-10">Dive In</span>
@@ -321,7 +358,7 @@ const Playground: React.FC = () => {
                                 )}
 
                                 {selectedEdge && (
-                                    <div className="mt-4 bg-white border border-gray-200 rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow duration-300 relative overflow-hidden font-mono">
+                                    <div className="mt-4 bg-white border border-gray-200 rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow duration-300 relative overflow-hidden">
                                         {/* Cyberpunk decorative element - top glow bar */}
                                         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-blue-500"></div>
 
@@ -367,17 +404,17 @@ const Playground: React.FC = () => {
 
                                             <div className="flex items-center mb-4">
                                                 <Calendar className="mr-2 text-blue-500" size={18} />
-                                                <h3 className="text-lg font-mono font-medium text-blue-700">Time Simulation</h3>
+                                                <h3 className="text-lg font-medium text-blue-700">Time Simulation</h3>
                                             </div>
 
                                             <div className="mb-4">
-                                                <p className="text-sm text-gray-600 mb-2 font-mono">Time Unit:</p>
+                                                <p className="text-sm text-gray-600 mb-2">Time Unit:</p>
                                                 <div className="grid grid-cols-2 gap-2">
                                                     {(['days', 'weeks', 'months', 'years'] as const).map((unit) => (
                                                         <button
                                                             key={unit}
                                                             className={`
-                                                                px-3 py-2 text-sm rounded-md transition-all duration-300 font-mono relative overflow-hidden
+                                                                px-3 py-2 text-sm rounded-md transition-all duration-300 relative overflow-hidden
                                                                 ${simulationSettings.timeUnit === unit
                                                                     ? 'shadow-lg transform scale-105'
                                                                     : 'hover:shadow-md'}
@@ -407,9 +444,9 @@ const Playground: React.FC = () => {
 
                                             <div>
                                                 <div className="flex justify-between mb-1">
-                                                    <p className="text-sm text-gray-600 font-mono">Simulate future:</p>
-                                                    <span className="text-sm font-medium text-blue-600 font-mono">
-                                                        {Math.round(simulationValue)} {simulationSettings.timeUnit}
+                                                    <p className="text-sm text-gray-600">Simulate future:</p>
+                                                    <span className="text-sm font-medium text-blue-600">
+                                                        {Math.round(animatedSimulationValue)} {simulationSettings.timeUnit}
                                                     </span>
                                                 </div>
                                                 <div className="relative py-2">
@@ -431,7 +468,7 @@ const Playground: React.FC = () => {
                                                         }}
                                                     />
                                                 </div>
-                                                <div className="flex justify-between text-xs text-gray-500 mt-1 font-mono">
+                                                <div className="flex justify-between text-xs text-gray-500 mt-1">
                                                     <span>Now</span>
                                                     <span>
                                                         {simulationSettings.timeUnit === 'days' ? '365 days' :
@@ -441,7 +478,7 @@ const Playground: React.FC = () => {
                                                 </div>
                                                 <div className="mt-4">
                                                     <button
-                                                        className="w-full py-2 rounded font-medium font-mono transition-all duration-300 relative overflow-hidden bg-gradient-to-r from-blue-500 to-pink-500 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 focus:outline-none"
+                                                        className="w-full py-2 rounded font-medium transition-all duration-300 relative overflow-hidden bg-gradient-to-r from-blue-500 to-pink-500 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 focus:outline-none"
                                                         onClick={() => animateSimulation(simulationValue, 2000)}
                                                     >
                                                         <span className="relative z-10">Simulate</span>

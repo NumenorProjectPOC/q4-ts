@@ -1,16 +1,18 @@
 import { BrowserRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import Login from "./pages/LoginPage";
-import Preferences from "./pages/PreferencesPage";
+import RegionSelectionPage from "./pages/RegionSelectionPage";
 import MainPage from "./pages/MainPage";
 import Playground from "./pages/Playground";
 import Contact from "./pages/Contact";
 import React from "react";
-import PreferancesPage2 from "./pages/PreferancesPage2";
+import FrameworkSelectionPage from "./pages/FrameworkSelectionPage";
+import DomainSelectionPage from "./pages/DomainSelectionPage";
+import StockSelectionPage from "./pages/StockSelectionPage";
 
 const ProtectedRoute: React.FC<{ element: React.ReactNode }> = ({ element }) => {
   const navigate = useNavigate();
-  
+
   useEffect(() => {
     const token = sessionStorage.getItem("access_token");
     if (!token) {
@@ -26,11 +28,13 @@ const App: React.FC = () => {
     <Router>
       <Routes>
         <Route path="/" element={<Login />} />
-        <Route path="/preferences" element={<ProtectedRoute element={<Preferences />} />} />
+        <Route path="/regions" element={<ProtectedRoute element={<RegionSelectionPage />} />} />
         <Route path="/main" element={<ProtectedRoute element={<MainPage />} />} />
         <Route path="/playground" element={<ProtectedRoute element={<Playground />} />} />
         <Route path="/contact" element={<ProtectedRoute element={<Contact />} />} />
-        <Route path="/preferancePage2" element={<PreferancesPage2/>} />
+        <Route path="/frameworks" element={<ProtectedRoute element={<FrameworkSelectionPage />} />} />
+        <Route path="/domains" element={<ProtectedRoute element={<DomainSelectionPage />} />} />
+        <Route path="/stocks" element={<ProtectedRoute element={<StockSelectionPage />} />} />
       </Routes>
     </Router>
   );

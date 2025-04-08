@@ -123,9 +123,12 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
         if (!graphData) return;
 
         const availableColors: [string, string][] = [
-            ['#B8D7D9', d3.color('#B8D7D9')!.darker(0.7).toString()],
-            ['#F5D6D6', d3.color('#F5D6D6')!.darker(0.7).toString()],
-            ['#E5E5E5', d3.color('#E5E5E5')!.darker(0.7).toString()],
+            ['#B0E2FF', d3.color('#B0E2FF')!.darker(0.9).toString()],
+            ['#FFDAB9', d3.color('#FFDAB9')!.darker(0.9).toString()],
+            ['#B0E2FF', d3.color('#B0E2FF')!.darker(0.9).toString()],
+            ['#E6E6FA', d3.color('#E6E6FA')!.darker(0.9).toString()],
+            ['#E6FFE6', d3.color('#E6FFE6')!.darker(0.9).toString()],
+            ['#B2DFDB', d3.color('#B2DFDB')!.darker(0.9).toString()],
         ];
 
         let initialNodeColors: Record<string, [string, string]> = {};
@@ -275,7 +278,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
             .join("line")
             .attr("stroke", (d: any) => edgeColor(d.impact))
             .attr("stroke-width", 2)
-            .attr("opacity", (d: any) => d.isSecondary ? 0.2 : 0.6) // Adjust opacity for secondary links
+            .attr("opacity", (d: any) => d.isSecondary ? 0.6 : 0.6)
             .attr("class", "link")
             .style("cursor", "pointer")
             .on("click", (event: any, d: any) => {
@@ -340,7 +343,8 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
             .attr("fill", (d: any) => {
                 if (d.isSecondary) {
                     // Apply a faded fill (e.g., light gray)
-                    return "#ddd"; // Or any light color
+                    return `url(#nodeGradient-${d.id})`;
+                    // return "#ddd"; // Or any light color
                 } else {
                     return `url(#nodeGradient-${d.id})`;
                 }
@@ -518,6 +522,24 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
         requestAnimationFrame(animate);
     }, [runSimulation, graphData, nodes, simulationValue, simulationSettings]);
 
+   useEffect(() => {
+        if (!svgRef.current) return;
+
+        const svg = d3.select(svgRef.current);
+
+        svg.selectAll(".node-value")
+            .text((d: any) => {
+                const animatedValue = animatedValues[d.id];
+                const roundedValue = animatedValue !== undefined ? Math.round(animatedValue) : Math.round(d.value.value);
+                return formatLargeNumber(roundedValue);
+            })
+            .attr("title", (d: any) => {
+                const animatedValue = animatedValues[d.id];
+                const roundedValue = animatedValue !== undefined ? Math.round(animatedValue) : Math.round(d.value.value);
+                return `${roundedValue} ${d.value.unit}`;
+            });
+    }, [animatedValues]);
+
     // Use a container div to measure available space
     return (
         <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -526,4 +548,4 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
     );
 }
 
-export default GraphComponent;
+export default React.memo(GraphComponent);

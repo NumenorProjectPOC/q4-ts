@@ -41,16 +41,16 @@ const GridLayout: React.FC<GridLayoutProps> = ({ gridCount, data }) => {
         return "grid-cols-2 grid-rows-2";
     }
   };
-  
+
 
   return (
     <div className={`grid ${getGridClasses()} gap-2 md:gap-4 h-full w-full`}>
       {gridItems.map((item, index) => (
         <div
           key={item.id}
-          className={`bg-gray-100 border border-gray-200 rounded-lg p-1 md:p-4 
-            flex flex-col items-center justify-center text-base md:text-lg font-bold text-gray-700
-            ${gridCount === 3 ? (index === 0 ? "md:col-span-2" : "md:col-span-1") : ""}`} // 1st graph spans 2 cols
+          className={`bg-gradient-to-br from-white/30 via-teal-300/30 to-white/10 border border-gray-200 rounded-lg p-1 md:p-4 
+              flex flex-col items-center justify-center text-base md:text-lg font-bold text-gray-700
+              ${gridCount === 3 ? (index === 0 ? "md:col-span-2" : "md:col-span-1") : ""}`} // 1st graph spans 2 cols
         >
           <div>{item.content}</div>
           <GraphMonitorComponent data={item.dataset} index={index} />
@@ -58,7 +58,7 @@ const GridLayout: React.FC<GridLayoutProps> = ({ gridCount, data }) => {
       ))}
     </div>
   );
-  
+
 };
 
 export default GridLayout;

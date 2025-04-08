@@ -1,4 +1,4 @@
-const API_BASE_URL: String ="https://dl1zn50g-8000.inc1.devtunnels.ms";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 interface ValueUnit {
   value: number;
@@ -41,11 +41,11 @@ const fetchGraphData = async (stockName: string): Promise<GraphData> => {
     const graphData: GraphData = {
       stock: {
         ...data.stock,
-       
+
       },
       related_stocks: data.stock.related_stocks
     };
-    
+
     return graphData;
   } catch (error) {
     console.error("Failed to fetch graph data:", error);
@@ -54,3 +54,30 @@ const fetchGraphData = async (stockName: string): Promise<GraphData> => {
 };
 
 export { fetchGraphData };
+
+// async function fetchDomains(regions: string, framework: string): Promise<string[]> {
+//   // Implement your API call here to fetch domains based on regions and framework
+//   // Example:
+//   const response = await fetch(`${API_BASE_URL}/domains?regions=${regions}&framework=${framework}`);
+//   if (!response.ok) {
+//     throw new Error(`HTTP error! Status: ${response.status}`);
+//   }
+//   const data: string[] = await response.json();
+//   return data;
+//   return Promise.resolve(['Domain1', 'Domain2', 'Domain3']);
+// }
+
+// export { fetchDomains };
+
+// async function fetchStocks(regions: string, framework: string, domains: string): Promise<string[]> {
+//   // Implement your API call here to fetch stocks based on regions, framework and domains
+//   // Example:
+// const response = await fetch(`${API_BASE_URL}/stocks?regions=${regions}&framework=${framework}&domains=${domains}`);
+// if (!response.ok) {
+//   throw new Error(`HTTP error! Status: ${response.status}`);
+// }
+// const data: string[] = await response.json();
+// return data;
+//   return Promise.resolve(['Stock1', 'Stock2', 'Stock3']); // Placeholder
+//
+// export { fetchStocks };
