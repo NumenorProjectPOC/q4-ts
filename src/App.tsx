@@ -29,7 +29,7 @@ const App: React.FC = () => {
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/regions" element={<ProtectedRoute element={<RegionSelectionPage />} />} />
-        <Route path="/main" element={<ProtectedRoute element={<MainPage />} />} />
+        <Route path="/monitoring" element={<ProtectedRoute element={<MainPage />} />} />
         <Route path="/playground" element={<ProtectedRoute element={<Playground />} />} />
         <Route path="/contact" element={<ProtectedRoute element={<Contact />} />} />
         <Route path="/frameworks" element={<ProtectedRoute element={<FrameworkSelectionPage />} />} />
