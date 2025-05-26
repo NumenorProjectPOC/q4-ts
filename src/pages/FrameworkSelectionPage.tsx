@@ -64,7 +64,7 @@ const FrameworkSelectionPage = () => {
   return (
     <div className="min-h-screen bg-white flex flex-col">
       {/* Header with cyberpunk elements */}
-      <Navbar showTabs={false}/>
+      {/* <Navbar showTabs={false}/> */}
 
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="max-w-3xl mx-auto">

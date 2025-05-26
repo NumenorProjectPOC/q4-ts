@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useMemo } from 'react';
 import * as d3 from 'd3';
 import { GraphData, NodeData, LinkData } from '../services/types';
 import { formatLargeNumber, formatStockName } from '../utils/utility';
+import LoadingScreen from './ui/LoadingScreen';
 
 interface GraphComponentProps {
     graphData: GraphData | null;
@@ -12,9 +13,11 @@ interface GraphComponentProps {
     simulationSettings: { value: number, timeUnit: string };
     simulationValue: number;
     runSimulation: boolean;
+    isLoading: boolean
 }
 
-const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElement, setSelectedElement, sidebarWidth, nodeValueChangeCallback, simulationSettings, simulationValue, runSimulation }) => {
+const GraphComponent: React.FC<GraphComponentProps> = ({ isLoading, graphData, selectedElement, setSelectedElement, sidebarWidth, nodeValueChangeCallback, simulationSettings, simulationValue, runSimulation }) => {
+    
     const svgRef = useRef<SVGSVGElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [nodeColors, setNodeColors] = useState<Record<string, [string, string]>>({});
@@ -24,6 +27,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
 
     // Calculate container dimensions and observe changes
     useEffect(() => {
+        
         if (!containerRef.current) return;
 
         const updateDimensions = () => {
@@ -540,12 +544,30 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ graphData, selectedElem
             });
     }, [animatedValues]);
 
-    // Use a container div to measure available space
     return (
-        <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
-            <svg ref={svgRef} width="100%" height="100%"></svg>
+        <div
+          ref={containerRef}
+          style={{
+            width: "100%",
+            height: "100%",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          {isLoading && (
+            <LoadingScreen
+              message="Loading visualization..."
+              fullscreen={false}
+            />
+          )}
+          {!isLoading && (
+            <div className="absolute inset-0">
+              <svg ref={svgRef} width="100%" height="100%" />
+            </div>
+          )}
         </div>
-    );
+      );
+      
 }
 
 export default React.memo(GraphComponent);

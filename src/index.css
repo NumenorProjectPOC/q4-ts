@@ -118,6 +118,17 @@ input[type=range]::-webkit-slider-thumb:hover {
   /* Firefox */
 }
 
+.mapboxgl-popup-content {
+  background-color: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+
+.mapboxgl-popup-tip {
+  display: none !important;
+}
+
 
 @keyframes blob {
   0% {
@@ -136,6 +147,57 @@ input[type=range]::-webkit-slider-thumb:hover {
     transform: translate(0px, 0px) scale(1);
   }
 }
+
+@keyframes fade-in-up {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.95);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.3s ease-out both;
+}
+
+.outer-marker {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  background-color: transparent;
+}
+
+.inner-blink {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background-color: #f97316;
+  animation: blink 1.5s infinite ease-in-out;
+  box-shadow: 0 0 10px rgba(249, 115, 22, 0.8), 0 0 20px rgba(249, 115, 22, 0.4);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+@keyframes blink {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.4;
+    transform: scale(1.6);
+  }
+}
+
 
 /* .animate-blob {
   animation: blob 7s infinite ease-in-out;

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
 
 const LOGIN_URL = import.meta.env.VITE_LOGIN_URL;
 
@@ -10,6 +11,8 @@ const LoginPage: React.FC = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [dynamicTagline, setDynamicTagline] = useState("Access Restricted. Credentials Required.");
+  const [showPassword, setShowPassword] = useState(false);
+
 
   useEffect(() => {
     const taglines = [
@@ -47,14 +50,19 @@ const LoginPage: React.FC = () => {
       });
 
       const data = await response.json();
+      console.log("Login response:", data);      
 
       if (!response.ok) {
         throw new Error(data.detail || "Login failed");
       }
 
-      sessionStorage.setItem("access_token", data.access_token);
-      sessionStorage.setItem("org_id", data.org_id);
-      navigate("/regions");
+        // Save required values to sessionStorage
+        sessionStorage.setItem("access_token", data.access_token);
+        sessionStorage.setItem("org_id", data.org_id);
+        sessionStorage.setItem("username", data.username);
+        sessionStorage.setItem("organization_name", data.organization_name);
+        sessionStorage.setItem("role", data.role);
+      navigate("/monitoring");
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -74,7 +82,13 @@ const LoginPage: React.FC = () => {
         <p className="text-gray-600 text-lg mt-2">{dynamicTagline}</p>
       </div>
 
-      <div className="w-full max-w-md p-8 rounded-lg shadow-2xl border-1 animate-fade-in">
+      <form
+        className="w-full max-w-md p-8 rounded-lg shadow-2xl border-1 animate-fade-in"
+        onSubmit={(e) => {
+          e.preventDefault(); // Prevent default form behavior
+          handleLogin();      // Call your login handler
+        }}
+      >
         <h1 className="text-3xl font-lato font-semibold text-center text-teal-800 mb-6">
           Login/SignUp
         </h1>
@@ -95,17 +109,26 @@ const LoginPage: React.FC = () => {
         </div>
 
         <div className="relative mb-6">
-          <div className="bg-teal-50 rounded-full flex items-center px-4 py-3 shadow-md">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-            </svg>
-            <input
-              type="password"
-              placeholder="Password"
-              className="bg-transparent outline-none w-full ml-2 text-gray-800 placeholder-gray-400"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+          <div className="relative mb-6">
+            <div className="bg-teal-50 rounded-full flex items-center px-4 py-3 shadow-md">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+              </svg>
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Password"
+                className="bg-transparent outline-none w-full ml-2 text-gray-800 placeholder-gray-400 pr-8"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-4 text-gray-500 hover:text-gray-700 focus:outline-none"
+              >
+                {showPassword ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -113,12 +136,11 @@ const LoginPage: React.FC = () => {
 
         <div className="flex items-center justify-center relative">
           <button
-            className={`w-full font-bold py-3 rounded-full shadow-lg border-2 text-xl flex items-center justify-center transition-colors duration-300 ${
-              loading
-                ? "bg-teal-600 text-teal-100 border-teal-600 cursor-not-allowed"
-                : "bg-white text-teal-700 hover:text-teal-100 border-teal-600 hover:bg-teal-600"
-            }`}
-            type="button"
+            className={`w-full font-bold py-3 rounded-full shadow-lg border-2 text-xl flex items-center justify-center transition-colors duration-300 ${loading
+              ? "bg-teal-600 text-teal-100 border-teal-600 cursor-not-allowed"
+              : "bg-white text-teal-700 hover:text-teal-100 border-teal-600 hover:bg-teal-600"
+              }`}
+            type="submit"
             onClick={handleLogin}
             disabled={loading}
           >
@@ -138,13 +160,13 @@ const LoginPage: React.FC = () => {
         <div className="text-center mt-4">
           <a href="#" className="text-teal-600 text-sm hover:text-teal-800">Forgot Password?</a>
         </div>
-      </div>
+      </form>
 
       <footer className="mt-8 text-center text-gray-500">
-        <p>© {new Date().getFullYear()} Quantifore Corporation. All rights reserved.</p>
+        <p>© {new Date().getFullYear()} Numenor Pvt. Ltd. All rights reserved.</p>
       </footer>
     </div>
   );
 };
 
-export default LoginPage;
+export default LoginPage; 

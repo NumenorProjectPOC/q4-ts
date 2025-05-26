@@ -14,27 +14,28 @@ const GraphMonitorComponent: React.FC<{ data: DataItem[]; index: number }> = ({ 
   useEffect(() => {
     if (data.length > 0) drawGraph();
   }, [data]);
-
+  
   const parseValue = (valueUnit: string): number => {
     const match = valueUnit.match(/[\d.]+/);
     return match ? parseFloat(match[0]) : 0;
   };
+  
 
   const drawGraph = () => {
     if (!data || data.length === 0 || !svgRef.current) return;
     d3.select(svgRef.current).selectAll("*").remove();
 
     const processedData = data
-      .map((item) => ({
-        date: new Date(item.time),  // Ensure this is a valid Date object
-        value: parseValue(item.value_unit),
-        originalValue: item.value_unit,
-      }))
-      .sort((a, b) => a.date.getTime() - b.date.getTime());
-
-    console.log(processedData, ',.,...');
-
-
+    .map((item) => ({
+      date: new Date(item.time),  // Ensure this is a valid Date object
+      value: parseValue(item.value_unit),
+      originalValue: item.value_unit,
+    }))
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  
+      console.log(processedData,',.,...');
+      
+      
     const margin = { top: 20, right: 20, bottom: 30, left: 40 };
     const height = 150 - margin.top - margin.bottom;
     const containerWidth = svgRef.current.clientWidth;
@@ -44,14 +45,14 @@ const GraphMonitorComponent: React.FC<{ data: DataItem[]; index: number }> = ({ 
       .select(svgRef.current)
       .attr("width", containerWidth)
       .attr("height", height + margin.top + margin.bottom)
-      .style("background", "#121212") // Deep Color: Dark Background
+      .style("background", "#1F2937") // Updated background color
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
-    const x = d3.scaleTime()
-      .domain(d3.extent(processedData, d => d.date) as [Date, Date])
+      const x = d3.scaleTime()
+      .domain(d3.extent(processedData, d => d.date) as [Date, Date]) 
       .range([0, graphWidth]);
-
+    
     const y = d3.scaleLinear().domain([0, d3.max(processedData, (d) => d.value) as number]).range([height, 0]);
 
     const line = d3
@@ -60,43 +61,40 @@ const GraphMonitorComponent: React.FC<{ data: DataItem[]; index: number }> = ({ 
       .y((d) => y(d.value))
       .curve(d3.curveMonotoneX); // Smooth curve
 
-    // Grid lines - Dark Blue Grey
+    // Grid lines
     svg.append("g")
       .attr("class", "grid")
-      .attr("stroke", "#2A2A2A") // Dark Blue Grey Grid
+      .attr("stroke", "rgb(57, 255, 20)")
       .attr("stroke-dasharray", "3,3")
       .call(d3.axisLeft(y).tickSize(-graphWidth).tickFormat(() => "").ticks(5));
 
     svg.append("g")
       .attr("class", "grid")
-      .attr("stroke", "#2A2A2A") // Dark Blue Grey Grid
+      .attr("stroke", "#39FF14")
       .attr("stroke-dasharray", "3,3")
       .attr("transform", `translate(0,${height})`)
       .call(d3.axisBottom(x).tickSize(-height).tickFormat(() => "").ticks(5));
 
-    // X & Y Axes - Light Grey for contrast
+    // X & Y Axes
     svg.append("g")
-      .attr("transform", `translate(0,${height})`)
-      .call(
-        d3.axisBottom(x)
-          .ticks(d3.timeDay.every(1))  // Show one tick per day
-          .tickFormat(d3.timeFormat("%b %d")) // Show only Month and Date
-          .tickPadding(10)
-      )
-      .attr("color", "#E0E0E0") // Light Grey Axis color
-      .selectAll("text") // Rotate text for better readability
-      .attr("transform", "rotate(-45)")
-      .style("text-anchor", "end")
-      .style("fill", "#E0E0E0"); // Light Grey Text color
-
+    .attr("transform", `translate(0,${height})`)
+    .call(
+      d3.axisBottom(x)
+        .ticks(d3.timeDay.every(1))  // Show one tick per day
+        .tickFormat(d3.timeFormat("%b %d")) // Show only Month and Date
+        .tickPadding(10)
+    )
+    .attr("color", "#00E5FF")
+    .selectAll("text") // Rotate text for better readability
+    .attr("transform", "rotate(-45)")
+    .style("text-anchor", "end");
+  
 
     svg.append("g")
       .call(d3.axisLeft(y).ticks(3).tickPadding(10))
-      .attr("color", "#E0E0E0") // Light Grey Axis color
-      .selectAll("text")
-      .style("fill", "#E0E0E0"); // Light Grey Text color
+      .attr("color", "#00E5FF");
 
-    // Gradient for line - Deep Purple to Deep Blue Gradient (Reversed)
+    // Gradient for line
     const defs = svg.append("defs");
     const gradient = defs.append("linearGradient")
       .attr("id", "lineGradient")
@@ -105,51 +103,51 @@ const GraphMonitorComponent: React.FC<{ data: DataItem[]; index: number }> = ({ 
       .attr("x2", "0%")
       .attr("y2", "100%");
 
-    gradient.append("stop").attr("offset", "0%").attr("stop-color", "#6A00FF").attr("stop-opacity", 0.9); // Deep Purple (Start)
-    gradient.append("stop").attr("offset", "100%").attr("stop-color", "#007BFF").attr("stop-opacity", 0.9); // Deep Blue (End)
+    gradient.append("stop").attr("offset", "0%").attr("stop-color", "#00E5FF").attr("stop-opacity", 0.8);
+    gradient.append("stop").attr("offset", "100%").attr("stop-color", "#00E5FF").attr("stop-opacity", 0.2);
 
-    // Graph Line - Apply Gradient
+    // Graph Line
     svg.append("path")
       .datum(processedData)
       .attr("fill", "none")
       .attr("stroke", "url(#lineGradient)")
-      .attr("stroke-width", 2)
+      .attr("stroke-width", 2.5)
       .attr("d", line)
-      .style("filter", "drop-shadow(0px 0px 5px #6A00FF)"); // Purple shadow - still appropriate as purple is now the starting color
+      .style("filter", "drop-shadow(0px 0px 6px #00E5FF)");
 
-    // Create tooltip div - Dark Background, Light Text, Vibrant Border
+    // Create tooltip div
     const tooltip = d3.select("body")
       .append("div")
       .attr("class", "tooltip")
       .style("position", "absolute")
       .style("padding", "8px")
-      .style("background", "rgba(0, 0, 0, 0.9)") // Dark Tooltip Background
+      .style("background", "rgba(0, 0, 0, 0.8)")
       .style("border-radius", "4px")
-      .style("color", "#E0E0E0") // Light Text Color
+      .style("color", "#fff")
       .style("font-size", "12px")
-      .style("box-shadow", "0 0 8px rgba(106, 0, 255, 0.7)") // Purple Shadow
-      .style("border", "1px solid #007BFF") // Deep Blue Border
+      .style("box-shadow", "0 0 10px rgba(0, 229, 255, 0.5)")
+      .style("border", "1px solid #00E5FF")
       .style("pointer-events", "none")
       .style("opacity", 0)
       .style("z-index", 1000);
 
-    // Data Points - Vibrant Blue
+    // Data Points
     svg.selectAll(".dot")
       .data(processedData)
       .enter()
       .append("circle")
       .attr("cx", (d) => x(d.date))
       .attr("cy", (d) => y(d.value))
-      .attr("r", 4)
-      .attr("fill", "#52ff03") // Vibrant Blue Dots
-      .style("filter", "drop-shadow(0px 0px 6px #0ac27e)") // Blue dot shadow
+      .attr("r", 5)
+      .attr("fill", "#00E5FF")
+      .style("filter", "drop-shadow(0px 0px 8px #00E5FF)")
       .on("mouseover", function (event, d) {
-        // Enlarge and change color of the dot - Vibrant Pink on Hover
+        // Enlarge and change color of the dot
         d3.select(this)
           .transition()
           .duration(200)
-          .attr("r", 7)
-          .attr("fill", "#FF4081"); // Vibrant Pink on hover
+          .attr("r", 8)
+          .attr("fill", "#FF4081");
 
         // Format date for display
         const formatDate = d3.timeFormat("%b %d, %Y %H:%M");
@@ -175,8 +173,8 @@ const GraphMonitorComponent: React.FC<{ data: DataItem[]; index: number }> = ({ 
         d3.select(this)
           .transition()
           .duration(200)
-          .attr("r", 4)
-          .attr("fill", "#007BFF"); // Back to Vibrant Blue
+          .attr("r", 5)
+          .attr("fill", "#00E5FF");
 
         // Hide tooltip
         tooltip
@@ -206,7 +204,7 @@ const GraphMonitorComponent: React.FC<{ data: DataItem[]; index: number }> = ({ 
   }, [data, width]);
 
   return (
-    <div className="w-full h-48 mt-2 p-1 bg-gray-900 rounded-lg shadow-lg border border-gray-800"> {/* Updated container background and border for deep color */}
+    <div className="w-full h-48 mt-2 p-1 bg-gray-800 rounded-lg shadow-lg border border-gray-800">
       <svg ref={svgRef} className="w-full h-full"></svg>
     </div>
   );

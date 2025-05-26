@@ -60,7 +60,7 @@ const DomainSelectionPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Navbar showTabs={false} />
+      {/* <Navbar showTabs={false} /> */}
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="max-w-3xl mx-auto">
           <div className="mb-8">
