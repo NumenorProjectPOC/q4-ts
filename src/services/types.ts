@@ -1,10 +1,12 @@
 export interface Relationship {
-  impact: "positive" | "negative";
+  impact:  "positive" | "negative" | "neutral";
   weight: number;
   flow: number;
+  fromName: string;
+  toName: string;
 }
 
-interface Value {
+export interface Value {
   value: number;
   unit: string;
 }
@@ -15,36 +17,36 @@ export interface Stock {
   value: Value;
   context?: string;
   relationship?: Relationship;
-  related_stocks?: Stock[];
 }
 
 export interface GraphData {
-  stock: Stock;
-  related_stocks: Stock[];
+  stock: {
+    guid: string;
+    name: string;
+    value: Value;
+    context?: string;
+  };
+  nodes: NodeData[];
+  edges: LinkData[];
 }
 
 export interface NodeData {
   id: string;
-  x: any;
-  y: string | number | boolean | readonly (string | number)[] | null;
   name: string;
-  value?: Value;
+  value: Value;
   context?: string;
-  isCenter?: boolean;
-  relationship?: Relationship;
+  relationship?: Relationship; 
   isSecondary?: boolean;
+  isCenter?: boolean; 
+  x?: number;
+  y?: number;
+  fx?: number;
+  fy?: number;
 }
 
 export interface LinkData {
-  // id: string;
-  source: string;
-  target: string;
-  impact: "positive" | "negative";
-  weight: number;
-  flow: number;
-  name: string;
-  isSecondary?: boolean;
-  value?: Value;
+  relationshipList?: Relationship[];
+  isBidirectional?: boolean;
 }
 
 export interface TooltipProps {
@@ -52,3 +54,24 @@ export interface TooltipProps {
   isVisible: boolean;
   position?: { x: number; y: number };
 }
+
+export interface FavoriteStock {
+  label: string;
+  value: string;
+  guid: string;
+}
+
+export interface OrgUser {
+  user_id: string;
+  name: string;
+  email: string;
+  login_id: string;
+  role: string;
+}
+
+export interface Model {
+  model_guid: string;
+  model_name: string;
+  shared_by: string;
+  shared_by_username: string;
+} 

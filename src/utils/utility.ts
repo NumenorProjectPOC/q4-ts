@@ -11,9 +11,21 @@ export const formatStockName = (name: string): string => {
 
 // utility function to format large numbers
 export const formatLargeNumber = (num: number): string => {
-    if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
-    if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
-    if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
-    if (num >= 1e3) return (num / 1e3).toFixed(2) + 'K';
+    if (num >= 1e12) {
+        const value = num / 1e12;
+        return Number(value.toFixed(2)).toString() + 'T';
+    }
+    if (num >= 1e9) {
+        const value = num / 1e9;
+        return Number(value.toFixed(2)).toString() + 'B';
+    }
+    if (num >= 1e6) {
+        const value = num / 1e6;
+        return Number(value.toFixed(2)).toString() + 'M';
+    }
+    if (num >= 1e3) {
+        const value = num / 1e3;
+        return Number(value.toFixed(2)).toString() + 'K';
+    }
     return num.toString();
-  };
+};

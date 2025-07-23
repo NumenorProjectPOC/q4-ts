@@ -33,7 +33,6 @@ const ShareModal: React.FC<ShareModalProps> = ({ isStock, title = "Share", itemL
         const formatted = fetched
             .filter(user => user.name !== currentUserName)
             .map(user => ({ name: user.name, userId: user.user_id, email: user.email }));
-    // debugger
         setUsers(formatted);
       } catch (err) {
         console.error("Failed to load users for sharing", err);
@@ -48,7 +47,6 @@ const ShareModal: React.FC<ShareModalProps> = ({ isStock, title = "Share", itemL
 
   const handleShare = async (userId: string, name: string, email?: string) => {
     try {
-      debugger
       setSharingEmail(userId);
   
       if (isStock) {

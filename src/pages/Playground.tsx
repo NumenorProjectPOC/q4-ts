@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import GraphComponent from '../components/GraphComponent';
 import { fetchSavedModel, fetchGraphData, removeSavedModel, shareSavedModel } from '../services/quantiforeApi';
-import Navbar from "../components/Navbar";
+import DashboardSwitcher from "../components/ui/DashboardSwitcher";
+import RightSidebar from "../components/RightSidebar";
 import { GraphData, NodeData, LinkData } from '../services/types';
 import { Calendar, Info, Eye, Pause, Play, RefreshCw, Search, Share2, Trash2 } from 'lucide-react';
 import { formatStockName } from '../utils/utility';
-import LoadingScreen from '../components/ui/LoadingScreen';
 import ConfirmationPopup from '../components/ui/ConfirmationPopup';
 import ShareModal from '../components/ui/ShareModal';
 import Toast from '../components/ui/Toast';
-
+import { simulateStockGrowth } from '../utils/simulation';
+import { AnimatePresence, motion } from "framer-motion";
 
 interface ValueUnit {
     value: number;
@@ -28,7 +29,6 @@ interface Stock {
     value: ValueUnit;
     context?: string;
     relationship?: Relationship;
-    related_stocks?: Stock[];
 }
 
 interface Model {
@@ -47,21 +47,6 @@ const Playground: React.FC = () => {
     const [graphData, setGraphData] = useState<GraphData | null>(null);
     const [selectedNode, setSelectedNode] = useState<NodeData | null>(null);
     const [selectedEdge, setSelectedEdge] = useState<LinkData | null>(null);
-    const setSelectedElement = useCallback((element: NodeData | LinkData | null) => {
-        if (element && 'source' in element) {
-            // If the element is an edge
-            setSelectedNode(null);
-            setSelectedEdge(element as LinkData);
-        } else if (element && 'id' in element) {
-            // If the element is a node
-            setSelectedNode(element as NodeData);
-            setSelectedEdge(null);
-        } else {
-            // If the element is null
-            setSelectedNode(null);
-            setSelectedEdge(null);
-        }
-    }, [setSelectedNode, setSelectedEdge]);
     const [simulationSettings, setSimulationSettings] = useState<SimulationSettings>({
         timeUnit: "years",
         value: 0
@@ -87,8 +72,12 @@ const Playground: React.FC = () => {
     const [modelToShare, setModelToShare] = useState<Stock | null>(null);
     const [confirmPopup, setConfirmPopup] = useState<{ model: Stock | null }>({ model: null });
     const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
-
-
+    const [isPanelOpen, setIsPanelOpen] = useState(false);
+    const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false);
+    const [activeSection, setActiveSection] = useState<'details' | 'simulation' | 'both' | null>(null);
+    const [visualizingModelId, setVisualizingModelId] = useState<string | null>(null);
+    const [showPlaceholder, setShowPlaceholder] = useState(true);
+    const [showPills, setShowPills] = useState(false);
 
     useLayoutEffect(() => {
         const updateSidebarWidth = () => {
@@ -114,75 +103,160 @@ const Playground: React.FC = () => {
     }, []);
 
     useEffect(() => {
+
         const loadSavedModels = async () => {
-          try {
-            // Check cache first
-            const cached = sessionStorage.getItem("saved_models");
-            if (cached) {
-              const parsed = JSON.parse(cached);
-              setSavedModels(parsed);
-              console.log("Loaded saved models from sessionStorage:", parsed);
-              return;
+            try {
+                // Check cache first
+                const cached = sessionStorage.getItem("saved_models");
+                if (cached) {
+                    const parsed = JSON.parse(cached);
+                    if (cached.length > 0) {
+                        setSavedModels(parsed);
+                        console.log("Loaded saved models from sessionStorage:", parsed);
+                        return;
+                    }
+                }
+
+                // Fetch from API if not cached
+                const models = await fetchSavedModel();
+                const formatted = models.map((model) => ({
+                    guid: model.model_guid,
+                    name: model.model_name,
+                    value: { value: 0, unit: "unknown" },
+                    sharedBy: model.shared_by_username || null,
+                }));
+
+                // Only store in sessionStorage if data exists
+                if (formatted.length > 0) {
+                    sessionStorage.setItem("saved_models", JSON.stringify(formatted));
+                    setSavedModels(formatted);
+                    console.log("Fetched and cached saved models:", formatted);
+                } else {
+                    console.warn("No models returned from API — not storing in cache.");
+                }
+            } catch (error) {
+                console.error("Failed to fetch saved models", error);
+                setToast({
+                    type: "error",
+                    message: "Could not load saved models. Please try again.",
+                });
             }
-      
-            // Fetch from API if not cached
-            const models = await fetchSavedModel();
-            const formatted = models.map((model) => ({
-              guid: model.model_guid,
-              name: model.model_name,
-              value: { value: 0, unit: "unknown" },
-              sharedBy: model.shared_by_username || null,
-            }));
-      
-            // Store in cache
-            sessionStorage.setItem("saved_models", JSON.stringify(formatted));
-            setSavedModels(formatted);
-            console.log("Fetched and cached saved models:", formatted);
-          } catch (error) {
-            console.error("Failed to fetch saved models", error);
-            setToast({
-              type: "error",
-              message: "Could not load saved models. Please try again.",
-            });
-          }
         };
-      
+
         loadSavedModels();
-      }, []);
-      
-
-    const toggleSidebar = () => setIsSidebarCollapsed((prev) => !prev);
-
-    // useEffect(() => {
-    //     fetchGraphData(currentStockName)
-    //         .then((data: any) => {
-    //             console.log(data, "Data fetched from API");
-    //             setGraphData(data);
-    //             setIsLoading(false);
-    //         })
-    //         .catch(error => {
-    //             console.error("Error fetching graph data:", error);
-    //             setIsLoading(false);
-    //         });
-    // }, [currentStockName]);
+    }, []);
 
     useEffect(() => {
         if (!currentStockName) return;
 
         setIsLoading(true);
-
         fetchGraphData(currentStockName)
-            .then((data: any) => {
-                console.log(data, "Data fetched from API");
+            .then((data: GraphData) => {
+                console.log("GRAPHDATA →", data);
                 setGraphData(data);
             })
-            .catch(error => {
+            .catch((error) => {
                 console.error("Error fetching graph data:", error);
             })
             .finally(() => {
-                setIsLoading(false); // Hide loading after response
+                setIsLoading(false);
             });
     }, [currentStockName]);
+
+    // Replace the existing useEffect for visualization state
+    useEffect(() => {
+        const storedVisualizingId = sessionStorage.getItem("visualizing_model_id");
+        if (storedVisualizingId) {
+            setVisualizingModelId(storedVisualizingId);
+            setCurrentStockName(storedVisualizingId);
+            setShowPlaceholder(false);
+            setIsLoading(true); // Add loading state
+
+            // Fetch data for the stored model
+            fetchGraphData(storedVisualizingId)
+                .then((data: GraphData) => {
+                    console.log("GRAPHDATA →", data);
+                    setGraphData(data);
+                    setShowPlaceholder(false);
+                })
+                .catch((error) => {
+                    console.error("Error fetching graph data:", error);
+                    // On error, reset to placeholder
+                    setVisualizingModelId(null);
+                    setShowPlaceholder(true);
+                    setCurrentStockName("");
+                    setGraphData(null);
+                })
+                .finally(() => {
+                    setIsLoading(false);
+                });
+        }
+    }, []);
+
+    // Add this effect to handle visualization state changes
+    useEffect(() => {
+        if (visualizingModelId) {
+            sessionStorage.setItem("visualizing_model_id", visualizingModelId);
+            setShowPlaceholder(false);
+        } else {
+            sessionStorage.removeItem("visualizing_model_id");
+            setShowPlaceholder(true);
+            setCurrentStockName("");
+            setGraphData(null);
+        }
+    }, [visualizingModelId]);
+
+    useEffect(() => {
+        if (graphData && !showPlaceholder) {
+            setActiveSection('both');
+            setShowPills(true);
+        } else {
+            setShowPills(false);
+            setActiveSection(null);
+        }
+    }, [graphData, showPlaceholder]);
+
+    const setSelectedElement = useCallback((element: NodeData | LinkData | null) => {
+        if (element && 'source' in element) {
+            // If the element is an edge
+            setSelectedNode(null);
+            setSelectedEdge(element as LinkData);
+        } else if (element && 'id' in element) {
+            // If the element is a node
+            setSelectedNode(element as NodeData);
+            setSelectedEdge(null);
+        } else {
+            // If the element is null
+            setSelectedNode(null);
+            setSelectedEdge(null);
+        }
+
+        console.log("Selected element:", element);
+    }, []);
+
+    const toggleSidebar = () => setIsSidebarCollapsed((prev) => !prev);
+
+    const toggleRightSidebar = () => setIsRightSidebarCollapsed((prev) => !prev);
+
+    const toggleSection = (section: 'details' | 'simulation') => {
+        if (activeSection === section) {
+            // If the clicked section is open, close it
+            setActiveSection(null);
+        } else if (activeSection === null) {
+            // If nothing is open, open the clicked section
+            setActiveSection(section);
+        } else if (activeSection === 'both') {
+            // If both are open, close the clicked section (keep the other open)
+            setActiveSection(section === 'details' ? 'simulation' : 'details');
+        } else {
+            // If the other section is open, open both
+            setActiveSection('both');
+        }
+    };
+
+    const collapseAllSections = () => {
+        setActiveSection(null);
+    };
 
     // Rest of your functions (updateValue, animateSimulation, etc.)
     const updateValue = useCallback((increment: boolean) => {
@@ -195,7 +269,7 @@ const Playground: React.FC = () => {
             if (isMainStock) {
                 stockToUpdate = graphData.stock;
             } else {
-                stockToUpdate = graphData.related_stocks.find((stock: Stock) => stock.guid === stockGuid);
+                stockToUpdate = graphData.nodes.find((node) => node.id === stockGuid);
             }
 
             if (!stockToUpdate) return; // Stock not found
@@ -206,27 +280,24 @@ const Playground: React.FC = () => {
             stockToUpdate.value = { value: currentValue + change, unit: unit };
         };
 
-        // Determine which stock to update and initiate recursive updates
         if (selectedNode.id === graphData.stock.guid) {
             const change = increment ? 1 : -1;
-            updateRelatedStocks(graphData.stock.guid, change, true); // True means this is the main stock
+            updateRelatedStocks(graphData.stock.guid, change, true);
         } else {
             const change = increment ? 1 : -1;
             updateRelatedStocks(selectedNode.id, change);
         }
 
-        // Update state with new graph data
         setGraphData({ ...graphData });
 
-        // Update selected node
         if (selectedNode.id === graphData.stock.guid) {
             setSelectedNode({
                 ...selectedNode,
                 value: graphData.stock.value
             });
         } else {
-            const updatedStock = graphData.related_stocks.find(
-                (stock: Stock) => stock.guid === selectedNode.id
+            const updatedStock = graphData.nodes.find(
+                (node: NodeData) => node.id === selectedNode.id
             );
             if (updatedStock) {
                 setSelectedNode({
@@ -241,18 +312,58 @@ const Playground: React.FC = () => {
         setRunSimulation(true);
         setIsSimulating(true);
 
-        // Animate the slider
+        const timeInSeconds = (() => {
+            switch (simulationSettings.timeUnit) {
+                case "days": return targetValue * 86400;
+                case "weeks": return targetValue * 604800;
+                case "months": return targetValue * 2629746; // avg seconds
+                case "years": return targetValue * 31556952;
+                default: return 0;
+            }
+        })();
+
+        if (graphData) {
+            const startVals = {
+                [graphData.stock.guid]: graphData.stock.value.value,
+                ...graphData.nodes.reduce((acc, s) => {
+                    acc[s.id] = s.value.value;
+                    return acc;
+                }, {} as Record<string, number>)
+            };
+
+            const newVals = simulateStockGrowth(graphData, timeInSeconds, startVals);
+
+            setGraphData(prev => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    stock: {
+                        ...prev.stock,
+                        value: {
+                            ...prev.stock.value,
+                            value: newVals[prev.stock.guid],
+                        },
+                    },
+                    nodes: prev.nodes.map(rs => ({
+                        ...rs,
+                        value: {
+                            ...rs.value,
+                            value: newVals[rs.id],
+                        },
+                    })),
+                };
+            });
+        }
+
+        // animation part (optional)
         const startTime = performance.now();
         const animateSlider = (currentTime: number) => {
-            const elapsedTime = currentTime - startTime;
-            const progress = Math.min(elapsedTime / duration, 1);
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
             const newValue = simulationValue + (targetValue - simulationValue) * progress;
-            setAnimatedSimulationValue(newValue); // Update animated slider value
-
-            if (progress < 1) {
-                requestAnimationFrame(animateSlider);
-            } else {
-                // Animation complete, set the actual value
+            setAnimatedSimulationValue(newValue);
+            if (progress < 1) requestAnimationFrame(animateSlider);
+            else {
                 setSimulationValue(targetValue);
                 setAnimatedSimulationValue(targetValue);
                 setRunSimulation(false);
@@ -261,20 +372,7 @@ const Playground: React.FC = () => {
         };
 
         requestAnimationFrame(animateSlider);
-
-        // No need to update simulationSettings.value here.
-
-        // setTimeout(() => {
-        //     setRunSimulation(false);
-        //     setIsSimulating(false);
-        // }, duration);
-
-        // setSimulationSettings((prevSettings) => ({
-        //     ...prevSettings,
-        //     value: targetValue,
-        // }));
-    }, [simulationValue]); // Removed simulationSettings, targetValue from dependencies
-    //useCallback dependancy issues were fixed here
+    }, [graphData, simulationSettings.timeUnit, simulationValue]);
 
     const handlePause = useCallback(() => {
         setIsPaused(!isPaused);
@@ -310,7 +408,7 @@ const Playground: React.FC = () => {
                 if (isMainStock) {
                     stockToUpdate = prevGraphData.stock;
                 } else {
-                    stockToUpdate = prevGraphData.related_stocks.find((stock: Stock) => stock.guid === stockGuid);
+                    stockToUpdate = prevGraphData.nodes.find((node) => node.id === stockGuid);
                 }
 
                 if (!stockToUpdate) return; // Stock not found
@@ -393,55 +491,22 @@ const Playground: React.FC = () => {
 
     const memoizedSelectedElement = useMemo(() => selectedNode || selectedEdge, [selectedNode, selectedEdge]);
 
+    useEffect(() => {
+        console.log("Selected Edge Updated:", selectedEdge);
+    }, [selectedEdge]);
+
     return (
-        <div className="h-screen bg-teal-50 text-text-primary flex flex-col font-poppins">
-            <Navbar showLogo={true} showTabs={true} />
-            {/* <div className="w-full flex justify-center mt-6">
-                    <div className="flex items-center gap-3 px-5 py-2 rounded-full shadow-xl border border-white/50 backdrop-blur-md bg-gradient-to-r from-teal-300/20 to-cyan-300/20">
-                        <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && handleSearchQuery()}
-                            placeholder="Search for the models you want"
-                            className="text-gray-800 placeholder-gary-200 text-sm sm:text-base w-64 bg-transparent focus:outline-none"
-                        />
-                        <button
-                            onClick={handleSearchQuery}
-                            disabled={isLoading}
-                            className="p-2 rounded-full hover:bg-white/10 transition duration-150"
-                        >
-                            {isLoading ? (
-                                <svg
-                                    className="animate-spin h-4 w-4 text-gray-300"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <circle
-                                        className="opacity-25"
-                                        cx="12"
-                                        cy="12"
-                                        r="10"
-                                        stroke="currentColor"
-                                        strokeWidth="4"
-                                    ></circle>
-                                    <path
-                                        className="opacity-75"
-                                        fill="currentColor"
-                                        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                                    ></path>
-                                </svg>
-                            ) : (
-                                <Search size={18} className="text-gray-400" />
-                            )}
-                        </button>
-                    </div>
-                </div> */}
+        <div className="h-screen bg-teal-50 text-text-primary flex flex-col">
+            <DashboardSwitcher />
+            <header className="shadow-sm border-b border-gray-200/80 px-6 py-4 bg-white/50 backdrop-blur-md">
+                <div className="flex items-center justify-between mb-5">
+                    <img src="/qf-logo0.1.svg" alt="Quantifore Logo" className="h-8 w-auto mt-3" />
+                </div>
+            </header>
 
-
-            <div className="main-content p-2 md:p-4 flex flex-1">
-                <div className={`${isSidebarCollapsed ? "w-16" : "w-80"} sidebar bg-gradient-to-br from-white/30 via-teal-300/30 to-white/10 backdrop-blur-xl border border-gray-200 rounded-lg p-2 flex flex-col text-gray-700 shadow-xl transition-all duration-300 relative flex-shrink-0 overflow-hidden`}>
+            <div className="main-content p-2 md:p-4 flex flex-1 overflow-hidden relative">
+                {/* Left Sidebar - Overlay */}
+                <div className={`${isSidebarCollapsed ? "w-16" : "w-80"} absolute left-2 top-2 bottom-2 z-10 sidebar bg-gradient-to-br from-white/30 via-teal-300/30 to-white/10 backdrop-blur-xl border border-gray-200 rounded-lg p-2 flex flex-col text-gray-700 shadow-xl transition-all duration-300 flex-shrink-0 overflow-hidden`}>
                     <button
                         onClick={toggleSidebar}
                         className={`${isSidebarCollapsed ? "right-3" : "right-1"} absolute top-2 bg-gray-100 hover:bg-gray-200 rounded-full p-1 z-10 shadow-xl transition-transform duration-300`}
@@ -467,44 +532,61 @@ const Playground: React.FC = () => {
                                     className="w-full px-4 py-2 rounded-full shadow-md border border-gray-200 bg-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500 focus:outline-none text-sm"
                                 />
                             </div>
-                            <div className="space-y-2 pt-2 border-b border-gray-300 pb-8">
-                                <h3 className="text-md text-gray-800 font-semibold pb-2">Saved Models</h3>
+                            <div className="space-y-2 pt-2 border-t border-gray-300 pb-8">
+                                <h3 className="text-md font-medium text-gray-500 tracking-wide">Saved Models</h3>
                                 {savedModels.length > 0 ? (
                                     savedModels.map((model) => {
-                                        const isSelected = selectedModels.includes(model.name); // You already have selectedModels state
+                                        const isSelected = visualizingModelId === model.name;
 
                                         return (
+                                            // 1. Added 'group' class to the parent div
                                             <div
                                                 key={model.guid}
-                                                className={`p-2 pl-3 pr-2 rounded-lg flex justify-between items-center shadow-sm transition-all duration-300 ${isSelected
-                                                    ? "bg-gradient-to-r from-cyan-400 to-teal-300 text-green-900"
-                                                    : "bg-gradient-to-r from-cyan-200 to-teal-100 text-gray-800"
-                                                    }`}
+                                                className={`
+                                                    group
+                                                    p-4
+                                                    rounded-lg 
+                                                    flex justify-between items-center 
+                                                    transition-all duration-300
+                                                    text-gray-900
+                                                    ${isSelected ? "bg-gradient-to-r from-blue-200 to-cyan-200 shadow-md border-2 border-blue-300"
+                                                        : "bg-gradient-to-r from-cyan-100 to-teal-100 border-2 border-transparent hover:shadow-lg"
+                                                    }
+                                                `}
                                             >
-                                                <span
-                                                    onClick={() => setCurrentStockName(model.name)}
-                                                    className="text-sm font-medium truncate cursor-pointer hover:underline hover:text-teal-600"
-                                                    title="Click to open"
-                                                >
-                                                    {model.name}
-                                                </span>
+                                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                    <span className="text-sm font-medium text-gray-900 truncate">
+                                                        {formatStockName(model.name)}
+                                                    </span>
+                                                    {isSelected && (
+                                                        <div className="w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white shadow-sm"></div>
+                                                    )}
+                                                </div>
 
-                                                <div className="flex items-center gap-1">
+                                                {/* 2. Applied conditional visibility to the entire icon container */}
+                                                <div className={`flex items-center space-x-1 transition-opacity ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                                                    }`}>
                                                     {/* Visualize */}
                                                     <button
                                                         onClick={() => {
-                                                            setCurrentStockName(model.name); // ✅ Set the model name
-                                                            const updated = isSelected
-                                                                ? selectedModels.filter((m) => m !== model.name)
-                                                                : [...selectedModels, model.name];
-                                                            setSelectedModels(updated);
-                                                        }}
-                                                        className={`p-1 rounded-full hover:bg-teal-600/30 transition ${isSelected ? "text-green-800" : "text-gray-600"}`}
-                                                        title="Visualize"
-                                                    >
-                                                        <Eye size={16} />
-                                                    </button>
+                                                            const isCurrentlyVisualizing = visualizingModelId === model.name;
 
+                                                            if (isCurrentlyVisualizing) {
+                                                                // If currently visualizing this model, stop visualization
+                                                                setVisualizingModelId(null);
+                                                                setSelectedModels(prev => prev.filter(m => m !== model.name));
+                                                            } else {
+                                                                // If not visualizing or visualizing different model, start visualization
+                                                                setVisualizingModelId(model.name);
+                                                                setCurrentStockName(model.name);
+                                                                setSelectedModels([model.name]);
+                                                            }
+                                                        }}
+                                                        className="p-1.5 rounded-md text-gray-500 hover:text-green-600 hover:bg-green-100/50 transition-colors"
+                                                        title={visualizingModelId === model.name ? "Stop Visualization" : "Visualize"}
+                                                    >
+                                                        <Eye size={15} />
+                                                    </button>
 
                                                     {/* Share */}
                                                     <button
@@ -512,10 +594,10 @@ const Playground: React.FC = () => {
                                                             setModelToShare(model);
                                                             setShowShareModal(true);
                                                         }}
-                                                        className="p-1 rounded-full hover:bg-blue-600/30 text-gray-600 transition"
+                                                        className="p-1.5 rounded-md text-gray-500 hover:text-blue-600 hover:bg-blue-100/50 transition-colors"
                                                         title="Share"
                                                     >
-                                                        <Share2 size={16} />
+                                                        <Share2 size={15} />
                                                     </button>
 
                                                     {/* Remove */}
@@ -523,16 +605,15 @@ const Playground: React.FC = () => {
                                                         onClick={() => {
                                                             setConfirmPopup({ model });
                                                         }}
-                                                        className="p-1 rounded-full hover:bg-red-600/30 text-gray-600 transition"
+                                                        className="p-1.5 rounded-md text-gray-500 hover:text-red-600 hover:bg-red-100/70 transition-colors"
                                                         title="Remove"
                                                     >
-                                                        <Trash2 size={16} />
+                                                        <Trash2 size={15} />
                                                     </button>
                                                 </div>
                                             </div>
                                         )
                                     })
-
                                 ) : (
                                     <p className="text-sm text-gray-500">No saved models found.</p>
                                 )}
@@ -540,281 +621,515 @@ const Playground: React.FC = () => {
                         </div>
                     )}
                 </div>
-                <div className="graph-container flex-grow bg-transparent flex justify-center items-center overflow-hidden relative">
-                    {/* {isLoading && (
-                        // <div className=" flex items-center justify-center bg-white/70 z-50 relative">
-                        //     <LoadingScreen message="Loading models..." />
-                        // </div>
-                    )} */}
-                    
-                        <GraphComponent
-                            isLoading={isLoading}
-                            simulationSettings={memoizedSimulationSettings}
-                            simulationValue={simulationValue}
-                            graphData={graphData}
-                            selectedElement={memoizedSelectedElement}
-                            setSelectedElement={setSelectedElement}
-                            sidebarWidth={sidebarWidth}
-                            nodeValueChangeCallback={handleNodeValueChange}
-                            runSimulation={runSimulation}
-                            // key={graphData.stock.guid}
-                        />
-                    
-                </div>
-                <div className="sidebar w-80 p-2 sidebar bg-teal-50" style={{ position: 'relative' }} ref={sidebarRef}>
-                    <div className="sidebar-content">
-                        <h2 className="text-xl font-semibold text-teal-700 mb-4 tracking-tight">Stock Details</h2>
-                        {!selectedNode && !selectedEdge && (
-                            <p className="text-gray-600">Click on a node or edge to see details.</p>
-                        )}
-                        {selectedNode && (
-                            <>
-                                <div className="bg-teal-50 border border-gray-200 rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow duration-300 relative overflow-hidden">
-                                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-cyan-500"></div>
 
-                                    <h3 className="text-lg font-medium text-teal-700 mb-2 relative z-10">
-                                        <strong>
-                                            {formatStockName(selectedNode.name || "")}
-                                        </strong>
-                                    </h3>
-                                    <hr className="border-gray-200 mb-3" />
+                {showPlaceholder && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center space-y-6 z-0">
+                        <div className="w-24 h-24 bg-gradient-to-br from-teal-100 to-cyan-100 rounded-full flex items-center justify-center">
+                            <Search className="w-12 h-12 text-teal-500" />
+                        </div>
+                        <div className="space-y-2">
+                            <h3 className="text-2xl font-bold text-gray-700">Start Exploring Models</h3>
+                            <p className="text-gray-500 max-w-md">
+                                Click the eye icon next to any saved model to visualize its data and start playing with the interactive graph.
+                            </p>
+                        </div>
+                    </div>
+                )}
 
-                                    {/* Node Selected */}
-                                    {selectedNode.value !== undefined && (
-                                        <div className="text-gray-700 mb-1 flex items-center">
-                                            <span>Value:</span>
-                                            <div className="flex items-center ml-6">
-                                                <input
-                                                    type="number"
-                                                    value={editedValue !== null ? editedValue : Math.round(selectedNode.value.value)}
-                                                    onChange={(e) => setEditedValue(parseInt(e.target.value))}
-                                                    className="w-16 text-center border border-gray-300 rounded focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-                                                />
-                                            </div>
+                {/* Graph Container - Full Width */}
+                {!showPlaceholder && (
+                    <GraphComponent
+                        isLoading={isLoading}
+                        simulationSettings={memoizedSimulationSettings}
+                        simulationValue={simulationValue}
+                        graphData={graphData}
+                        selectedElement={memoizedSelectedElement}
+                        setSelectedElement={setSelectedElement}
+                        sidebarWidth={sidebarWidth}
+                        nodeValueChangeCallback={handleNodeValueChange}
+                        runSimulation={runSimulation}
+                    />
+                )}
+
+                {/* Right Sidebar - Replaced with expandable pills */}
+                {showPills && (
+                    <div className="absolute right-4 top-1/2 transform -translate-y-1/2 z-10 flex flex-col gap-4">
+                        {/* Stock Details Pill */}
+                        <div className="relative">
+                            <div className={`${(activeSection === 'details' || activeSection === 'both')
+                                ? 'bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/30'
+                                : ''
+                                }`}>
+                                <button
+                                    onClick={() => toggleSection('details')}
+                                    className={`w-full transition-all duration-300 ${(activeSection === 'details' || activeSection === 'both')
+                                        ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-xl px-6 py-4 rounded-t-2xl'
+                                        : 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg hover:shadow-xl hover:scale-105 p-4 rounded-full'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className={`p-2 rounded-full ${(activeSection === 'details' || activeSection === 'both') ? 'bg-white/20' : 'bg-white/20'}`}>
+                                            <Info size={20} className="text-white" />
                                         </div>
-                                    )}
-                                    {/* Details for value and unit */}
-                                    {selectedNode.value !== undefined && (
-                                        <div className="text-gray-700 mb-1 flex items-center justify-between">
-                                            <div>
-                                                <br />
-                                                {`Unit: ${selectedNode.value.unit}`}
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div className="flex justify-between mt-4">
-                                        <button
-                                            className="py-2 px-4 rounded font-medium transition-all duration-300 relative overflow-hidden bg-gradient-to-r from-teal-400 to-cyan-500 hover:from-teal-500 hover:to-cyan-600 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 focus:outline-none flex-grow"
-                                            onClick={handleSave}
-                                        >
-                                            <span className="relative z-10">Save</span>
-                                            <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-pink-600 opacity-0 hover:opacity-100 rounded transition-opacity duration-300"></div>
-                                            <div className="absolute inset-0 rounded-lg opacity-0 hover:opacity-30 transition-opacity duration-300 blur-md bg-gradient-to-r from-cyan-400 to-sky-900"></div>
-                                        </button>
-                                    </div>
-                                    {selectedNode && !selectedNode.isCenter && (
-                                        <button
-                                            className="w-full py-2 px-4 mt-2 rounded font-medium transition-all duration-300 relative overflow-hidden bg-gradient-to-r from-sky-400 to-sky-900 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 focus:outline-none flex-grow"
-                                            onClick={handleDiveIntoNode}
-                                        >
-                                            <span className="relative z-10">Dive In</span>
-                                            <div className="absolute inset-0 bg-gradient-to-r from-green-500 to-blue-600 opacity-0 hover:opacity-100 rounded transition-opacity duration-300"></div>
-                                            <div className="absolute inset-0 rounded opacity-0 hover:opacity-30 transition-opacity duration-300 blur-md bg-gradient-to-r from-cyan-400 to-blue-400"></div>
-                                        </button>
-                                    )}
-                                    <div className="absolute bottom-0 right-0 w-16 h-16 bg-gradient-to-tl from-cyan-500 to-transparent opacity-10"></div>
-                                </div>
-                            </>
-                        )}
-
-                        {selectedEdge && (
-                            <div className="mt-4 bg-teal-50 border border-gray-200 rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow duration-300 relative overflow-hidden">
-                                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-400 to-blue-500"></div>
-
-                                <div className="flex items-center mb-2">
-                                    <Info className="mr-2 text-blue-500" size={16} />
-                                    <h4 className="text-md font-medium text-blue-700">Connection Details</h4>
-                                </div>
-
-                                {'impact' in selectedEdge && selectedEdge.impact && (
-                                    <div className="text-gray-700 mb-1 flex justify-between">
-                                        <span>Impact:</span>
-                                        <span className={selectedEdge.impact === 'positive' ? 'text-green-600' : 'text-red-600'}>
-                                            {selectedEdge.impact}
-                                        </span>
-                                    </div>
-                                )}
-
-                                {'weight' in selectedEdge && selectedEdge.weight !== undefined && (
-                                    <div className="text-gray-700 mb-1 flex justify-between">
-                                        <span>Weight:</span>
-                                        <span>{selectedEdge.weight}</span>
-                                    </div>
-                                )}
-
-                                {'flow' in selectedEdge && selectedEdge.flow !== undefined && (
-                                    <div className="text-gray-700 mb-1 flex justify-between">
-                                        <span>Flow:</span>
-                                        <span>{selectedEdge.flow}</span>
-                                    </div>
-                                )}
-
-                                <div className="absolute bottom-0 right-0 w-16 h-16 bg-gradient-to-tl from-blue-500 to-transparent opacity-10"></div>
-                            </div>
-                        )}
-
-                        {graphData && (
-                            <div className="mt-6">
-                                <div className="bg-teal-50 border border-gray-200 rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow duration-300 relative overflow-hidden">
-                                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-400 to-blue-500"></div>
-
-                                    <div className="flex items-center mb-4">
-                                        <Calendar className="mr-2 text-blue-500" size={18} />
-                                        <h3 className="text-lg font-medium text-blue-700">Time Simulation</h3>
-                                    </div>
-
-                                    <div className="mb-4">
-                                        <p className="text-sm text-gray-600 mb-2">Time Unit:</p>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {(['days', 'weeks', 'months', 'years'] as const).map((unit) => (
-                                                <button
-                                                    key={unit}
-                                                    className={`
-                                                                    px-3 py-2 text-sm rounded-md transition-all duration-300 relative overflow-hidden
-                                                                    ${simulationSettings.timeUnit === unit
-                                                            ? 'shadow-lg transform scale-105'
-                                                            : 'hover:shadow-md'}
-                                                                `}
-                                                    onClick={() => handleTimeUnitChange(unit)}
-                                                >
-                                                    <div className={`
-                                                                    absolute inset-0 bg-gradient-to-r
-                                                                    ${simulationSettings.timeUnit === unit
-                                                            ? 'from-blue-500 to-cyan-400'
-                                                            : 'from-gray-100 to-gray-200 hover:from-blue-50 hover:to-cyan-50'}
-                                                                `}></div>
-                                                    <span className={`
-                                                                    relative z-10
-                                                                    ${simulationSettings.timeUnit === unit ? 'text-white' : 'text-gray-800'}
-                                                                `}>
-                                                        {unit.charAt(0).toUpperCase() + unit.slice(1)}
-                                                    </span>
-
-                                                    {simulationSettings.timeUnit === unit && (
-                                                        <div className="absolute inset-0 opacity-30 blur-sm bg-gradient-to-r from-blue-300 to-cyan-300"></div>
-                                                    )}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <div className="flex justify-between mb-1">
-                                            <p className="text-sm text-gray-600">Simulate future:</p>
-                                            <span className="text-sm font-medium text-blue-600">
-                                                {Math.round(animatedSimulationValue)} {simulationSettings.timeUnit}
-                                            </span>
-                                        </div>
-                                        <div className="relative py-2">
-                                            <div className="absolute h-2 top-1/2 left-0 right-0 -mt-1 bg-gradient-to-r from-blue-100 to-teal-900 rounded-lg"></div>
-                                            <input
-                                                type="range"
-                                                min="0"
-                                                max={
-                                                    simulationSettings.timeUnit === 'days' ? 365 :
-                                                        simulationSettings.timeUnit === 'weeks' ? 52 :
-                                                            simulationSettings.timeUnit === 'months' ? 36 : 10
-                                                }
-                                                value={simulationValue}
-                                                onChange={handleSliderChange}
-                                                className="appearance-none w-full h-2 bg-transparent rounded-lg cursor-pointer relative z-10"
-                                                style={{
-                                                    WebkitAppearance: 'none',
-                                                    background: 'transparent'
-                                                }}
-                                            />
-                                        </div>
-                                        <div className="flex justify-between text-xs text-gray-500 mt-1">
-                                            <span>Now</span>
-                                            <span>
-                                                {simulationSettings.timeUnit === 'days' ? '365 days' :
-                                                    simulationSettings.timeUnit === 'weeks' ? '52 weeks' :
-                                                        simulationSettings.timeUnit === 'months' ? '36 months' : '10 Years'}
-                                            </span>
-                                        </div>
-                                        <div className="mt-4">
-                                            <button
-                                                className="w-full py-2 rounded font-medium transition-all duration-300 relative overflow-hidden bg-gradient-to-r from-teal-500 to-cyan-500 text-white shadow-lg hover:shadow-xl transform hover:-translate-y-1 focus:outline-none"
-                                                onClick={() => animateSimulation(simulationValue, 2000)}
-                                            >
-                                                <span className="relative z-10">Simulate</span>
-                                                <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-cyan-600 opacity-0 hover:opacity-100 rounded-lg transition-opacity duration-300"></div>
-                                                <div className="absolute inset-0 rounded-lg opacity-0 hover:opacity-30 transition-opacity duration-300 blur-md bg-gradient-to-r from-cyan-400 to-pink-400"></div>
-                                            </button>
-                                            <div className="mt-2 flex justify-between">
-                                                <div className="flex space-x-2">
+                                        {(activeSection === 'details' || activeSection === 'both') && (
+                                            <div className="flex items-center justify-between w-full">
+                                                <span className="font-semibold text-lg whitespace-nowrap">Stock Details</span>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="relative group">
+                                                        <button
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="p-1 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                                            </svg>
+                                                        </button>
+                                                        <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-white/95 text-gray-700 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200 ease-out pointer-events-none z-[60] shadow-md border border-gray-200 backdrop-blur-sm max-w-xs whitespace-nowrap">
+                                                            <span className="italic text-xs">Click on any node or edge to see detailed information</span>
+                                                        </div>
+                                                    </div>
                                                     <button
-                                                        className="bg-teal-50 border border-gray-200 hover:border-pink-300 text-gray-800 py-2 px-2 rounded-full shadow focus:outline-none flex items-center justify-center transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg relative overflow-hidden"
-                                                        onClick={handlePause}
-                                                        disabled={simulationValue === 0}
+                                                        onClick={(e) => { e.stopPropagation(); toggleSection('details'); }}
+                                                        className="p-1 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
+                                                        title="Minimize"
                                                     >
-                                                        <div className="absolute inset-0 bg-gradient-to-r from-blue-50 to-pink-50 opacity-0 hover:opacity-100 transition-opacity duration-300 rounded-full"></div>
-                                                        {isPaused ? <Play size={16} className="relative z-10" /> : <Pause size={16} className="relative z-10" />}
-                                                    </button>
-                                                    <button
-                                                        className="bg-teal-50 border border-gray-200 hover:border-pink-300 text-gray-800 py-2 px-2 rounded-full shadow focus:outline-none flex items-center justify-center transition-all duration-300 transform hover:-translate-y-1 hover:shadow-lg relative overflow-hidden"
-                                                        onClick={handleReset}
-                                                    >
-                                                        <div className="absolute inset-0 bg-gradient-to-r from-blue-50 to-pink-50 opacity-0 hover:opacity-100 transition-opacity duration-300 rounded-full"></div>
-                                                        <RefreshCw size={16} className="relative z-10" />
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                                                        </svg>
                                                     </button>
                                                 </div>
                                             </div>
-                                        </div>
+                                        )}
+                                        {/* Show expand icon when minimized */}
+                                        {!(activeSection === 'details' || activeSection === 'both') && (
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8l4-4 4 4m0 8l-4 4-4-4" />
+                                            </svg>
+                                        )}
                                     </div>
+                                </button>
 
-                                    <div className="absolute bottom-0 right-0 w-16 h-16 bg-gradient-to-tl from-cyan-500 to-transparent opacity-10"></div>
-                                    <div className="absolute top-0 right-0 w-8 h-8 bg-gradient-to-bl from-blue-500 to-transparent opacity-10"></div>
+                                {/* Stock Details Content */}
+                                <AnimatePresence>
+                                    {(activeSection === 'details' || activeSection === 'both') && (
+                                        <motion.div
+                                            initial={{ opacity: 0, scale: 0.8, y: -20 }}
+                                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                                            exit={{ opacity: 0, scale: 0.8, y: -20 }}
+                                            transition={{ duration: 0.3 }}
+                                            className="mt-4 w-80 bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/30 p-2run"
+                                        >
+                                            {/* Show Selected Node Details if available, otherwise show main stock */}
+                                            {selectedNode && selectedNode.id !== graphData?.stock.guid ? (
+                                                <div className="space-y-4">
+                                                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100">
+                                                        <h3 className="text-xl font-bold text-green-700 mb-3 flex items-center gap-2">
+                                                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                                                            {formatStockName(selectedNode.name || "")}
+                                                        </h3>
+
+                                                        {selectedNode.value !== undefined && (
+                                                            <div className="space-y-3">
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-gray-700 font-medium">Value:</span>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <input
+                                                                            type="number"
+                                                                            value={editedValue !== null ? editedValue : Math.round(selectedNode.value.value)}
+                                                                            onChange={(e) => setEditedValue(parseInt(e.target.value))}
+                                                                            className="w-20 px-3 py-2 text-center border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white shadow-sm"
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-gray-700 font-medium">Unit:</span>
+                                                                    <span className="text-gray-600 bg-gray-100 px-3 py-1 rounded-full text-sm">{selectedNode.value.unit}</span>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="flex gap-3">
+                                                        <button
+                                                            onClick={handleSave}
+                                                            className="flex-1 py-3 px-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group"
+                                                        >
+                                                            <span className="relative z-10">Save Changes</span>
+                                                            <div className="absolute inset-0 bg-gradient-to-r from-green-600 to-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                                                        </button>
+                                                    </div>
+
+                                                    {/* {!selectedNode.isCenter && (
+                                                    <button
+                                                        onClick={handleDiveIntoNode}
+                                                        className="w-full py-3 px-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group"
+                                                    >
+                                                        <span className="relative z-10">Dive Deeper</span>
+                                                        <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                                                    </button>
+                                                )} */}
+                                                </div>
+                                            ) : selectedEdge?.relationshipList && selectedEdge.relationshipList.length > 0 ? (
+                                                /* Show Edge Details */
+                                                <div className="space-y-4">
+                                                    <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100">
+                                                        <h3 className="text-xl font-bold text-purple-700 mb-3 flex items-center gap-2">
+                                                            <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                                                            Connection Details
+                                                        </h3>
+
+                                                        <div className="space-y-3">
+                                                            {selectedEdge.relationshipList.map((rel, idx) => (
+                                                                <div key={idx} className="bg-white/80 rounded-lg p-4 border border-purple-200">
+                                                                    {/* Direction Header */}
+                                                                    <div className="mb-3 pb-2 border-b border-gray-200">
+                                                                        <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                                                                            <span className="text-purple-600">From:</span>
+                                                                            <span className="bg-purple-100 px-2 py-1 rounded text-purple-700">
+                                                                                {rel.fromName}
+                                                                            </span>
+                                                                            <span className="text-gray-400">→</span>
+                                                                            <span className="text-purple-600">To:</span>
+                                                                            <span className="bg-purple-100 px-2 py-1 rounded text-purple-700">
+                                                                                {rel.toName}
+                                                                            </span>
+                                                                        </h4>
+                                                                    </div>
+
+                                                                    {/* Relationship Details */}
+                                                                    {/* Relationship Details */}
+                                                                    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2 text-sm">
+                                                                        {/* Impact */}
+                                                                        <div className="flex items-baseline gap-2">
+                                                                            <span className="text-gray-600 font-medium">Impact:</span>
+                                                                            <span className={`font-semibold capitalize px-3 py-1 rounded-full text-xs ${rel.impact === 'positive' ? 'bg-green-100 text-green-800' :
+                                                                                    rel.impact === 'negative' ? 'bg-red-100 text-red-800' :
+                                                                                        'bg-gray-100 text-gray-800'
+                                                                                }`}>
+                                                                                {rel.impact}
+                                                                            </span>
+                                                                        </div>
+
+                                                                        {/* Weight */}
+                                                                        <div className="flex items-baseline gap-2">
+                                                                            <span className="text-gray-600 font-medium">Weight:</span>
+                                                                            <span className="font-semibold bg-gray-100 px-2 py-1 rounded text-gray-800">
+                                                                                {rel.weight}
+                                                                            </span>
+                                                                        </div>
+
+                                                                        {/* Flow */}
+                                                                        <div className="flex items-baseline gap-2">
+                                                                            <span className="text-gray-600 font-medium">Flow:</span>
+                                                                            <span className="font-semibold bg-gray-100 px-2 py-1 rounded text-gray-800">
+                                                                                {rel.flow}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                /* Show Main Stock Details as fallback */
+                                                graphData && (
+                                                    <div className="space-y-4">
+                                                        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4 border border-blue-100">
+                                                            <h3 className="text-xl font-bold text-blue-700 mb-3 flex items-center gap-2">
+                                                                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                                                                {formatStockName(graphData.stock.name || "")}
+                                                            </h3>
+
+                                                            <div className="space-y-3">
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-gray-700 font-medium">Value:</span>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <input
+                                                                            type="number"
+                                                                            value={editedValue !== null ? editedValue : Math.round(graphData.stock.value.value)}
+                                                                            onChange={(e) => setEditedValue(parseInt(e.target.value))}
+                                                                            className="w-20 px-3 py-2 text-center border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white shadow-sm"
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-gray-700 font-medium">Unit:</span>
+                                                                    <span className="text-gray-600 bg-gray-100 px-3 py-1 rounded-full text-sm">{graphData.stock.value.unit}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Save button applies for main stock as well */}
+                                                        <div className="flex gap-3">
+                                                            <button
+                                                                onClick={handleSave}
+                                                                className="flex-1 py-3 px-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group"
+                                                            >
+                                                                <span className="relative z-10">Save Changes</span>
+                                                                <div className="absolute inset-0 bg-gradient-to-r from-green-600 to-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            )}
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        </div>
+
+                        {/* Time Simulation Pill */}
+                        {graphData && (
+                            <div className="relative">
+                                <div className={`${(activeSection === 'simulation' || activeSection === 'both')
+                                    ? 'bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/30'
+                                    : ''
+                                    }`}>
+                                    <button
+                                        onClick={() => toggleSection('simulation')}
+                                        className={`w-full transition-all duration-300 ${(activeSection === 'simulation' || activeSection === 'both')
+                                            ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-xl px-6 py-4 rounded-t-2xl'
+                                            : 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg hover:shadow-xl hover:scale-105 p-4 rounded-full'
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-full ${(activeSection === 'simulation' || activeSection === 'both') ? 'bg-white/20' : 'bg-white/20'}`}>
+                                                <Calendar size={20} className="text-white" />
+                                            </div>
+                                            {(activeSection === 'simulation' || activeSection === 'both') && (
+                                                <div className="flex items-center justify-between w-full">
+                                                    <span className="font-semibold text-lg whitespace-nowrap">Time Simulation</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="relative group">
+                                                            <button
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="p-1 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                                                </svg>
+                                                            </button>
+                                                            <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-white/95 text-gray-700 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200 ease-out pointer-events-none z-[60] shadow-md border border-gray-200 backdrop-blur-sm max-w-xs whitespace-nowrap">
+                                                                <span className="italic text-xs">Project how your model's values will change over time</span>
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); toggleSection('simulation'); }}
+                                                            className="p-1 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
+                                                            title="Minimize"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {/* Show expand icon when minimized */}
+                                            {!(activeSection === 'simulation' || activeSection === 'both') && (
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8l4-4 4 4m0 8l-4 4-4-4" />
+                                                </svg>
+                                            )}
+                                        </div>
+                                    </button>
+
+                                    {/* Time Simulation Content */}
+                                    <AnimatePresence>
+                                        {(activeSection === 'simulation' || activeSection === 'both') && (
+                                            <motion.div
+                                                initial={{ opacity: 0, scale: 0.8, y: -20 }}
+                                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                                exit={{ opacity: 0, scale: 0.8, y: -20 }}
+                                                transition={{ duration: 0.3 }}
+                                                className="mt-4 w-80 bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/30 p-6 space-y-6"
+                                            >
+                                                {/* === NO CHANGE NEEDED === */}
+                                                {/* All the existing time simulation controls remain the same */}
+                                                <div>
+                                                    <h4 className="text-sm font-semibold text-gray-700 mb-3">Time Unit</h4>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        {(['days', 'weeks', 'months', 'years'] as const).map((unit) => (
+                                                            <button
+                                                                key={unit}
+                                                                onClick={() => handleTimeUnitChange(unit)}
+                                                                className={`px-4 py-3 text-sm font-medium rounded-xl transition-all duration-300 relative overflow-hidden group ${simulationSettings.timeUnit === unit
+                                                                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg scale-105'
+                                                                    : 'bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 hover:shadow-md hover:scale-102'
+                                                                    }`}
+                                                            >
+                                                                <span className="relative z-10 capitalize">{unit}</span>
+                                                                {simulationSettings.timeUnit === unit && (
+                                                                    <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-cyan-400 opacity-30 blur-sm"></div>
+                                                                )}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <div className="flex justify-between items-center mb-3">
+                                                        <h4 className="text-sm font-semibold text-gray-700">Simulate Future</h4>
+                                                        <div className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                                                            {simulationValue} {simulationSettings.timeUnit}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="relative py-4">
+                                                        <div className="absolute h-3 top-1/2 left-0 right-0 -mt-1.5 bg-gradient-to-r from-blue-200 to-cyan-200 rounded-full shadow-inner"></div>
+                                                        <input
+                                                            type="range"
+                                                            min="0"
+                                                            max={
+                                                                simulationSettings.timeUnit === 'days' ? 365 :
+                                                                    simulationSettings.timeUnit === 'weeks' ? 52 :
+                                                                        simulationSettings.timeUnit === 'months' ? 36 : 10
+                                                            }
+                                                            value={simulationValue}
+                                                            onChange={handleSliderChange}
+                                                            className="appearance-none w-full h-3 bg-transparent rounded-full cursor-pointer relative z-10 slider-thumb"
+                                                            style={{ WebkitAppearance: 'none', background: 'transparent' }}
+                                                        />
+                                                    </div>
+
+                                                    <div className="flex justify-between text-xs text-gray-500">
+                                                        <span>Now</span>
+                                                        <span>
+                                                            {simulationSettings.timeUnit === 'days' ? '1 Year' :
+                                                                simulationSettings.timeUnit === 'weeks' ? '1 Year' :
+                                                                    simulationSettings.timeUnit === 'months' ? '3 Years' : '10 Years'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Simulation Controls */}
+                                                <div className="space-y-3">
+                                                    <button
+                                                        onClick={() => animateSimulation(simulationValue, 2000)}
+                                                        className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group"
+                                                    >
+                                                        <span className="relative z-10 flex items-center justify-center gap-2">
+                                                            <Play size={18} />
+                                                            Start Simulation
+                                                        </span>
+                                                        <div className="absolute inset-0 bg-gradient-to-r from-green-600 to-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                                                    </button>
+
+                                                    <div className="flex gap-3">
+                                                        <button
+                                                            onClick={handlePause}
+                                                            disabled={simulationValue === 0}
+                                                            className="flex-1 py-3 px-4 bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            <span className="relative z-10 flex items-center justify-center gap-2">
+                                                                {isPaused ? <Play size={16} /> : <Pause size={16} />}
+                                                                {isPaused ? 'Resume' : 'Pause'}
+                                                            </span>
+                                                            <div className="absolute inset-0 bg-gradient-to-r from-yellow-600 to-orange-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                                                        </button>
+
+                                                        <button
+                                                            onClick={handleReset}
+                                                            className="flex-1 py-3 px-4 bg-gradient-to-r from-gray-500 to-gray-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group"
+                                                        >
+                                                            <span className="relative z-10 flex items-center justify-center gap-2">
+                                                                <RefreshCw size={16} />
+                                                                Reset
+                                                            </span>
+                                                            <div className="absolute inset-0 bg-gradient-to-r from-gray-600 to-gray-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
                                 </div>
                             </div>
                         )}
-
-                        {confirmPopup.model && (
-                            <ConfirmationPopup
-                                title="Remove Saved Model"
-                                message={`Are you sure you want to remove ${confirmPopup.model.name}?`}
-                                onConfirm={() => {
-                                    handleModelRemove(confirmPopup.model!);
-                                    setConfirmPopup({ model: null });
-                                }}
-                                onCancel={() => setConfirmPopup({ model: null })}
-                            />
-                        )}
-
-                        {showShareModal && modelToShare && (
-                            <ShareModal
-                                isStock={false}
-                                itemLabel={modelToShare.name}
-                                itemGuid={modelToShare.guid}
-                                onClose={() => {
-                                    setShowShareModal(false);
-                                    setModelToShare(null);
-                                }}
-                            />
-                        )}
-
-                        {toast && (
-                            <Toast
-                                type={toast.type}
-                                message={toast.message}
-                                onClose={() => setToast(null)}
-                            />
-                        )}
                     </div>
-                </div>
+                )}
 
+                {confirmPopup.model && (
+                    <ConfirmationPopup
+                        title="Remove Saved Model"
+                        message={`Are you sure you want to remove ${confirmPopup.model.name}?`}
+                        onConfirm={() => {
+                            handleModelRemove(confirmPopup.model!);
+                            setConfirmPopup({ model: null });
+                        }}
+                        onCancel={() => setConfirmPopup({ model: null })}
+                    />
+                )}
+
+                {showShareModal && modelToShare && (
+                    <ShareModal
+                        isStock={false}
+                        itemLabel={modelToShare.name}
+                        itemGuid={modelToShare.guid}
+                        onClose={() => {
+                            setShowShareModal(false);
+                            setModelToShare(null);
+                        }}
+                    />
+                )}
+
+                {toast && (
+                    <Toast
+                        type={toast.type}
+                        message={toast.message}
+                        onClose={() => setToast(null)}
+                    />
+                )}
 
             </div>
+            {/* Menu button*/}
+            <motion.button
+                className="fixed top-5 right-8 z-[60] p-2 rounded-full bg-white/70 backdrop-blur-md text-gray-700 hover:bg-white/90 transition-all shadow-lg hover:scale-105"
+                onClick={() => setIsPanelOpen(!isPanelOpen)}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                aria-label={isPanelOpen ? "Close menu" : "Open menu"}
+            >
+                <motion.svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-6 w-6"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    animate={{ rotate: isPanelOpen ? 180 : 0 }}
+                    transition={{ duration: 0.3 }}
+                >
+                    <motion.path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        animate={{
+                            d: isPanelOpen
+                                ? "M6 18L18 6M6 6l12 12"
+                                : "M4 6h16M4 12h16M4 18h16"
+                        }}
+                        transition={{ duration: 0.3 }}
+                    />
+                </motion.svg>
+            </motion.button>
+
+            {/* Backdrop and Sidebar */}
+            <AnimatePresence>
+                {isPanelOpen && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.35 }}
+                            className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
+                            onClick={() => setIsPanelOpen(false)}
+                        />
+                        <RightSidebar isOpen={isPanelOpen} onClose={() => setIsPanelOpen(false)} />
+                    </>
+                )}
+            </AnimatePresence>
         </div>
     );
 };

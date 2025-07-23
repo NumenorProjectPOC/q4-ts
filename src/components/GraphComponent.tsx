@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import * as d3 from 'd3';
-import { GraphData, NodeData, LinkData } from '../services/types';
+import { GraphData, NodeData, LinkData, Relationship } from '../services/types'; // Assuming Relationship is exported
 import { formatLargeNumber, formatStockName } from '../utils/utility';
 import LoadingScreen from './ui/LoadingScreen';
 
@@ -16,25 +16,36 @@ interface GraphComponentProps {
     isLoading: boolean
 }
 
-const GraphComponent: React.FC<GraphComponentProps> = ({ isLoading, graphData, selectedElement, setSelectedElement, sidebarWidth, nodeValueChangeCallback, simulationSettings, simulationValue, runSimulation }) => {
-    
+const GraphComponent: React.FC<GraphComponentProps> = ({
+    isLoading,
+    graphData,
+    selectedElement,
+    setSelectedElement,
+    sidebarWidth,
+    nodeValueChangeCallback,
+    simulationSettings,
+    simulationValue,
+    runSimulation
+}) => {
     const svgRef = useRef<SVGSVGElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [nodeColors, setNodeColors] = useState<Record<string, [string, string]>>({});
     const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
     const [animatedValues, setAnimatedValues] = useState<Record<string, number>>({});
     const [initialRender, setInitialRender] = useState(true);
+    const [zoomTransform, setZoomTransform] = useState<d3.ZoomTransform | null>(null);
+
+    // Zoom behavior ref
+    const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+    const simulationRef = useRef<d3.Simulation<NodeData, any> | null>(null); // Use 'any' for links due to dynamic props
 
     // Calculate container dimensions and observe changes
     useEffect(() => {
-        
         if (!containerRef.current) return;
 
         const updateDimensions = () => {
             if (!containerRef.current) return;
-
             const containerRect = containerRef.current.getBoundingClientRect();
-
             setContainerDimensions({
                 width: containerRect.width,
                 height: containerRect.height
@@ -54,102 +65,91 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ isLoading, graphData, s
         };
     }, []);
 
-    const nodes: any[] = useMemo(() => {
+    const nodes: NodeData[] = useMemo(() => {
         if (!graphData) return [];
 
-        const primaryNodes = [
-            {
-                id: graphData.stock.guid,
-                name: graphData.stock.name,
-                value: graphData.stock.value,
-                context: graphData.stock.context,
-                isCenter: true,
-            },
-            ...graphData.related_stocks.map(stock => ({
-                id: stock.guid,
-                name: stock.name,
-                value: stock.value,
-                context: stock.context,
-                relationship: stock.relationship
-            }))
-        ];
-
-        // Add secondary related stocks with faded styling
-        const secondaryNodes = graphData.related_stocks.flatMap(stock => {
-            if (stock.related_stocks) {
-                return stock.related_stocks.map(secondaryStock => ({
-                    id: secondaryStock.guid,
-                    name: secondaryStock.name,
-                    value: secondaryStock.value,
-                    context: secondaryStock.context,
-                    relationship: secondaryStock.relationship,
-                    isSecondary: true // Flag to apply different styling
-                }));
-            }
-            return [];
-        });
-
-        return [...primaryNodes, ...secondaryNodes];
-    }, [graphData]);
-
-    const links: any[] = useMemo(() => {
-        if (!graphData) return [];
-
-        const primaryLinks = graphData.related_stocks.map(stock => ({
-            source: graphData.stock.guid,
-            target: stock.guid,
-            impact: stock.relationship?.impact || 'neutral',
-            weight: stock.relationship?.weight || 0,
-            flow: stock.relationship?.flow || 0,
-            name: `Influence from ${graphData.stock.name} to ${stock.name}`
+        return graphData.nodes.map((node) => ({
+            ...node,
+            isCenter: node.id === graphData.stock.guid
         }));
-
-        // Add links from related stocks to their related stocks
-        const secondaryLinks = graphData.related_stocks.flatMap(stock => {
-            if (stock.related_stocks) {
-                return stock.related_stocks.map(secondaryStock => ({
-                    source: stock.guid,
-                    target: secondaryStock.guid,
-                    impact: secondaryStock.relationship?.impact || 'neutral',
-                    weight: secondaryStock.relationship?.weight || 0,
-                    flow: secondaryStock.relationship?.flow || 0,
-                    name: `Influence from ${stock.name} to ${secondaryStock.name}`,
-                    isSecondary: true // Flag to apply different styling
-                }));
-            }
-            return [];
-        });
-
-        return [...primaryLinks, ...secondaryLinks];
     }, [graphData]);
 
+    // *** MODIFIED SECTION START ***
+    // This hook is updated to correctly process the pre-structured edges from the API.
+    const links = useMemo(() => {
+        if (!graphData || !graphData.edges || !graphData.nodes) {
+            return [];
+        }
+
+        // Create a lookup map from node name to node ID for efficient linking.
+        const nameToIdMap = new Map<string, string>();
+        graphData.nodes.forEach(node => {
+            nameToIdMap.set(node.name, node.id);
+        });
+
+        // The edges are already processed for bidirectionality.
+        // We just need to add the `source` and `target` IDs that D3 requires.
+        const d3Links = graphData.edges.map(edge => {
+            if (!edge.relationshipList || edge.relationshipList.length === 0) {
+                console.warn("Edge object has no relationships:", edge);
+                return null;
+            }
+
+            // Get source and target names from the first relationship in the list.
+            const firstRelationship = edge.relationshipList[0];
+            const sourceName = firstRelationship.fromName;
+            const targetName = firstRelationship.toName;
+            
+            // Look up the corresponding node IDs.
+            const sourceId = nameToIdMap.get(sourceName);
+            const targetId = nameToIdMap.get(targetName);
+
+            // If IDs are not found, we cannot create the link.
+            if (!sourceId || !targetId) {
+                console.warn(`Could not find node IDs for link between "${sourceName}" and "${targetName}"`);
+                return null;
+            }
+            
+            // Return the link object with all original data plus the source/target IDs for D3.
+            return {
+                ...edge,
+                source: sourceId,
+                target: targetId,
+            };
+        });
+
+        // Filter out any links that could not be created.
+        return d3Links.filter(link => link !== null) as (LinkData & { source: string, target: string })[];
+
+    }, [graphData]);
+    // *** MODIFIED SECTION END ***
+
+    // Initialize node colors
     useEffect(() => {
         if (!graphData) return;
 
         const availableColors: [string, string][] = [
             ['#B0E2FF', d3.color('#B0E2FF')!.darker(0.9).toString()],
             ['#FFDAB9', d3.color('#FFDAB9')!.darker(0.9).toString()],
-            ['#B0E2FF', d3.color('#B0E2FF')!.darker(0.9).toString()],
             ['#E6E6FA', d3.color('#E6E6FA')!.darker(0.9).toString()],
             ['#E6FFE6', d3.color('#E6FFE6')!.darker(0.9).toString()],
             ['#B2DFDB', d3.color('#B2DFDB')!.darker(0.9).toString()],
+            ['#FFE4E1', d3.color('#FFE4E1')!.darker(0.9).toString()],
         ];
 
         let initialNodeColors: Record<string, [string, string]> = {};
-        const storedNodeColors = localStorage.getItem('nodeColors');
+        const storedNodeColors = sessionStorage.getItem('nodeColors');
 
         if (storedNodeColors) {
             try {
                 initialNodeColors = JSON.parse(storedNodeColors);
-                setNodeColors(initialNodeColors);
             } catch (error) {
-                console.error("Error parsing node colors from local storage:", error);
-                // If parsing fails, proceed with initial color assignment
+                console.error("Error parsing node colors from session storage:", error);
                 initialNodeColors = {};
             }
         }
 
-        // Assign colors if not found in local storage or after parsing failure
+        // Assign colors if not found in session storage
         if (Object.keys(initialNodeColors).length === 0) {
             nodes.forEach(node => {
                 if (node.isCenter) {
@@ -160,10 +160,9 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ isLoading, graphData, s
                 }
             });
 
-            localStorage.setItem('nodeColors', JSON.stringify(initialNodeColors));
-            setNodeColors(initialNodeColors);
+            sessionStorage.setItem('nodeColors', JSON.stringify(initialNodeColors));
         } else {
-            // Ensure that all nodes have a color assigned, and if not, assign a default color
+            // Ensure all nodes have colors
             nodes.forEach(node => {
                 if (!initialNodeColors[node.id]) {
                     if (node.isCenter) {
@@ -174,13 +173,14 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ isLoading, graphData, s
                     }
                 }
             });
-            setNodeColors(initialNodeColors);
         }
+
+        setNodeColors(initialNodeColors);
     }, [nodes, graphData]);
 
+    // Main rendering effect
     useEffect(() => {
-
-        if (!graphData || !svgRef.current || containerDimensions.width === 0) return;
+        if (!graphData || !svgRef.current || containerDimensions.width === 0 || links.length === 0) return;
 
         const svg = d3.select(svgRef.current);
         svg.selectAll("*").remove();
@@ -190,25 +190,63 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ isLoading, graphData, s
         const nodeRadius = 50;
         const centerNodeRadius = 70;
 
-        const topMargin = 20;
-        const bottomMargin = 20;
-        const leftMargin = 20;
-        const rightMargin = 30;
+        // Create zoom behavior
+        const zoom = d3.zoom<SVGSVGElement, unknown>()
+            .scaleExtent([0.1, 4])
+            .on("zoom", (event) => {
+                const transform = event.transform;
+                setZoomTransform(transform);
+                g.attr("transform", transform);
+            });
 
-        const nodeBuffer = 5; // Small buffer to prevent visual clipping
+        zoomBehaviorRef.current = zoom;
+        svg.call(zoom);
 
-        function constrain(x: number, y: number, radius: number) {
-            return {
-                x: Math.max(radius - nodeBuffer + leftMargin, Math.min(width - radius + nodeBuffer - rightMargin, x)),
-                y: Math.max(radius - nodeBuffer + topMargin, Math.min(height - radius + nodeBuffer - bottomMargin, y))
-            };
-        }
+        // Create main group for all elements
+        const g = svg.append("g");
 
+        // Define gradients and markers
         const edgeColor = d3.scaleOrdinal<string>()
-            .domain(['positive', 'negative', 'neutral'])
+        .domain(['positive', 'negative', 'neutral'])
             .range(['#6A958F', '#DC143C', '#888']);
-
+        
         const defs = svg.append("defs");
+        const impacts = ['positive', 'negative', 'neutral'];
+        impacts.forEach(impact => {
+            const color = edgeColor(impact);
+
+            // End arrow for each impact type
+            defs.append("marker")
+                .attr("id", `arrowhead-${impact}`)
+                .attr("viewBox", "-2 -8 12 16")
+                .attr("refX", 8)
+                .attr("refY", 0)
+                .attr("orient", "auto")
+                .attr("markerWidth", 5)
+                .attr("markerHeight", 5)
+                .attr("markerUnits", "strokeWidth")
+                .append("svg:path")
+                .attr("d", "M 0,-6 L 10,0 L 0,6 Z")
+                .attr("fill", color)
+                .attr("stroke", color)
+                .attr("stroke-width", 1);
+
+            // Start arrow for each impact type
+            defs.append("marker")
+                .attr("id", `arrowhead-start-${impact}`)
+                .attr("viewBox", "-2 -8 12 16")
+                .attr("refX", 2)
+                .attr("refY", 0)
+                .attr("orient", "auto")
+                .attr("markerWidth", 5)
+                .attr("markerHeight", 5)
+                .attr("markerUnits", "strokeWidth")
+                .append("svg:path")
+                .attr("d", "M 10,-6 L 0,0 L 10,6 Z")
+                .attr("fill", color)
+                .attr("stroke", color)
+                .attr("stroke-width", 1);
+        });
 
         const centerInnerGradient = defs.append("linearGradient")
             .attr("id", "centerInnerGradient")
@@ -242,64 +280,108 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ isLoading, graphData, s
                 .attr("stop-color", colorEnd);
         });
 
-
-        // Load saved positions if available
-        const storedNodePositions = localStorage.getItem('nodePositions');
+        // Load saved positions
+        const storedNodePositions = sessionStorage.getItem('nodePositions');
         let initialPositions: Record<string, { x: number; y: number }> = {};
         if (storedNodePositions) {
-            initialPositions = JSON.parse(storedNodePositions);
+            try {
+                initialPositions = JSON.parse(storedNodePositions);
+            } catch (error) {
+                console.error("Error parsing node positions:", error);
+            }
         }
 
-        // Initialize node positions (randomly or from localStorage)
+        // Load saved zoom transform
+        const storedZoomTransform = sessionStorage.getItem('zoomTransform');
+        if (storedZoomTransform && !zoomTransform) {
+            try {
+                const savedTransform = JSON.parse(storedZoomTransform);
+                const transform = d3.zoomIdentity
+                    .translate(savedTransform.x, savedTransform.y)
+                    .scale(savedTransform.k);
+                svg.call(zoom.transform, transform);
+            } catch (error) {
+                console.error("Error parsing zoom transform:", error);
+            }
+        }
+
+        // Initialize node positions
         nodes.forEach(node => {
             if (initialPositions[node.id]) {
+                node.x = initialPositions[node.id].x;
+                node.y = initialPositions[node.id].y;
                 node.fx = initialPositions[node.id].x;
                 node.fy = initialPositions[node.id].y;
             } else {
-                // Random initial positions
-                node.x = Math.random() * (width - leftMargin - rightMargin) + leftMargin;
-                node.y = Math.random() * (height - topMargin - bottomMargin) + topMargin;
+                const centerNode = nodes.find(n => n.isCenter);
+                if (node.isCenter) {
+                    node.x = width / 2;
+                    node.y = height / 2;
+                } else {
+                    const angleStep = (2 * Math.PI) / (nodes.length - 1);
+                    const nodeIndex = nodes.filter(n => !n.isCenter).indexOf(node);
+                    const angle = nodeIndex * angleStep;
+                    const radius = Math.min(width, height) * 0.3;
+                    node.x = (width / 2) + Math.cos(angle) * radius;
+                    node.y = (height / 2) + Math.sin(angle) * radius;
+                }
             }
         });
 
-
+        // Create simulation with better forces
         const simulation = d3.forceSimulation(nodes)
-            .force("link", d3.forceLink(links).id((d: any) => d.id).distance(200))
-            .force("charge", d3.forceManyBody().strength(-1000))
-            .force("center", d3.forceCenter((width - sidebarWidth) / 2, height / 2))
-            .force("x", d3.forceX((width - sidebarWidth) / 2).strength(0.1))
-            .force("y", d3.forceY(height / 2).strength(0.1))
-            .force(
-                "collide",
-                d3.forceCollide((d: any) => (d.isCenter ? centerNodeRadius : nodeRadius) + nodeBuffer).iterations(16)
-            );
+            .force("link", d3.forceLink(links).id((d: any) => d.id).distance(200).strength(0.3))
+            .force("charge", d3.forceManyBody().strength(-800))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collision", d3.forceCollide((d: any) => (d.isCenter ? centerNodeRadius : nodeRadius) + 10))
+            .alphaDecay(0.02)
+            .velocityDecay(0.3);
 
+        simulationRef.current = simulation;
 
-
-        const link = svg.append("g")
+        // Create links
+        const link = g.append("g")
             .selectAll("line")
             .data(links)
             .join("line")
-            .attr("stroke", (d: any) => edgeColor(d.impact))
-            .attr("stroke-width", 2)
-            .attr("opacity", (d: any) => d.isSecondary ? 0.6 : 0.6)
+            .attr("stroke", (d: any) => edgeColor(d.relationshipList?.[0]?.impact))
+            .attr("stroke-width", 3)
+            .attr("opacity", 0.8)
             .attr("class", "link")
             .style("cursor", "pointer")
+            .attr("marker-end", (d: any) => {
+                const impact = d.relationshipList?.[0]?.impact || 'neutral';
+                return `url(#arrowhead-${impact})`;
+            })
+            .attr("marker-start", (d: any) => {
+                if (d.isBidirectional) {
+                    const impact = d.relationshipList?.[1]?.impact || d.relationshipList?.[0]?.impact || 'neutral';
+                    return `url(#arrowhead-start-${impact})`;
+                }
+                return null;
+            })
             .on("click", (event: any, d: any) => {
-                setSelectedElement(d);
+                event.stopPropagation();
+                setSelectedElement({
+                    ...d,
+                    relationshipList: d.relationshipList ?? [],
+                    isBidirectional: d.isBidirectional ?? false
+                });
             });
 
-        const centerGroup = svg.append("g")
+        // Create center nodes
+        const centerGroup = g.append("g")
             .selectAll("g")
             .data(nodes.filter((d: any) => d.isCenter))
-            .join("g");
+            .join("g")
+            .style("cursor", "pointer");
 
         centerGroup.append("circle")
             .attr("r", centerNodeRadius + 10)
             .attr("fill", (d: any) => `url(#nodeGradient-${d.id})`)
             .style("filter", "drop-shadow(0px 0px 10px rgba(106, 149, 143, 0.5))")
-            .style("cursor", "pointer")
             .on("click", (event: any, d: any) => {
+                event.stopPropagation();
                 setSelectedElement(d);
             });
 
@@ -307,14 +389,12 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ isLoading, graphData, s
             .attr("r", centerNodeRadius - 10)
             .attr("fill", "url(#centerInnerGradient)");
 
-        // Add text to center circle
+        // Add text to center nodes
         centerGroup.each(function (d: any) {
             const group = d3.select(this);
-
             const animatedValue = animatedValues[d.id];
             const roundedValue = animatedValue !== undefined ? Math.round(animatedValue) : Math.round(d.value.value);
 
-            // Display the formatted name
             group.append("text")
                 .attr("text-anchor", "middle")
                 .attr("dy", "1em")
@@ -324,7 +404,6 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ isLoading, graphData, s
                 .style("font-weight", "normal")
                 .text(formatStockName(d.name));
 
-            // Display value and unit on one line with icons on the right
             group.append("text")
                 .attr("text-anchor", "middle")
                 .attr("dy", "-0.35em")
@@ -332,41 +411,34 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ isLoading, graphData, s
                 .style("font-size", "16px")
                 .style("fill", "#2C3333")
                 .style("font-weight", "bold")
-                .text(formatLargeNumber(roundedValue)) // Use formatLargeNumber here
-                .append("title") // Add title for hover effect
+                .text(formatLargeNumber(roundedValue))
+                .append("title")
                 .text(`${roundedValue} ${d.value.unit}`);
         });
 
-        const nodeGroups = svg.append("g")
+        // Create regular nodes
+        const nodeGroups = g.append("g")
             .selectAll("g")
             .data(nodes.filter((d: any) => !d.isCenter))
-            .join("g");
+            .join("g")
+            .style("cursor", "pointer");
 
         nodeGroups.append("circle")
             .attr("r", nodeRadius)
-            .attr("fill", (d: any) => {
-                if (d.isSecondary) {
-                    // Apply a faded fill (e.g., light gray)
-                    return `url(#nodeGradient-${d.id})`;
-                    // return "#ddd"; // Or any light color
-                } else {
-                    return `url(#nodeGradient-${d.id})`;
-                }
-            })
+            .attr("fill", (d: any) => `url(#nodeGradient-${d.id})`)
             .style("filter", (d: any) => `drop-shadow(0px 0px 10px ${nodeColors[d.id]?.[0]})`)
-            .style("cursor", "pointer")
-            .attr("opacity", (d: any) => d.isSecondary ? 0.5 : 1) // Adjust opacity for secondary nodes
+            .attr("opacity", (d: any) => d.isSecondary ? 0.5 : 1)
             .on("click", (event: any, d: any) => {
+                event.stopPropagation();
                 setSelectedElement(d);
             });
 
+        // Add text to regular nodes
         nodeGroups.each(function (d: any) {
             const group = d3.select(this);
-
             const animatedValue = animatedValues[d.id];
             const roundedValue = animatedValue !== undefined ? Math.round(animatedValue) : Math.round(d.value.value);
 
-            // Display the formatted name
             group.append("text")
                 .attr("text-anchor", "middle")
                 .attr("dy", "1em")
@@ -376,7 +448,6 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ isLoading, graphData, s
                 .style("font-weight", "normal")
                 .text(formatStockName(d.name));
 
-            // Value
             group.append("text")
                 .attr("text-anchor", "middle")
                 .attr("dy", "-0.35em")
@@ -384,89 +455,97 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ isLoading, graphData, s
                 .style("font-size", "16px")
                 .style("fill", "#2C3333")
                 .style("font-weight", "bold")
-                .text(formatLargeNumber(roundedValue)) // Use formatLargeNumber here
-                .append("title") // Add title for hover effect
+                .text(formatLargeNumber(roundedValue))
+                .append("title")
                 .text(`${roundedValue} ${d.value.unit}`);
         });
 
-        function dragstarted(event: any, d: any) {
-            if (!event.active) simulation.alphaTarget(0.3).restart();
-            d.fx = d.x;
-            d.fy = d.y;
-        }
-
-        function dragged(event: any, d: any) {
-            const nodeR = d.isCenter ? centerNodeRadius : nodeRadius;
-            const constrained = constrain(event.x, event.y, nodeR);
-            d.fx = constrained.x;
-            d.fy = constrained.y;
-        }
-
-        function dragended(event: any, d: any) {
-            if (!event.active) simulation.alphaTarget(0);
-
-            // Ensure node stays within bounds even after drag ends
-            const nodeR = d.isCenter ? centerNodeRadius : nodeRadius;
-            const constrained = constrain(event.x, event.y, nodeR);
-            d.fx = constrained.x;
-            d.fy = constrained.y;
-
-            // Save positions to localStorage
-            const nodePositions: Record<string, { x: number, y: number }> = {};
-            nodes.forEach(node => {
-                if (node.fx !== undefined && node.fy !== undefined) {
-                    nodePositions[node.id] = { x: node.fx, y: node.fy };
-                }
+        // Drag behavior
+        const drag = d3.drag<any, any>()
+            .on("start", (event: any, d: any) => {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            })
+            .on("drag", (event: any, d: any) => {
+                d.fx = event.x;
+                d.fy = event.y;
+            })
+            .on("end", (event: any, d: any) => {
+                if (!event.active) simulation.alphaTarget(0);
+                const nodePositions: Record<string, { x: number, y: number }> = JSON.parse(sessionStorage.getItem('nodePositions') || '{}');
+                nodePositions[d.id] = { x: d.fx, y: d.fy };
+                sessionStorage.setItem('nodePositions', JSON.stringify(nodePositions));
             });
-            localStorage.setItem('nodePositions', JSON.stringify(nodePositions));
-        }
 
-        nodeGroups.call(d3.drag<any, any>()
-            .on("start", dragstarted)
-            .on("drag", dragged)
-            .on("end", dragended) as any);
+        // Apply drag to all node groups
+        nodeGroups.call(drag as any);
+        centerGroup.call(drag as any);
 
-        centerGroup.call(d3.drag<any, any>()
-            .on("start", dragstarted)
-            .on("drag", dragged)
-            .on("end", dragended) as any);
-
+        // Simulation tick
         simulation.on("tick", () => {
-            nodeGroups.attr("transform", (d: any) => {
-                // If the position is fixed, don't apply constraints.
-                if (d.fx !== undefined && d.fy !== undefined) {
-                    return `translate(${d.fx},${d.fy})`;
-                }
-
-                // Apply constraints only if the position is not fixed.
-                const constrained = constrain(d.x, d.y, nodeRadius);
-                d.x = constrained.x;
-                d.y = constrained.y;
-                return `translate(${d.x},${d.y})`;
-            });
-
-            centerGroup.attr("transform", (d: any) => {
-                // Apply constraints on each tick
-                if (d.fx !== undefined && d.fy !== undefined) {
-                    return `translate(${d.fx},${d.fy})`;
-                }
-
-                const constrained = constrain(d.x, d.y, centerNodeRadius);
-                d.x = constrained.x;
-                d.y = constrained.y;
-                return `translate(${d.x},${d.y})`;
-            });
-
             link
-                .attr("x1", (d: any) => d.source.x)
-                .attr("y1", (d: any) => d.source.y)
-                .attr("x2", (d: any) => d.target.x)
-                .attr("y2", (d: any) => d.target.y);
+                .attr("x1", (d: any) => {
+                    const dx = d.target.x - d.source.x;
+                    const dy = d.target.y - d.source.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance === 0) return d.source.x;
+                    const sourceRadius = d.source.isCenter ? centerNodeRadius + 10 : nodeRadius;
+                    const offsetX = (dx / distance) * sourceRadius;
+                    return d.source.x + offsetX;
+                })
+                .attr("y1", (d: any) => {
+                    const dx = d.target.x - d.source.x;
+                    const dy = d.target.y - d.source.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance === 0) return d.source.y;
+                    const sourceRadius = d.source.isCenter ? centerNodeRadius + 10 : nodeRadius;
+                    const offsetY = (dy / distance) * sourceRadius;
+                    return d.source.y + offsetY;
+                })
+                .attr("x2", (d: any) => {
+                    const dx = d.target.x - d.source.x;
+                    const dy = d.target.y - d.source.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance === 0) return d.target.x;
+                    const targetRadius = d.target.isCenter ? centerNodeRadius + 10 : nodeRadius;
+                    const offsetX = (dx / distance) * targetRadius;
+                    return d.target.x - offsetX;
+                })
+                .attr("y2", (d: any) => {
+                    const dx = d.target.x - d.source.x;
+                    const dy = d.target.y - d.source.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance === 0) return d.target.y;
+                    const targetRadius = d.target.isCenter ? centerNodeRadius + 10 : nodeRadius;
+                    const offsetY = (dy / distance) * targetRadius;
+                    return d.target.y - offsetY;
+                });
+
+            nodeGroups.attr("transform", (d: any) => `translate(${d.x},${d.y})`);
+            centerGroup.attr("transform", (d: any) => `translate(${d.x},${d.y})`);
         });
 
-    }, [graphData, nodeColors, links, setSelectedElement, nodes, containerDimensions, sidebarWidth]);
+        // Save zoom transform on zoom events
+        zoom.on("zoom", (event) => {
+            const transform = event.transform;
+            setZoomTransform(transform);
+            g.attr("transform", transform);
+            sessionStorage.setItem('zoomTransform', JSON.stringify({ x: transform.x, y: transform.y, k: transform.k }));
+        });
 
+        // Stop simulation after initial layout
+        setTimeout(() => {
+            simulation.stop();
+        }, 3000);
 
+        return () => {
+            simulation.stop();
+        };
+
+    }, [graphData, nodeColors, links, setSelectedElement, nodes, containerDimensions, sidebarWidth, animatedValues]);
+
+    // Handle simulation animation
     useEffect(() => {
         if (initialRender) {
             setInitialRender(false);
@@ -475,7 +554,6 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ isLoading, graphData, s
 
         if (!graphData || !runSimulation) return;
 
-
         const startValues = nodes.reduce((acc, node) => {
             acc[node.id] = node.value.value;
             return acc;
@@ -483,91 +561,105 @@ const GraphComponent: React.FC<GraphComponentProps> = ({ isLoading, graphData, s
 
         let yearEquivalent = 0;
         switch (simulationSettings.timeUnit) {
-            case "days":
-                yearEquivalent = simulationValue / 365;
-                break;
-            case "weeks":
-                yearEquivalent = simulationValue / 52;
-                break;
-            case "months":
-                yearEquivalent = simulationValue / 12;
-                break;
-            case "years":
-                yearEquivalent = simulationValue;
-                break;
+            case "days": yearEquivalent = simulationValue / 365; break;
+            case "weeks": yearEquivalent = simulationValue / 52; break;
+            case "months": yearEquivalent = simulationValue / 12; break;
+            case "years": yearEquivalent = simulationValue; break;
         }
 
         const targetValues = nodes.reduce((acc, node) => {
             const growthFactor = 0.02; // Example growth factor
-
             acc[node.id] = node.value.value * Math.pow(1 + growthFactor, yearEquivalent);
             return acc;
         }, {} as Record<string, number>);
 
         const startTime = performance.now();
-        const duration = 2000; // 2000ms duration for animation
+        const duration = 2000;
 
         const animate = (currentTime: number) => {
             const elapsedTime = currentTime - startTime;
             const progress = Math.min(elapsedTime / duration, 1);
-
             const newValues = nodes.reduce((acc, node) => {
                 acc[node.id] = startValues[node.id] + (targetValues[node.id] - startValues[node.id]) * progress;
                 return acc;
             }, {} as Record<string, number>);
-
             setAnimatedValues(newValues);
-
             if (progress < 1) {
                 requestAnimationFrame(animate);
             }
         };
-
         requestAnimationFrame(animate);
-    }, [runSimulation, graphData, nodes, simulationValue, simulationSettings]);
+    }, [runSimulation, graphData, nodes, simulationValue, simulationSettings, initialRender]);
 
-   useEffect(() => {
+    // Update node values when animation changes
+    useEffect(() => {
         if (!svgRef.current) return;
-
         const svg = d3.select(svgRef.current);
-
         svg.selectAll(".node-value")
             .text((d: any) => {
                 const animatedValue = animatedValues[d.id];
                 const roundedValue = animatedValue !== undefined ? Math.round(animatedValue) : Math.round(d.value.value);
                 return formatLargeNumber(roundedValue);
             })
-            .attr("title", (d: any) => {
+            .select("title")
+            .text((d: any) => {
                 const animatedValue = animatedValues[d.id];
                 const roundedValue = animatedValue !== undefined ? Math.round(animatedValue) : Math.round(d.value.value);
                 return `${roundedValue} ${d.value.unit}`;
             });
     }, [animatedValues]);
 
+    // Reset zoom function
+    const resetZoom = () => {
+        if (svgRef.current && zoomBehaviorRef.current) {
+            const svg = d3.select(svgRef.current);
+            svg.transition().duration(750).call(
+                zoomBehaviorRef.current.transform,
+                d3.zoomIdentity
+            );
+            sessionStorage.removeItem('zoomTransform');
+        }
+    };
+
     return (
         <div
-          ref={containerRef}
-          style={{
-            width: "100%",
-            height: "100%",
-            position: "relative",
-            overflow: "hidden",
-          }}
+            ref={containerRef}
+            style={{ width: "100%", height: "100%", position: "relative", backgroundColor: "#f8f9fa" }}
         >
-          {isLoading && (
-            <LoadingScreen
-              message="Loading visualization..."
-              fullscreen={false}
-            />
-          )}
-          {!isLoading && (
-            <div className="absolute inset-0">
-              <svg ref={svgRef} width="100%" height="100%" />
-            </div>
-          )}
+            {isLoading && <LoadingScreen message="Loading visualization..." fullscreen={false} />}
+            {!isLoading && (
+                <>
+                    <div className="absolute inset-0">
+                        <svg
+                            ref={svgRef}
+                            width="100%"
+                            height="100%"
+                            style={{ cursor: "grab" }}
+                            onMouseDown={(e) => { if (e.target === svgRef.current) (e.target as SVGElement).style.cursor = "grabbing"; }}
+                            onMouseUp={(e) => { (e.target as SVGElement).style.cursor = "grab"; }}
+                        />
+                    </div>
+                    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex flex-row justify-center items-center gap-2 z-10">
+                        <button
+                            onClick={() => { if (svgRef.current && zoomBehaviorRef.current) d3.select(svgRef.current).transition().duration(200).call(zoomBehaviorRef.current.scaleBy, 1.5); }}
+                            className="w-10 h-10 bg-white border border-gray-300 rounded-full flex items-center justify-center hover:bg-gray-50 shadow-lg text-lg font-semibold"
+                            title="Zoom In"
+                        >+</button>
+                        <button
+                            onClick={() => { if (svgRef.current && zoomBehaviorRef.current) d3.select(svgRef.current).transition().duration(200).call(zoomBehaviorRef.current.scaleBy, 0.67); }}
+                            className="w-10 h-10 bg-white border border-gray-300 rounded-full flex items-center justify-center hover:bg-gray-50 shadow-lg text-lg font-semibold"
+                            title="Zoom Out"
+                        >-</button>
+                        <button
+                            onClick={resetZoom}
+                            className="w-10 h-10 bg-white border border-gray-300 rounded-full flex items-center justify-center hover:bg-gray-50 shadow-lg text-sm"
+                            title="Reset Zoom"
+                        >⌂</button>
+                    </div>
+                </>
+            )}
         </div>
-      );
-      
-}
+    );
+};
 
 export default React.memo(GraphComponent);

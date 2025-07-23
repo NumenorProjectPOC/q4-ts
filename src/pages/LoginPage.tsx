@@ -50,19 +50,21 @@ const LoginPage: React.FC = () => {
       });
 
       const data = await response.json();
-      console.log("Login response:", data);      
+      console.log("Login response:", data);
 
       if (!response.ok) {
         throw new Error(data.detail || "Login failed");
       }
+      // Save required values to sessionStorage
+      const loginTime = Date.now();
+      sessionStorage.setItem("access_token", data.access_token);
+      sessionStorage.setItem("org_id", data.org_id);
+      sessionStorage.setItem("username", data.username);
+      sessionStorage.setItem("organization_name", data.organization_name);
+      sessionStorage.setItem("role", data.role);
+      sessionStorage.setItem("login_time", loginTime.toString());
 
-        // Save required values to sessionStorage
-        sessionStorage.setItem("access_token", data.access_token);
-        sessionStorage.setItem("org_id", data.org_id);
-        sessionStorage.setItem("username", data.username);
-        sessionStorage.setItem("organization_name", data.organization_name);
-        sessionStorage.setItem("role", data.role);
-      navigate("/monitoring");
+      navigate("/home");
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -73,28 +75,26 @@ const LoginPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-white text-gray-800 flex flex-col items-center justify-center p-4">
       <div className="text-center mb-8">
-        <h1
-          className="text-5xl md:text-7xl font-extrabold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-teal-900 to-teal-400 animate-movingGradient"
-          style={{ fontFamily: 'Saira Stencil One, sans-serif' }}
-        >
-          QUANTIFORE
-        </h1>
+        <div className="flex flex-col items-center justify-center mb-4">
+          <img src="/qf-logo0.1.svg" alt="Quantifore Logo" className="h-16 md:h-20 w-auto mb-2" />
+        </div>
+
         <p className="text-gray-600 text-lg mt-2">{dynamicTagline}</p>
       </div>
 
       <form
         className="w-full max-w-md p-8 rounded-lg shadow-2xl border-1 animate-fade-in"
         onSubmit={(e) => {
-          e.preventDefault(); // Prevent default form behavior
-          handleLogin();      // Call your login handler
+          e.preventDefault();
+          handleLogin();
         }}
       >
-        <h1 className="text-3xl font-lato font-semibold text-center text-teal-800 mb-6">
+        <h1 className="text-3xl font-lato font-semibold text-center text-red-800 mb-6">
           Login/SignUp
         </h1>
 
         <div className="relative mb-4">
-          <div className="bg-teal-50 rounded-full flex items-center px-4 py-3 shadow-md">
+          <div className="bg-red-50 rounded-full flex items-center px-4 py-3 shadow-md">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
             </svg>
@@ -110,7 +110,7 @@ const LoginPage: React.FC = () => {
 
         <div className="relative mb-6">
           <div className="relative mb-6">
-            <div className="bg-teal-50 rounded-full flex items-center px-4 py-3 shadow-md">
+            <div className="bg-red-50 rounded-full flex items-center px-4 py-3 shadow-md">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
               </svg>
@@ -137,8 +137,8 @@ const LoginPage: React.FC = () => {
         <div className="flex items-center justify-center relative">
           <button
             className={`w-full font-bold py-3 rounded-full shadow-lg border-2 text-xl flex items-center justify-center transition-colors duration-300 ${loading
-              ? "bg-teal-600 text-teal-100 border-teal-600 cursor-not-allowed"
-              : "bg-white text-teal-700 hover:text-teal-100 border-teal-600 hover:bg-teal-600"
+              ? "bg-red-600 text-red-100 border-red-600 cursor-not-allowed"
+              : "bg-white text-red-700 hover:text-red-100 border-red-600 hover:bg-red-600"
               }`}
             type="submit"
             onClick={handleLogin}
@@ -156,14 +156,14 @@ const LoginPage: React.FC = () => {
             )}
           </button>
         </div>
-
+{/* 
         <div className="text-center mt-4">
-          <a href="#" className="text-teal-600 text-sm hover:text-teal-800">Forgot Password?</a>
-        </div>
+          <a href="#" className="text-red-600 text-sm hover:text-red-800">Forgot Password?</a>
+        </div> */}
       </form>
 
       <footer className="mt-8 text-center text-gray-500">
-        <p>© {new Date().getFullYear()} Numenor Pvt. Ltd. All rights reserved.</p>
+        <p>© {new Date().getFullYear()} QuantiFore Pvt. Ltd. All rights reserved.</p>
       </footer>
     </div>
   );

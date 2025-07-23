@@ -64,8 +64,17 @@ module.exports = {
             transform: "translate(0px, 0px) scale(1)",
           },
         },
+        shimmer: {
+          '0%': {
+            transform: 'translateX(-100%) translateY(-100%) rotate(45deg)',
+          },
+          '100%': {
+            transform: 'translateX(100%) translateY(100%) rotate(45deg)',
+          },
+        },        
       },
       animation: {
+        shimmer: 'shimmer 1.2s ease-in-out',
         fadeIn: 'fadeIn 0.5s ease-out',
         typing: 'typing 2s steps(30, end) infinite alternate',
         movingGradient: 'movingGradient 6s infinite alternate ease-in-out',

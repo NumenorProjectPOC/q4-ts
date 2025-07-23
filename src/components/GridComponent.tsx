@@ -6,7 +6,16 @@ interface DataItem {
   time: string;
   value_unit: string;
   stockcreationtime: string;
+  predicted_value_unit: string | null;
+  predicted_value_unit_1: string | null;
+  predicted_value_unit_2: string | null;
   guid: string;
+}
+
+interface Dataset {
+  stock_data?: DataItem[];
+  upper_threshold?: number;
+  lower_threshold?: number;
 }
 
 interface GridLayoutProps {
@@ -20,15 +29,13 @@ interface GridLayoutProps {
 
 const GridLayout: React.FC<GridLayoutProps> = ({ gridCount, data, loadingMap, stockOptions, selectedStocks }) => {
   console.log(data, 'Grid data received');
-
   // Ensure that we only use available datasets
-  const availableData = data.slice(0, gridCount);
-
+  const availableData = data.map((item) => item || null); // Initialize availableData based on the provided data
   // Generate grid items dynamically
   const gridItems = Array.from({ length: gridCount }, (_, index) => ({
     id: index + 1,
     content: stockOptions.find(s => s.value === selectedStocks[index])?.label,
-    dataset: availableData[index] || [], // Assign correct dataset or empty array if missing
+    dataset: (availableData[index] as Dataset) || {}, // Explicitly type dataset as Dataset
   }));
 
   const getGridClasses = () => {
@@ -52,10 +59,10 @@ const GridLayout: React.FC<GridLayoutProps> = ({ gridCount, data, loadingMap, st
         <div
           key={item.id}
           className={`${gridCount === 3 && index === 2
-              ? "md:col-span-2"
-              : gridCount === 3
-                ? "md:col-span-1"
-                : ""
+            ? "md:col-span-2"
+            : gridCount === 3
+              ? "md:col-span-1"
+              : ""
             }`}
         >
           {loadingMap[index] ? (
@@ -67,7 +74,14 @@ const GridLayout: React.FC<GridLayoutProps> = ({ gridCount, data, loadingMap, st
             <div className="bg-gradient-to-br from-white/30 via-teal-300/30 to-white/10 border border-gray-200 rounded-lg p-1 md:p-4 
               flex flex-col justify-center text-base md:text-lg font-bold text-gray-700 h-full w-full">
               <div>{item.content}</div>
-              <GraphMonitorComponent data={item.dataset} index={index} />
+              <GraphMonitorComponent
+                data={item.dataset?.stock_data || []}
+                upperThreshold={item.dataset?.upper_threshold || 0}
+                lowerThreshold={item.dataset?.lower_threshold || 0}
+                index={index}
+                availableRanges={["1D", "1M", "6M", "1Y", "Max"]}
+                defaultRange="1M"
+              />
             </div>
           )}
         </div>
