@@ -42,6 +42,8 @@ export interface NodeData {
   y?: number;
   fx?: number;
   fy?: number;
+  vx?: number;
+  vy?: number;
 }
 
 export interface LinkData {

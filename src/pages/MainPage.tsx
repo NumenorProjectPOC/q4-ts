@@ -1,177 +1,250 @@
-import React, { useState, useEffect, useRef } from "react";
-import GridLayout from "../components/GridComponent";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Monitor,
+  Trash2,
+  Share2,
+  Bell,
+  Search,
+  BarChart3,
+  ChevronLeft,
+  ChevronRight,
+  Menu,
+  TrendingUp,
+} from "lucide-react";
+
 import Toast from "../components/ui/Toast";
 import ConfirmationPopup from "../components/ui/ConfirmationPopup";
 import ShareModal from "../components/ui/ShareModal";
 import RightSidebar from "../components/RightSidebar";
-import DashboardSwitcher from "../components/ui/DashboardSwitcher";
-import { fetchFavoriteStocks, fetchMonitoredStockData, removeFavoriteStock, setStockAlert, toggleStockMonitoring } from "../services/quantiforeApi";
-import { Monitor, Trash2, Share2, Bell, Search, Sparkles } from "lucide-react";
+import AISearchComponent from "../components/AISearchComponent";
 import QuickStockPreviewModal from "../components/ui/QuickStockPreviewModal";
-import { formatStockName } from "../utils/utility";
-import { AnimatePresence, motion } from "framer-motion";
-import AISearchComponent from '../components/AISearchComponent';
+import GraphMonitorComponent from "../components/MonitoringGraph";
+import Dock from "../components/ui/Dock";
 
-interface StockOption {
+import {
+  fetchFavoriteStocks,
+  fetchMonitoredStockData,
+  removeFavoriteStock,
+  setStockAlert,
+  toggleStockMonitoring,
+} from "../services/quantiforeApi";
+import { formatStockName } from "../utils/utility";
+
+// Types
+interface DataOption {
   label: string;
   value: string;
   guid: string;
+  monitored?: boolean;
 }
 
-type StockAPIResponse = {
-  stock_data: any[];
+type DataAPIResponse = {
+  stock_data: any;
   upper_threshold: number;
   lower_threshold: number;
 };
 
-const MainPage: React.FC = () => {
-  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
-  const [gridCount, setGridCount] = useState<number>(0);
-  const [data, setData] = useState<(StockAPIResponse | null)[]>([]);
-  const [monitoredStockLoading, setMonitoredStockLoading] = useState<Record<string, boolean>>({});
-  const [error, setError] = useState<string | null>(null);
+const COLLAPSED_W = 64;   // 16 (w-16) * 4
+const EXPANDED_W = 384;   // 96 (w-96) * 4
+const SIDE_GAP = 24;      // left-6 * 4
+const RIGHT_GAP = 24;     // mirror right padding for symmetry
 
-  const [initialMonitoredStocks, setInitialMonitoredStocks] = useState<string[]>([]);
-  const [selectedStocks, setSelectedStocks] = useState<string[]>([]);
-  const [stockOptions, setStockOptions] = useState<StockOption[]>([]);
-  const [search, setSearch] = useState<string>("");
-  const [showModal, setShowModal] = useState<boolean>(false);
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [stockToShare, setStockToShare] = useState<StockOption | null>(null);
+const MainPage: React.FC = () => {
+  // Data state
+  const [dataOptions, setDataOptions] = useState<DataOption[]>([]);
+  const [selectedData, setSelectedData] = useState<string[]>([]);
+  const [data, setData] = useState<(DataAPIResponse | null)[]>([]);
   const [isFavoritesLoading, setIsFavoritesLoading] = useState(true);
-  const [favoritesExpanded, setFavoritesExpanded] = useState<boolean>(true);
-  const [quickPreviewStock, setQuickPreviewStock] = useState<StockOption | null>(null);
-  const [alertModalStock, setAlertModalStock] = useState<StockOption | null>(null);
-  const [upperThreshold, setUpperThreshold] = useState("");
-  const [lowerThreshold, setLowerThreshold] = useState("");
-  const [hasFetchedInitialData, setHasFetchedInitialData] = useState(false);
+  const [monitoredDataLoading, setMonitoredDataLoading] = useState<Record<string, boolean>>({});
+  const [activeDataIndex, setActiveDataIndex] = useState<number>(0);
+
+  // UI state
+  const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
+  const [search, setSearch] = useState("");
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isAiSearchOpen, setIsAiSearchOpen] = useState(false);
 
-  const [isPanelOpen, setIsPanelOpen] = useState(false);
-  const [toast, setToast] = useState<{ type: "success" | "error" | "warning", message: string } | null>(null);
-  const [confirmPopup, setConfirmPopup] = useState<{ stock: StockOption | null }>({ stock: null });
+  // Modals and toasts
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [dataToShare, setDataToShare] = useState<DataOption | null>(null);
+  const [alertModalData, setAlertModalData] = useState<DataOption | null>(null);
+  const [upperThreshold, setUpperThreshold] = useState("");
+  const [lowerThreshold, setLowerThreshold] = useState("");
+  const [confirmPopup, setConfirmPopup] = useState<{ data: DataOption | null }>({ data: null });
+  const [toast, setToast] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
+  const [toastSocket, setToastSocket] = useState<{ type: "completed" | "error" | "warning"; message: string } | null>(null);
+  const [quickPreviewData, setQuickPreviewData] = useState<DataOption | null>(null);
 
-  const toggleCollapse = () => setIsCollapsed((prev) => !prev);
-  const toggleFavorites = () => setFavoritesExpanded((prev) => !prev);
+  const navigate = useNavigate();
 
-  const handleStockToggle = async (value: string, label: string) => {
-    const stock = stockOptions.find(s => s.value === value);
-    if (!stock) return;
+  // Track the effective sidebar width so layout can react without jank
+  const sidebarWidth = isLeftSidebarCollapsed ? COLLAPSED_W : EXPANDED_W;
+  const contentLeftOffset = sidebarWidth + SIDE_GAP; // left margin for content
+  const contentRightOffset = RIGHT_GAP;
 
-    if (!selectedStocks.includes(value) && selectedStocks.length >= 4) {
-      setToast({
-        type: "warning",
-        message: "You can monitor a maximum of 4 stocks at a time."
+  // Bump a key to force GraphMonitorComponent to re-measure when sidebar width changes
+  const graphLayoutKey = useMemo(() => (isLeftSidebarCollapsed ? "collapsed" : "expanded"), [isLeftSidebarCollapsed]);
+
+  // Utils
+  const handleGoToDashboard = (targetTab?: "monitoring" | "visualization") => {
+    if (targetTab) navigate(`/${targetTab}`);
+  };
+
+  const refreshFavoritesFromStorage = () => {
+    const cached = sessionStorage.getItem("favorite_stocks");
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        setDataOptions(parsed);
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  // Load favorites and monitored data
+  useEffect(() => {
+    const loadFavorites = async () => {
+      try {
+        setIsFavoritesLoading(true);
+        const cached = sessionStorage.getItem("favorite_stocks");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          setDataOptions(parsed);
+          const monitoredGuids = parsed.filter((d: any) => d.monitored).map((d: any) => d.guid);
+          const monitoredValues = parsed.filter((d: any) => d.monitored).map((d: any) => d.value);
+          if (monitoredGuids.length > 0) {
+            await fetchInitialMonitoredData(monitoredGuids, monitoredValues);
+          }
+          return;
+        }
+
+        const favorites = await fetchFavoriteStocks();
+        const formatted = favorites.map((stock: any) => ({
+          ...stock,
+          label: formatStockName(stock.label),
+          guid: stock.guid,
+        }));
+        sessionStorage.setItem("favorite_stocks", JSON.stringify(formatted));
+        setDataOptions(formatted);
+
+        const monitoredGuids = formatted.filter((d: any) => d.monitored).map((d: any) => d.guid);
+        const monitoredValues = formatted.filter((d: any) => d.monitored).map((d: any) => d.value);
+        if (monitoredGuids.length > 0) {
+          await fetchInitialMonitoredData(monitoredGuids, monitoredValues);
+        }
+      } catch {
+        setToast({ type: "error", message: "Could not load favorites. Please try again." });
+      } finally {
+        setIsFavoritesLoading(false);
+      }
+    };
+
+    loadFavorites();
+  }, []);
+
+  const fetchInitialMonitoredData = async (guids: string[], values: string[]) => {
+    try {
+      const dataList = await fetchMonitoredStockData(guids);
+      const resultData = guids.map((guid) => {
+        const match = dataList.find((d: any) => d.guid === guid);
+        if (!match) return null;
+        return {
+          stock_data: match,
+          upper_threshold: (match as { upper_threshold?: number }).upper_threshold || 0,
+          lower_threshold: (match as { lower_threshold?: number }).lower_threshold || 0,
+        } as DataAPIResponse;
       });
+
+      setSelectedData(values);
+      setData(resultData);
+      const loadingMap = Object.fromEntries(guids.map((g) => [g, false]));
+      setMonitoredDataLoading(loadingMap);
+    } catch {
+      setToast({ type: "error", message: "Failed to load monitored data." });
+    }
+  };
+
+  // Actions
+  const handleDataToggle = async (value: string, label: string) => {
+    const dataItem = dataOptions.find((d) => d.value === value);
+    if (!dataItem) return;
+
+    if (!selectedData.includes(value) && selectedData.length >= 4) {
+      setToast({ type: "warning", message: "You can monitor a maximum of 4 data sources at a time." });
       return;
     }
 
-    const isMonitored = selectedStocks.includes(value);
+    const isMonitored = selectedData.includes(value);
     const newMonitorState = !isMonitored;
+
     try {
-      // Show loader immediately
-      setMonitoredStockLoading(prev => ({ ...prev, [value]: true }));
+      setMonitoredDataLoading((prev) => ({ ...prev, [value]: true }));
 
       if (!isMonitored) {
-        // We're trying to monitor a new stock: show a placeholder graph by incrementing grid
-        setGridCount(prev => prev + 1);
-      } else {
-        // Optimistically remove from UI immediately
-        setSelectedStocks(prev => prev.filter(v => v !== value));
-        setData(prev => prev.filter((_, idx) => selectedStocks[idx] !== value));
-        setGridCount(prev => Math.max(0, prev - 1));
-      }
-
-      // Backend update
-      await toggleStockMonitoring(stock.guid, newMonitorState);
-
-      // Fetch monitored data if newly monitored
-      if (newMonitorState) {
-        const result = await fetchMonitoredStockData([stock.guid]);
+        const result = await fetchMonitoredStockData([dataItem.guid]);
         if (result && result.length > 0) {
-          const formatted: StockAPIResponse = {
+          const formatted: DataAPIResponse = {
             stock_data: result[0],
             upper_threshold: (result[0] as { upper_threshold?: number }).upper_threshold || 0,
             lower_threshold: (result[0] as { lower_threshold?: number }).lower_threshold || 0,
           };
-          setSelectedStocks(prev => [...prev, value]);
-          setData(prev => [...prev, formatted]);
+          setSelectedData((prev) => [...prev, value]);
+          setData((prev) => [...prev, formatted]);
+          setActiveDataIndex(selectedData.length);
         }
-        setToast({ type: "success", message: `${label} is now being monitored.` });
       } else {
-        setToast({ type: "warning", message: `${label} removed from monitoring.` });
+        const indexToRemove = selectedData.findIndex((d) => d === value);
+        setSelectedData((prev) => prev.filter((d) => d !== value));
+        setData((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+        if (activeDataIndex === indexToRemove) {
+          setActiveDataIndex(0);
+        } else if (activeDataIndex > indexToRemove) {
+          setActiveDataIndex((prev) => prev - 1);
+        }
       }
 
-      // Refresh favorites + session cache
+      await toggleStockMonitoring(dataItem.guid, newMonitorState);
+
+      setToast({
+        type: newMonitorState ? "success" : "warning",
+        message: newMonitorState ? `${label} is now being monitored.` : `${label} removed from monitoring.`,
+      });
+
       const favorites = await fetchFavoriteStocks();
-      const formattedFavorites = favorites.map(fav => ({
+      const formattedFavorites = favorites.map((fav: any) => ({
         ...fav,
         label: formatStockName(fav.label),
         guid: fav.guid,
       }));
       sessionStorage.setItem("favorite_stocks", JSON.stringify(formattedFavorites));
-      setStockOptions(formattedFavorites);
-    } catch (err) {
-      console.error("Failed to toggle stock monitoring:", err);
-
-      // Revert optimistic UI changes
-      if (!isMonitored) {
-        // Revert graph add
-        setGridCount(prev => Math.max(0, prev - 1));
-      } else {
-        // Re-add graph
-        setSelectedStocks(prev => [...prev, value]);
-        const result = await fetchMonitoredStockData([stock!.guid]);
-        if (result && result.length > 0) {
-          const formatted: StockAPIResponse = {
-            stock_data: result[0],
-            upper_threshold: (result[0] as { upper_threshold?: number }).upper_threshold || 0,
-            lower_threshold: (result[0] as { lower_threshold?: number }).lower_threshold || 0,
-          };
-          setData(prev => [...prev, formatted]);
-          setGridCount(prev => prev + 1);
-        }
-      }
-
-      setToast({
-        type: "error",
-        message: `Could not ${newMonitorState ? "monitor" : "unmonitor"} ${label}`,
-      });
+      setDataOptions(formattedFavorites);
+    } catch {
+      setToast({ type: "error", message: `Could not ${newMonitorState ? "monitor" : "unmonitor"} ${label}` });
     } finally {
-      setMonitoredStockLoading(prev => ({ ...prev, [value]: false }));
+      setMonitoredDataLoading((prev) => ({ ...prev, [value]: false }));
     }
   };
 
-
-  const handleStockRemove = async (stock: StockOption) => {
+  const handleDataRemove = async (dataItem: DataOption) => {
     try {
-      // Remove from backend
-      await removeFavoriteStock(stock.guid);
-
-      // Remove from local state
-      const updated = stockOptions.filter((s) => s.guid !== stock.guid);
-      setStockOptions(updated);
-
-      // Show success toast
-      setToast({
-        type: "error",
-        message: `${stock.label} removed from favorites.`,
-      });
-    } catch (error) {
-      console.error("Failed to remove stock:", error);
-      setToast({
-        type: "error",
-        message: `Failed to remove ${stock.label} from favorites.`,
-      });
+      await removeFavoriteStock(dataItem.guid);
+      const updated = dataOptions.filter((d) => d.guid !== dataItem.guid);
+      setDataOptions(updated);
+      sessionStorage.setItem("favorite_stocks", JSON.stringify(updated));
+      setToast({ type: "error", message: `${dataItem.label} removed from favorites.` });
+    } catch {
+      setToast({ type: "error", message: `Failed to remove ${dataItem.label} from favorites.` });
     }
   };
 
   const handleSetAlert = async () => {
-    if (!alertModalStock) return;
+    if (!alertModalData) return;
 
     const hasUpper = upperThreshold.trim() !== "";
     const hasLower = lowerThreshold.trim() !== "";
-
     const upper = hasUpper ? parseFloat(upperThreshold) : null;
     const lower = hasLower ? parseFloat(lowerThreshold) : null;
 
@@ -179,565 +252,571 @@ const MainPage: React.FC = () => {
       setToast({ type: "error", message: "Please enter valid threshold values." });
       return;
     }
-
     if (!hasUpper && !hasLower) {
       setToast({ type: "error", message: "Please enter at least one threshold." });
       return;
     }
 
     try {
-      await setStockAlert(alertModalStock.guid, upper ?? 0, lower ?? 0); // backend expects numbers
-      setToast({ type: "success", message: `Alert set for ${alertModalStock.label}.` });
-    } catch (error) {
-      console.error("Error setting alert:", error);
-      setToast({ type: "error", message: `Failed to set alert for ${alertModalStock.label}.` });
+      await setStockAlert(alertModalData.guid, upper ?? 0, lower ?? 0);
+      setToast({ type: "success", message: `Alert set for ${alertModalData.label}.` });
+    } catch {
+      setToast({ type: "error", message: `Failed to set alert for ${alertModalData.label}.` });
     } finally {
-      setAlertModalStock(null);
+      setAlertModalData(null);
       setUpperThreshold("");
       setLowerThreshold("");
     }
   };
 
-  // const handleShareToUser = (email: string, stock: StockOption) => {
-  //   //api
-  //   console.log(`Shared ${stock.label} with ${email}`);
-  //   setToast({
-  //     type: "success",
-  //     message: `Shared ${stock.label} with ${email}`,
-  //   });
-  //   setShowShareModal(false);
-  // };
+  // Derived
+  const filteredData = dataOptions.filter((d) => d.label.toLowerCase().includes(search.toLowerCase()));
 
+  // A ref that forces reflow of the graph container on layout changes (no heavy listeners)
+  const contentRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    const loadFavorites = async () => {
-      try {
-        setIsFavoritesLoading(true);
-
-        // Check cache first
-        const cached = sessionStorage.getItem("favorite_stocks");
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          setStockOptions(parsed);
-          console.log("Loaded favorites from sessionStorage:", parsed);
-
-          // Fetch monitoring data if any cached favorites are monitored
-          const monitoredGuids = parsed.filter((s: any) => s.monitored).map((s: any) => s.guid);
-          const monitoredvalues = parsed.filter((s: any) => s.monitored).map((s: any) => s.value);
-          if (monitoredGuids.length > 0) {
-            await fetchInitialMonitoredStocks(monitoredGuids, monitoredvalues);
-            setHasFetchedInitialData(true);
-          }
-
-          return;
-        }
-
-        // Fetch from API
-        const favorites = await fetchFavoriteStocks();
-        const formattedFavorites = favorites.map(stock => ({
-          ...stock,
-          label: formatStockName(stock.label),
-          guid: stock.guid,
-        }));
-
-        sessionStorage.setItem("favorite_stocks", JSON.stringify(formattedFavorites));
-        setStockOptions(formattedFavorites);
-        console.log("Fetched and cached favorites:", formattedFavorites);
-
-        // Efficiently extract monitored guids and fetch monitoring data
-        const monitoredGuids = formattedFavorites
-          .filter((s: any) => s.monitored)
-          .map((s: any) => s.guid);
-        const monitoredvalues = formattedFavorites
-          .filter((s: any) => s.monitored)
-          .map((s: any) => s.value);
-        if (monitoredGuids.length > 0) {
-          await fetchInitialMonitoredStocks(monitoredGuids, monitoredvalues);
-          setHasFetchedInitialData(true);
-        }
-      } catch (error) {
-        console.error("Failed to fetch favorite stocks", error);
-        setToast({
-          type: "error",
-          message: "Could not load your favorite stocks. Please try again.",
-        });
-      } finally {
-        setIsFavoritesLoading(false);
-      }
-    };
-
-
-    loadFavorites();
-  }, []);
-
-  const fetchInitialMonitoredStocks = async (guids: string[], values: string[]) => {
-    try {
-      const stockDataList = await fetchMonitoredStockData(guids);
-      console.log("Fetched monitored stock data:", stockDataList);
-
-      const resultData = guids.map(guid => {
-        const match = stockDataList.find((d: any) => d.guid === guid);
-        if (!match) return null;
-        return {
-          stock_data: match,
-          upper_threshold: (match as { upper_threshold?: number }).upper_threshold || 0,
-          lower_threshold: (match as { lower_threshold?: number }).lower_threshold || 0,
-        } as StockAPIResponse;
-      });
-
-      setSelectedStocks(values);
-      setGridCount(guids.length);
-      setData(resultData);
-
-      const loadingMap = Object.fromEntries(guids.map(g => [g, false]));
-      setMonitoredStockLoading(loadingMap);
-
-      console.log("Fetched monitored data for initial stocks:", resultData);
-    } catch (error) {
-      console.error("Failed to load monitored stock data:", error);
-      setToast({
-        type: "error",
-        message: "Failed to load monitored stocks.",
-      });
-    }
-  };
-
-  // useEffect(() => {
-  //   if (selectedStocks.length === 0 || hasFetchedInitialData) return;
-  //   // const selectedGuids = stockOptions
-  //   //   .filter((s) => selectedStocks.includes(s.value))
-  //   //   .map((s) => s.guid);
-
-  //   const fetchData = async () => {
-  //     // setMonitoredStockLoading(prev => ({ ...prev, globalLoading: true }))
-  //     const guidMap = stockOptions.reduce((acc, stock) => {
-  //       acc[stock.value] = stock.guid;
-  //       return acc;
-  //     }, {} as Record<string, string>);
-
-  //     const newDataArray: (StockAPIResponse | null)[] = [];
-
-  //     for (const stockValue of selectedStocks) {
-  //       const guid = guidMap[stockValue];
-
-  //       try {
-  //         const stockData = await fetchMonitoredStockData([guid]);
-  //         if (stockData && stockData.length > 0) {
-  //           newDataArray.push({
-  //             stock_data: stockData[0],
-  //             upper_threshold: (stockData[0] as { upper_threshold?: number })?.upper_threshold || 0,
-  //             lower_threshold: (stockData[0] as { lower_threshold?: number })?.lower_threshold || 0,
-  //           } as StockAPIResponse); // ensure type compatibility
-  //         } else {
-  //           newDataArray.push(null);
-  //         }
-  //       } catch (err) {
-  //         newDataArray.push(null);
-  //       } finally {
-  //         setMonitoredStockLoading(prev => ({ ...prev, [stockValue]: false }));
-  //       }
-  //     }
-  //     setData(prev => [...prev, ...newDataArray]);
-  //   };
-
-  //   fetchData();
-
-  // }, [selectedStocks, stockOptions]);
+    // Defer a resize to allow transition to finish so charts measure the final box
+    const t = setTimeout(() => {
+      if (!contentRef.current) return;
+      // Force a reflow-safe style read; Graph component uses ResizeObserver internally
+      void contentRef.current.offsetWidth; // eslint-disable-line @typescript-eslint/no-unused-expressions
+      // Trigger a window resize event for any listeners inside chart libs
+      window.dispatchEvent(new Event("resize"));
+    }, 320); // matches transition duration
+    return () => clearTimeout(t);
+  }, [graphLayoutKey]);
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-teal-50 via-cyan-50 to-blue-50 overflow-x-hidden">
-      {/* Dashboard Switching Section */}
-      <DashboardSwitcher />
-      <div className="bg-teal-50 flex flex-col h-screen w-screen overflow-hidden">
-        <div className="shadow-sm border-b border-gray-200 px-6 py-4">
-          <div className="flex items-center justify-between mb-5">
-            <img src="/qf-logo0.1.svg" alt="Quantifore Logo" className="h-8 w-auto mt-3" />
-          </div>
-        </div>
-        <div className="flex-1 p-2 md:p-4 overflow-hidden">
-          <div className="flex h-full w-full gap-2 md:gap-4">
-            <div
-              className={`${isCollapsed ? "w-12 md:w-16" : "w-20 sm:w-40 md:w-80"} h-full bg-gradient-to-br from-white/40 via-teal-200/30 to-white/20 border border-gray-200 rounded-lg flex flex-col shadow-lg transition-all duration-300 relative flex-shrink-0 overflow-hidden`}
-            >
-              <button
-                onClick={toggleCollapse}
-                className={`${isCollapsed ? "right-2" : "right-2"} absolute top-3 bg-white hover:bg-gray-50 rounded-full p-2 z-10 shadow-lg border border-gray-200 transition-all duration-300`}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="#115e59" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={5}
-                    d={isCollapsed ? "M9 5l7 7-7 7" : "M15 19l-7-7 7-7"}
-                  />
-                </svg>
-              </button>
+    <div className="h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 text-gray-900 antialiased relative overflow-hidden flex flex-col">
+      {/* Background decoration */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full opacity-5 bg-gradient-to-br from-red-400 to-orange-400 blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full opacity-5 bg-gradient-to-tr from-blue-400 to-purple-400 blur-3xl" />
+      </div>
 
-              <div
-                className={`mt-10 px-2 flex flex-col gap-4 w-full transition-all duration-500 ease-in-out rounded-lg ${isCollapsed ? "opacity-0 translate-y-4 pointer-events-none" : "opacity-100 translate-y-0"}`}
+      {/* Header */}
+      <header className="flex items-center justify-between px-8 h-20 bg-white shadow-sm border-b border-gray-200/60 sticky top-0 z-30 flex-shrink-0">
+        <motion.div
+          className="flex items-center space-x-4"
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <img src="/qf-logo0.1.svg" alt="Quantifore logo" className="h-8 select-none" />
+          <div className="flex items-center space-x-2">
+            <BarChart3 className="w-5 h-5 text-red-600" />
+            <span className="text-lg font-semibold text-gray-900">Data Monitor</span>
+          </div>
+        </motion.div>
+
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            Live Data
+          </div>
+          <motion.button
+            onClick={() => setIsPanelOpen(!isPanelOpen)}
+            className="rounded-lg p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-all duration-200 shadow-sm border border-gray-200/50"
+            aria-label="Open menu"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <Menu className="h-5 w-5" />
+          </motion.button>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="relative flex-1 min-h-0">
+        {/* Sidebar - absolute like Signal */}
+        <motion.aside
+          className={`${isLeftSidebarCollapsed ? "w-16" : "w-96"
+            } absolute left-6 top-6 bottom-6 z-20 bg-white/90 backdrop-blur-xl border border-gray-200 rounded-2xl shadow-2xl flex flex-col transition-all duration-300`}
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.6 }}
+          aria-label="Monitoring sidebar"
+        >
+          {/* Header */}
+          <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-red-50 rounded-t-2xl flex-shrink-0">
+            <div className="flex items-center justify-between">
+              {!isLeftSidebarCollapsed && (
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-gradient-to-r from-red-600 to-red-700 rounded-lg">
+                    <BarChart3 className="w-4 h-4 text-white" />
+                  </div>
+                  <h2 className="font-bold text-gray-900">Stock Monitor</h2>
+                </div>
+              )}
+              <button
+                onClick={() => setIsLeftSidebarCollapsed((v) => !v)}
+                className="ms-[-10px] p-2 rounded-xl hover:bg-red-50 text-gray-600 transition-colors border border-red-200 shadow-sm"
+                aria-label={isLeftSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
               >
-                <div className="space-y-3 pb-4">
-                  <div className="mt-4">
-                    <button
-                      onClick={() => setIsAiSearchOpen(true)}
-                      className="w-full flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-teal-50 to-cyan-50 hover:from-teal-100 hover:to-cyan-100 border border-teal-200/50 transition-all duration-300 group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-500 to-cyan-500 flex items-center justify-center">
-                          <Search className="h-4 w-4 text-white" />
+                {isLeftSidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Expanded content with internal scroll */}
+          {!isLeftSidebarCollapsed ? (
+            <div className="flex-1 flex flex-col min-h-0">
+              {/* AI Search */}
+              <div className="p-6 border-b border-gray-200 flex-shrink-0">
+                <motion.button
+                  onClick={() => setIsAiSearchOpen(true)}
+                  className="w-full flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-700 hover:to-red-800 transition-all duration-300 group shadow-lg hover:shadow-xl"
+                  whileHover={{ scale: 1.02, y: -1 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <div className="p-2 bg-white/20 rounded-lg">
+                    <Search className="w-4 h-4" />
+                  </div>
+                  <span className="font-semibold">AI Data Search</span>
+                  <div className="ml-auto">
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </div>
+                </motion.button>
+              </div>
+
+              {/* Scrollable favorites */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                      <div className="w-2 h-2 bg-red-600 rounded-full" />
+                      Favourite Stocks
+                    </h3>
+                    <span className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded-full font-semibold">
+                      {dataOptions.length}
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {isFavoritesLoading ? (
+                      Array.from({ length: 6 }).map((_, i) => (
+                        <div key={i} className="h-24 rounded-2xl bg-gray-100 animate-pulse" />
+                      ))
+                    ) : dataOptions.length ? (
+                      filteredData.map((dataItem, index) => {
+                        const isSelected = selectedData.includes(dataItem.value);
+                        const dataIndex = selectedData.findIndex((d) => d === dataItem.value);
+                        const isActive = isSelected && dataIndex === activeDataIndex;
+
+                        return (
+                          <motion.div
+                            key={dataItem.value}
+                            layout
+                            onClick={() => {
+                              if (isSelected) setActiveDataIndex(dataIndex);
+                            }}
+                            className={`p-4 rounded-2xl border transition-all group cursor-pointer overflow-hidden relative ${isActive
+                                ? "bg-gradient-to-r from-red-50 to-red-100 border-red-300 shadow-lg"
+                                : "bg-white/90 border-gray-200/60 hover:border-red-300 hover:shadow-lg"
+                              }`}
+                            whileHover={{ scale: 1.02, y: -2 }}
+                            whileTap={{ scale: 0.98 }}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: index * 0.06 }}
+                          >
+                            {isActive && (
+                              <div className="absolute -top-10 -right-10 w-20 h-20 rounded-full bg-gradient-to-br from-red-400 to-red-600 opacity-10" />
+                            )}
+
+                            <div className="flex items-start justify-between relative z-10">
+                              <div className="flex-1 min-w-0">
+                                <div className="text-base font-bold text-gray-900 mb-1 whitespace-normal">
+                                  {formatStockName(dataItem.label)}
+                                </div>
+                                {isSelected ? (
+                                  <span className="inline-block px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full mb-1">
+                                    Monitoring
+                                  </span>
+                                ) : (
+                                  <div className="text-sm text-gray-500 font-medium">Available</div>
+                                )}
+                                {isActive && (
+                                  <div className="text-xs text-red-600 flex items-center gap-1 font-medium">
+                                    <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+                                    Currently viewing
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-1 ml-3 opacity-70 group-hover:opacity-100 transition-opacity">
+                                <motion.button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDataToggle(dataItem.value, dataItem.label);
+                                  }}
+                                  className={`p-2 rounded-lg transition-all ${isSelected
+                                      ? "text-red-600 hover:bg-red-200 bg-red-100"
+                                      : "text-gray-400 hover:text-red-600 hover:bg-red-50"
+                                    }`}
+                                  title={isSelected ? "Stop Monitoring" : "Start Monitoring"}
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                >
+                                  <Monitor className="w-4 h-4" />
+                                </motion.button>
+
+                                <motion.button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDataToShare(dataItem);
+                                    setShowShareModal(true);
+                                  }}
+                                  className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
+                                  title="Share"
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                >
+                                  <Share2 className="w-4 h-4" />
+                                </motion.button>
+
+                                <motion.button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setAlertModalData(dataItem);
+                                    const matched = data.find((d, idx) => selectedData[idx] === dataItem.value);
+                                    setUpperThreshold(matched ? matched?.upper_threshold?.toString() : "");
+                                    setLowerThreshold(matched ? matched?.lower_threshold?.toString() : "");
+                                  }}
+                                  className="p-2 rounded-lg text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 transition-all"
+                                  title="Set Alert"
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                >
+                                  <Bell className="w-4 h-4" />
+                                </motion.button>
+
+                                <motion.button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setConfirmPopup({ data: dataItem });
+                                  }}
+                                  className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all"
+                                  title="Remove"
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </motion.button>
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })
+                    ) : (
+                      <div className="text-center py-12">
+                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <BarChart3 className="w-8 h-8 text-gray-400" />
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Sparkles className="h-3 w-3 text-teal-500" />
-                          <span className="text-sm font-medium text-teal-700">Search for Stocks</span>
-                        </div>
+                        <p className="text-sm text-gray-500 mb-1 font-medium">No saved sources</p>
+                        <p className="text-xs text-gray-400">Use AI search to find data sources</p>
                       </div>
-                      <div className="ml-auto">
-                        <div className="w-2 h-2 bg-teal-400 rounded-full animate-pulse"></div>
-                      </div>
-                    </button>
+                    )}
                   </div>
                 </div>
+              </div>
+            </div>
+          ) : (
+            // Collapsed: quick AI button at bottom
+            <div className="p-3">
+              <button
+                onClick={() => setIsAiSearchOpen(true)}
+                className="w-full flex items-center justify-center bg-gradient-to-r from-red-600 to-red-700 text-white p-3 rounded-xl hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-lg"
+                title="AI Data Search"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </motion.aside>
 
-                <div className="space-y-3 pt-4 border-t border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-md font-medium text-gray-500 tracking-wide">Selected Stocks</h3>
-                    <button
-                      onClick={toggleFavorites}
-                      className="text-xs text-blue-600 hover:text-blue-700 font-medium transition"
-                    >
-                      {favoritesExpanded ? "Hide" : "Show"}
-                    </button>
-                  </div>
-
-                  {favoritesExpanded && (
-                    <div className="mt-2 flex flex-col gap-2 pr-1 pt-2 overflow-y-auto scrollbar-none">
-                      {isFavoritesLoading ? (
-                        Array.from({ length: 3 }).map((_, i) => (
-                          <div key={i} className="h-20 rounded-lg bg-gray-200/60 animate-pulse" />
-                        ))
-                      ) : stockOptions.length > 0 ? (
-                        stockOptions
-                          .filter((s) => s.label.toLowerCase().includes(search.toLowerCase()))
-                          .map((stock) => {
-                            const isSelected = selectedStocks.includes(stock.value);
-                            return (
-                              <div
-                                key={stock.value}
-                                className={`group relative p-3 rounded-lg transition-all duration-200 cursor-pointer text-gray-800 ${isSelected
-                                  ? "bg-gradient-to-r from-blue-200 to-cyan-200 shadow-md border-2 border-blue-300"
-                                  : "bg-gradient-to-r from-cyan-100 to-teal-100 border-2 border-transparent hover:shadow-lg"
-                                  }`}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center space-x-2">
-                                      {/* Changed text color for better contrast on gradients */}
-                                      <span className="text-sm font-medium text-gray-900 truncate">
-                                        {stock.label}
-                                      </span>
-                                      {isSelected && (
-                                        <div className="flex items-center space-x-1">
-                                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                          <span className="text-xs text-green-700 font-medium">Active</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                    <div className="flex items-center space-x-2 mt-1">
-                                      <span className="text-xs text-gray-600">Latest Value</span>
-                                      <span className="text-xs font-medium text-gray-700">--</span>
-                                    </div>
-                                  </div>
-
-                                  {/* --- Adjusted Action Icons for better visibility/interaction --- */}
-                                  <div className={`flex items-center space-x-1 transition-opacity ${
-                                    // Make actions visible if selected, or on hover
-                                    isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                                    }`}>
-                                    <button
-                                      onClick={() => handleStockToggle(stock.value, stock.label)}
-                                      className="p-1.5 rounded-md text-gray-500 hover:text-green-600 hover:bg-green-100/50 transition-colors"
-                                      title="Monitor"
-                                    >
-                                      <Monitor size={15} />
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setStockToShare(stock);
-                                        setShowShareModal(true);
-                                      }}
-                                      className="p-1.5 rounded-md text-gray-500 hover:text-blue-600 hover:bg-blue-100/50 transition-colors"
-                                      title="Share"
-                                    >
-                                      <Share2 size={15} />
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setAlertModalStock(stock);
-                                        const matched = data.find((d, idx) => selectedStocks[idx] === stock.value);
-                                        if (matched) {
-                                          setUpperThreshold(matched.upper_threshold.toString());
-                                          setLowerThreshold(matched.lower_threshold.toString());
-                                        } else {
-                                          setUpperThreshold("");
-                                          setLowerThreshold("");
-                                        }
-                                      }}
-                                      className="p-1.5 rounded-md text-gray-500 hover:text-yellow-600 hover:bg-yellow-100/70 transition-colors"
-                                      title="Set Alert"
-                                    >
-                                      <Bell size={15} />
-                                    </button>
-                                    <button
-                                      onClick={() => setConfirmPopup({ stock })}
-                                      className="p-1.5 rounded-md text-gray-500 hover:text-red-600 hover:bg-red-100/70 transition-colors"
-                                      title="Remove"
-                                    >
-                                      <Trash2 size={15} />
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })
-                      ) : (
-                        <p className="text-sm text-gray-500">No favorite stocks found.</p>
-                      )}
+        <section
+          // Use inline style for precise calc and smooth transitions without Tailwind plugin
+          style={{
+            marginLeft: contentLeftOffset,
+            marginRight: contentRightOffset,
+            transition: "margin 0.3s ease, width 0.3s ease",
+            width: `calc(100% - ${contentLeftOffset + contentRightOffset}px)`,
+          }}
+          className="h-full flex flex-col bg-white/50 backdrop-blur-sm relative min-h-0"
+          ref={contentRef}
+        >
+          {selectedData.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-gray-600">
+              <motion.div
+                className="text-center space-y-6"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6 }}
+              >
+                <div className="w-20 h-20 bg-gradient-to-br from-red-100 to-red-200 rounded-full flex items-center justify-center mx-auto shadow-lg">
+                  <TrendingUp className="w-10 h-10 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Start Monitoring</h3>
+                  <p className="text-gray-600 max-w-md leading-relaxed">
+                    Select data sources from the sidebar to monitor their performance and analyze trends.
+                  </p>
+                </div>
+                <motion.button
+                  onClick={() => setIsAiSearchOpen(true)}
+                  className="bg-gradient-to-r from-red-600 to-red-700 text-white px-6 py-3 rounded-2xl hover:from-red-700 hover:to-red-800 transition-all font-semibold shadow-lg hover:shadow-xl"
+                  whileHover={{ scale: 1.05, y: -2 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  Find Data with AI
+                </motion.button>
+              </motion.div>
+            </div>
+          ) : (
+            <>
+              {/* Main Graph */}
+              <div className="flex-1 p-6 pb-24 min-h-0">
+                <motion.div
+                  key={graphLayoutKey}
+                  className="h-full bg-white/90 rounded-2xl shadow-2xl relative overflow-hidden"
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.25 }}
+                >
+                  {data[activeDataIndex] ? (
+                    <GraphMonitorComponent
+                      data={data[activeDataIndex]?.stock_data || []}
+                      upperThreshold={data[activeDataIndex]?.upper_threshold || 0}
+                      lowerThreshold={data[activeDataIndex]?.lower_threshold || 0}
+                      index={activeDataIndex}
+                      availableRanges={["1D", "1M", "6M", "1Y", "Max"]}
+                      defaultRange="1M"
+                      sidebarCollapsed={isLeftSidebarCollapsed}
+                      stockName={dataOptions.find((d) => d.value === selectedData[activeDataIndex])?.label}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-4 border-red-600 border-t-transparent mx-auto mb-3" />
+                        <p className="text-gray-600 text-sm">Loading data...</p>
+                      </div>
                     </div>
                   )}
 
-                </div>
-              </div>
-            </div>
+                  {/* Other monitored sources mini charts */}
+                  {selectedData.length > 1 && (
+                    <div className="p-6 border-t border-gray-200/60 bg-gray-50/50 backdrop-blur-sm mb-16">
+                      <div className="mb-6">
+                        <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                          <div className="w-2 h-2 bg-blue-600 rounded-full" />
+                          Other Sources
+                        </h3>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {selectedData.map((dataValue, index) => {
+                          if (index === activeDataIndex) return null;
 
-            <div className="flex-grow h-full overflow-hidden relative">
-              {error || selectedStocks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center text-center text-gray-500 h-full">
-                  <img src="/empty-state.svg" alt="No stocks" className="w-48 h-48 mb-6 opacity-80" />
-                  <h2 className="text-xl font-semibold mb-2">No stocks selected</h2>
-                  <p className="mb-6">Use the panel to add stocks you want to track.</p>
-                  <button
-                    onClick={() => {
-                      setFavoritesExpanded(true);
-                      setIsCollapsed(false);
-                    }}
-                    className="bg-teal-500 hover:bg-teal-600 text-white py-2 px-6 rounded-full shadow"
-                  >
-                    Start Adding Stocks
-                  </button>
-                </div>
-              ) : (
-                <GridLayout
-                  gridCount={selectedStocks.length}
-                  data={data.filter((_, i) => i < selectedStocks.length).map(item => item ? item.stock_data : null)}
-                  selectedStocks={selectedStocks}
-                  stockOptions={stockOptions}
-                  loadingMap={selectedStocks.reduce((acc, stock, idx) => {
-                    acc[idx] = monitoredStockLoading[stock] || false;
-                    return acc;
-                  }, {} as Record<number, boolean>)}
-                />
-              )}
-            </div>
-          </div>
-          {/* Status Bar */}
-          <div className="bg-white border-t border-gray-200 px-6 py-3">
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center space-x-4">
-                <span className="text-gray-600">Active Stocks: <span className="font-medium">{selectedStocks.length}</span></span>
-                <span className="text-gray-600">Favorites: <span className="font-medium">{stockOptions.length}</span></span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="text-gray-600">Live Data Connected</span>
-              </div>
-            </div>
-          </div>
+                          const dataItem = dataOptions.find((d) => d.value === dataValue);
+                          const dataSet: any = data[index];
+                          const chartPoints = dataSet?.stock_data?.stock_data || [];
 
-        </div>
+                          const parsePointValue = (point: any): number | null => {
+                            const valStr = point.value_unit || point.predicted_value_unit_1 || point.predicted_value_unit_2;
+                            if (!valStr) return null;
+                            const parsed = parseFloat(valStr);
+                            return isNaN(parsed) ? null : parsed;
+                          };
 
-        {showModal && (
-          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center">
-            <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full space-y-4 overflow-y-auto max-h-[80vh] relative">
-              <button
-                onClick={() => setShowModal(false)}
-                className="absolute top-2 right-2 text-gray-600 hover:text-red-500 transition"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </button>
-              <h2 className="text-xl font-bold text-gray-800">Explore More Stocks</h2>
-              <div className="space-y-2">
-                {stockOptions.map((stock) => {
-                  const isSelected = selectedStocks.includes(stock.value);
-                  return (
-                    <div
-                      key={stock.value}
-                      className={`p-2 rounded-lg flex justify-between items-center shadow-sm transition-all duration-300 cursor-pointer ${isSelected ? "bg-gradient-to-r from-cyan-200 to-teal-200" : "bg-gray-100"
-                        }`}
-                      onClick={() => {
-                        handleStockToggle(stock.value, stock.label);
-                      }}
-                    >
-                      <span className={`text-sm ${isSelected ? "text-green-800" : "text-gray-800"}`}>
-                        {stock.label}
-                      </span>
+                          return (
+                            <motion.div
+                              key={dataValue}
+                              layout
+                              className="bg-white/90 backdrop-blur-sm rounded-2xl border border-gray-200/60 p-4 cursor-pointer hover:shadow-lg transition-all duration-300 hover:border-red-300"
+                              onClick={() => setActiveDataIndex(index)}
+                              whileHover={{ scale: 1.02, y: -2 }}
+                              whileTap={{ scale: 0.98 }}
+                              initial={{ opacity: 0, y: 20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: index * 0.1 }}
+                            >
+                              <div className="flex items-center justify-between mb-3">
+                                <h4 className="text-sm font-semibold text-gray-900 truncate">
+                                  {formatStockName(dataItem?.label || "")}
+                                </h4>
+                                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                              </div>
+                              <div className="h-16 bg-gray-50 rounded-xl flex items-center justify-center border border-gray-200/50">
+                                {chartPoints.length > 0 ? (
+                                  <div className="w-full h-full p-2">
+                                    <svg className="w-full h-full" viewBox="0 0 200 40">
+                                      {(() => {
+                                        const values = chartPoints
+                                          .map(parsePointValue)
+                                          .filter((v: any): v is number => v !== null)
+                                          .slice(-30);
+
+                                        if (values.length < 2) return null;
+
+                                        const minValue = Math.min(...values);
+                                        const maxValue = Math.max(...values);
+                                        const valueRange = maxValue - minValue || 1;
+
+                                        const points = values
+                                          .map((value: any, i: any) => {
+                                            const x = (i / (values.length - 1)) * 180 + 10;
+                                            const y = 35 - ((value - minValue) / valueRange) * 30;
+                                            return `${x},${y}`;
+                                          })
+                                          .join(" ");
+
+                                        return (
+                                          <polyline
+                                            points={points}
+                                            fill="none"
+                                            stroke="#dc2626"
+                                            strokeWidth="2"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                          />
+                                        );
+                                      })()}
+                                    </svg>
+                                  </div>
+                                ) : (
+                                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-red-600 border-t-transparent" />
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-2 text-center font-medium">Click to expand</p>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  );
-                })}
+                  )}
+                </motion.div>
               </div>
-            </div>
-          </div>
-        )}
 
-        {alertModalStock && (
-          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center">
-            <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full space-y-4 relative">
+
+            </>
+          )}
+        </section>
+      </main>
+
+      {/* Modals and overlays */}
+      {alertModalData && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center">
+          <motion.div
+            className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 border border-gray-200/60"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900">Set Alert</h2>
               <button
-                onClick={() => setAlertModalStock(null)}
-                className="absolute top-2 right-2 text-gray-600 hover:text-red-500 transition"
+                onClick={() => setAlertModalData(null)}
+                className="text-gray-500 hover:text-gray-700 p-1 rounded-lg hover:bg-gray-100"
               >
                 ✕
               </button>
-              <h2 className="text-lg font-semibold text-gray-800">
-                Set Alert for <span className="text-teal-700">{alertModalStock.label}</span>
-              </h2>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm text-gray-700 mb-1">Upper Threshold</label>
-                  <input
-                    type="number"
-                    value={upperThreshold}
-                    onChange={(e) => setUpperThreshold(e.target.value)}
-                    className="w-full px-4 py-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-teal-400 outline-none"
-                    placeholder="e.g., 120"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-700 mb-1">Lower Threshold</label>
-                  <input
-                    type="number"
-                    value={lowerThreshold}
-                    onChange={(e) => setLowerThreshold(e.target.value)}
-                    className="w-full px-4 py-2 rounded-md border border-gray-300 focus:ring-2 focus:ring-teal-400 outline-none"
-                    placeholder="e.g., 80"
-                  />
-                </div>
-                <button
-                  className="w-full py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-md font-medium shadow"
-                  onClick={handleSetAlert}
-                >
-                  Save Alert
-                </button>
-              </div>
             </div>
-          </div>
-        )}
+            <p className="text-gray-600 mb-4">
+              Set alerts for <strong>{alertModalData.label}</strong>
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-1">Upper Threshold</label>
+                <input
+                  type="number"
+                  value={upperThreshold}
+                  onChange={(e) => setUpperThreshold(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  placeholder="e.g., 120"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-1">Lower Threshold</label>
+                <input
+                  type="number"
+                  value={lowerThreshold}
+                  onChange={(e) => setLowerThreshold(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  placeholder="e.g., 80"
+                />
+              </div>
+              <button
+                onClick={handleSetAlert}
+                className="w-full bg-gradient-to-r from-red-600 to-red-700 text-white py-2 rounded-lg hover:from-red-700 hover:to-red-800 transition-colors font-medium"
+              >
+                Save Alert
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
-        {toast && (
-          <Toast
-            type={toast.type}
-            message={toast.message}
-            onClose={() => setToast(null)}
-          />
-        )}
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
 
-        {/* Confirmation Popup */}
-        {confirmPopup.stock && (
-          <ConfirmationPopup
-            title="Remove Favorite Stock?"
-            message={`Are you sure you want to remove ${confirmPopup.stock.label} from your favorites?`}
-            onConfirm={() => {
-              handleStockRemove(confirmPopup.stock!);
-              setConfirmPopup({ stock: null });
-            }}
-            onCancel={() => setConfirmPopup({ stock: null })}
-          />
-        )}
-        {showShareModal && stockToShare && (
-          <ShareModal
-            isStock={true}
-            itemLabel={stockToShare.label}
-            itemGuid={stockToShare.guid}
-            onClose={() => {
-              setStockToShare(null);
-              setShowShareModal(false);
-            }}
-          />
-        )}
-        {quickPreviewStock && (
-          <QuickStockPreviewModal
-            stock={quickPreviewStock}
-            onClose={() => setQuickPreviewStock(null)}
-          />
-        )}
-
-        <AISearchComponent
-          isOpen={isAiSearchOpen}
-          onClose={() => setIsAiSearchOpen(false)}
-          onStockFound={(stockData) => {
-            console.log("Stock found:", stockData);
-            // You can add logic here, e.g., close modal after a stock is added
+      {confirmPopup.data && (
+        <ConfirmationPopup
+          title="Remove Favorite Data Source?"
+          message={`Are you sure you want to remove ${confirmPopup.data.label} from your favorites?`}
+          onConfirm={() => {
+            handleDataRemove(confirmPopup.data!);
+            setConfirmPopup({ data: null });
           }}
-          onAddToFavorites={(stockData) => {
-            // Handle adding stock to favorites
-            // This is where you would call your API to add the favorite
-            // and then refresh your favorites list.
-            console.log("Adding to favorites:", stockData);
-          }}
-          onShowToast={(type, message) => {
-            setToast({ type, message });
+          onCancel={() => setConfirmPopup({ data: null })}
+        />
+      )}
+
+      {showShareModal && dataToShare && (
+        <ShareModal
+          isStock={true}
+          itemLabel={dataToShare.label}
+          itemGuid={dataToShare.guid}
+          onClose={() => {
+            setDataToShare(null);
+            setShowShareModal(false);
           }}
         />
+      )}
 
-        {/* Menu button*/}
-        <motion.button
-          className="fixed top-5 right-8 z-[60] p-2 rounded-full bg-white/70 backdrop-blur-md text-gray-700 hover:bg-white/90 transition-all shadow-lg hover:scale-105"
-          onClick={() => setIsPanelOpen(!isPanelOpen)}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          aria-label={isPanelOpen ? "Close menu" : "Open menu"}
-        >
-          <motion.svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-6 w-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            animate={{ rotate: isPanelOpen ? 180 : 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <motion.path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              animate={{
-                d: isPanelOpen
-                  ? "M6 18L18 6M6 6l12 12"
-                  : "M4 6h16M4 12h16M4 18h16"
-              }}
-              transition={{ duration: 0.3 }}
+      {quickPreviewData && (
+        <QuickStockPreviewModal stock={quickPreviewData} onClose={() => setQuickPreviewData(null)} />
+      )}
+
+      <AISearchComponent
+        isOpen={isAiSearchOpen}
+        onClose={() => setIsAiSearchOpen(false)}
+        onStockFound={(stockData) => {
+          console.log("Data found:", stockData);
+        }}
+        onAddToFavorites={() => {
+          refreshFavoritesFromStorage();
+        }}
+        onShowToast={(type, message) => {
+          setToastSocket({ type, message });
+        }}
+        onGoToDashboard={handleGoToDashboard}
+        currentTab="monitoring"
+      />
+
+      <AnimatePresence>
+        {isPanelOpen && (
+          <>
+            <motion.div
+              className="fixed inset-0 z-40 bg-black bg-opacity-30 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsPanelOpen(false)}
             />
-          </motion.svg>
-        </motion.button>
+            <RightSidebar isOpen={isPanelOpen} onClose={() => setIsPanelOpen(false)} />
+          </>
+        )}
+      </AnimatePresence>
 
-        {/* Backdrop and Sidebar */}
-        <AnimatePresence>
-          {isPanelOpen && (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.35 }}
-                className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
-                onClick={() => setIsPanelOpen(false)}
-              />
-              <RightSidebar isOpen={isPanelOpen} onClose={() => setIsPanelOpen(false)} />
-            </>
-          )}
-        </AnimatePresence>
-      </div>
-
+      <Dock />
     </div>
   );
 };

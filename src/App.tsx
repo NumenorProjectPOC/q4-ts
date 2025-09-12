@@ -1,87 +1,234 @@
-import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
-import Login from "./pages/LoginPage";
-import RegionSelectionPage from "./pages/RegionSelectionPage";
-import MainPage from "./pages/MainPage";
-import Playground from "./pages/Playground";
-import AlertPage from "./pages/AlertPage";
-import FrameworkSelectionPage from "./pages/FrameworkSelectionPage";
-import DomainSelectionPage from "./pages/DomainSelectionPage";
-import StockSelectionPage from "./pages/StockSelectionPage";
-import StepProgress from "./components/ui/StepProgress";
-import SignalTrackerPage from "./pages/SignalTrackerPage";
-import SettingsPage from "./pages/SettingsPage";
-import Toast from "./components/ui/Toast";
-import DashboardHome from "./pages/Dashboard";
+import React from 'react';
+import { Routes, Route, useLocation } from 'react-router-dom';
+import Login from './pages/LoginPage';
+import LandingPage from './pages/LandingPage';
+import RegionSelectionPage from './pages/RegionSelectionPage';
+import MainPage from './pages/MainPage';
+import Playground from './pages/Playground';
+import AlertPage from './pages/AlertPage';
+import FrameworkSelectionPage from './pages/FrameworkSelectionPage';
+import DomainSelectionPage from './pages/DomainSelectionPage';
+import StockSelectionPage from './pages/StockSelectionPage';
+import StepProgress from './components/ui/StepProgress';
+import SignalTrackerPage from './pages/SignalTrackerPage';
+import SettingsPage from './pages/SettingsPage';
+import Toast from './components/ui/Toast';
+import DashboardHome from './pages/Dashboard';
+import { AIWebSocketProvider } from './context/AIWebSocketContext';
+import WebSocketNotifications from './components/ui/WebSocketNotification';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-const stepRoutes = ["/regions", "/frameworks", "/domains", "/stocks"];
+const stepRoutes = ['/regions', '/frameworks', '/domains', '/stocks'];
 
+/**
+ * Error Boundary Component - Catches and handles component errors gracefully
+ */
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
 
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
 
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Error Boundary caught an error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="error-boundary-fallback p-4 bg-red-50 border border-red-200 rounded-md">
+          <h2 className="text-red-800 font-semibold mb-2">Something went wrong</h2>
+          <p className="text-red-600 text-sm">
+            {this.state.error?.message || 'An unexpected error occurred'}
+          </p>
+          <button 
+            className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+            onClick={() => this.setState({ hasError: false, error: undefined })}
+          >
+            Try Again
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+/**
+ * Protected Route Component - Ensures user is authenticated before accessing protected routes
+ */
 const ProtectedRoute: React.FC<{ element: React.ReactNode }> = ({ element }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = sessionStorage.getItem("access_token");
+    const token = sessionStorage.getItem('access_token');
     if (!token) {
-      navigate("/");
+      navigate('/login');
     }
   }, [navigate]);
 
-  return <>{element}</>;
+  return (
+    <ErrorBoundary>
+      {element}
+    </ErrorBoundary>
+  );
 };
 
-const App: React.FC = () => {
-  const [toast, setToast] = useState<{
-    type: "success" | "error" | "warning";
-    message: string;
-  } | null>(null);
-
-  const location = useLocation();
+/**
+ * Authenticated App Wrapper - Wraps authenticated routes with WebSocket provider
+ */
+const AuthenticatedApp: React.FC<{ showStepProgress: boolean }> = ({ showStepProgress }) => {
   const navigate = useNavigate();
-  const showStepProgress = stepRoutes.includes(location.pathname);
 
+  // Monitor session expiration for authenticated users
   useEffect(() => {
     const interval = setInterval(() => {
-      const token = sessionStorage.getItem("access_token");
-      const loginTime = sessionStorage.getItem("login_time");
+      const token = sessionStorage.getItem('access_token');
+      const loginTime = sessionStorage.getItem('login_time');
 
       if (token && loginTime) {
         const loginTimestamp = parseInt(loginTime, 10);
         const now = Date.now();
-        const twoHours = 2 * 60 * 60 * 1000;
+        const twoHours = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
 
         if (now - loginTimestamp > twoHours) {
-          console.log("Session expired. Logging out...");
+          console.log('Session expired. Logging out...');
           sessionStorage.clear();
-          setToast({
-            type: "warning",
-            message: "Session expired. Please log in again.",
-          });
-          navigate("/");
+          navigate('/login');
         }
+      } else {
+        // No token found, redirect to login
+        navigate('/login');
       }
-    }, 60000);
+    }, 60000); // Check every minute
 
     return () => clearInterval(interval);
   }, [navigate]);
 
   return (
-    <>
-      {showStepProgress && <StepProgress />}
+    <AIWebSocketProvider wsUrl="ws://10.200.200.1:8000/ws/ai-query">
+      <ErrorBoundary>
+        {showStepProgress && <StepProgress />}
+        
+        {/* Protected Routes with WebSocket connection available */}
+        <Routes>
+          <Route path="/regions" element={<ProtectedRoute element={<RegionSelectionPage />} />} />
+          <Route path="/frameworks" element={<ProtectedRoute element={<FrameworkSelectionPage />} />} />
+          <Route path="/domains" element={<ProtectedRoute element={<DomainSelectionPage />} />} />
+          <Route path="/stocks" element={<ProtectedRoute element={<StockSelectionPage />} />} />
+          <Route path="/home" element={<ProtectedRoute element={<DashboardHome />} />} />
+          <Route path="/monitoring" element={<ProtectedRoute element={<MainPage />} />} />
+          <Route path="/visualization" element={<ProtectedRoute element={<Playground />} />} />
+          <Route path="/alert" element={<ProtectedRoute element={<AlertPage />} />} />
+          <Route path="/signal" element={<ProtectedRoute element={<SignalTrackerPage />} />} />
+          <Route path="/settings" element={<ProtectedRoute element={<SettingsPage />} />} />
+        </Routes>
+
+        {/* WebSocket Notifications - Only available in authenticated context */}
+        <WebSocketNotifications />
+      </ErrorBoundary>
+    </AIWebSocketProvider>
+  );
+};
+
+/**
+ * Loading Component - Shows while checking authentication status
+ */
+const LoadingScreen: React.FC = () => (
+  <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+  </div>
+);
+
+/**
+ * Main App Component - Handles authentication state and routing
+ */
+const App: React.FC = () => {
+  const [toast, setToast] = useState<{
+    type: 'success' | 'error' | 'warning';
+    message: string;
+  } | null>(null);
+  
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null); // null = checking
+  const location = useLocation();
+  const navigate = useNavigate();
+  const showStepProgress = stepRoutes.includes(location.pathname);
+
+  // Check authentication status on app load and route changes
+  useEffect(() => {
+    const checkAuthentication = () => {
+      const token = sessionStorage.getItem('access_token');
+      const loginTime = sessionStorage.getItem('login_time');
+      
+      if (token && loginTime) {
+        const loginTimestamp = parseInt(loginTime, 10);
+        const now = Date.now();
+        const twoHours = 2 * 60 * 60 * 1000;
+        
+        if (now - loginTimestamp > twoHours) {
+          // Session expired
+          sessionStorage.clear();
+          setIsAuthenticated(false);
+          setToast({
+            type: 'warning',
+            message: 'Session expired. Please log in again.',
+          });
+          navigate('/landing');
+        } else {
+          // Valid session
+          setIsAuthenticated(true);
+        }
+      } else {
+        // No valid session
+        setIsAuthenticated(false);
+      }
+    };
+
+    checkAuthentication();
+  }, [location.pathname, navigate]);
+
+  // Show loading screen while checking authentication
+  if (isAuthenticated === null) {
+    return <LoadingScreen />;
+  }
+
+  // If user is authenticated and not on public routes, show authenticated app
+  if (isAuthenticated && !['/landing', '/login'].includes(location.pathname)) {
+    return (
+      <>
+        <AuthenticatedApp showStepProgress={showStepProgress} />
+        {toast && (
+          <Toast
+            type={toast.type}
+            message={toast.message}
+            onClose={() => setToast(null)}
+          />
+        )}
+      </>
+    );
+  }
+
+  // Show public routes for unauthenticated users
+  return (
+    <ErrorBoundary>
       <Routes>
-        <Route path="/" element={<Login />} />
-        <Route path="/regions" element={<ProtectedRoute element={<RegionSelectionPage />} />} />
-        <Route path="/frameworks" element={<ProtectedRoute element={<FrameworkSelectionPage />} />} />
-        <Route path="/domains" element={<ProtectedRoute element={<DomainSelectionPage />} />} />
-        <Route path="/stocks" element={<ProtectedRoute element={<StockSelectionPage />} />} />
-        <Route path="/home" element={<ProtectedRoute element={<DashboardHome />} />} />
-        <Route path="/monitoring" element={<ProtectedRoute element={<MainPage />} />} />
-        <Route path="/visualization" element={<ProtectedRoute element={<Playground />} />} />
-        <Route path="/alert" element={<ProtectedRoute element={<AlertPage />} />} />
-        <Route path="/signal" element={<ProtectedRoute element={<SignalTrackerPage />} />} />
-        <Route path="/settings" element={<ProtectedRoute element={<SettingsPage />} />} />
+        {/* Landing page as default route */}
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/landing" element={<LandingPage />} />
+        <Route path="/login" element={<Login />} />
+        {/* Redirect all other routes to landing if not authenticated */}
+        <Route path="*" element={<LandingPage />} />
       </Routes>
+      
       {toast && (
         <Toast
           type={toast.type}
@@ -89,7 +236,7 @@ const App: React.FC = () => {
           onClose={() => setToast(null)}
         />
       )}
-    </>
+    </ErrorBoundary>
   );
 };
 

@@ -1,69 +1,57 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, User, Lock, AlertTriangle, ArrowLeft } from "lucide-react";
+import { motion } from "framer-motion";
 
 const LOGIN_URL = import.meta.env.VITE_LOGIN_URL;
+const ENABLE_BG = (import.meta.env.VITE_LOGIN_BG ?? "true") === "true";
 
-const LoginPage: React.FC = () => {
+export default function LoginPage() {
   const navigate = useNavigate();
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [dynamicTagline, setDynamicTagline] = useState("Access Restricted. Credentials Required.");
-  const [showPassword, setShowPassword] = useState(false);
-
+  const [tagline, setTagline] = useState("Enter the gateway to advanced analytics.");
+  const [showPwd, setShowPwd] = useState(false);
 
   useEffect(() => {
-    const taglines = [
-      "Unlocking Insights, One Login at a Time.",
-      "Enter the Gateway to Advanced Analytics.",
-      "Your Key to Quantifore Awaits.",
-      "Accessing the Future of Data Analysis.",
-      "Empowering Decisions Through Secure Access."
+    const lines = [
+      "Unlocking insights, one log‑in at a time.",
+      "Enter the gateway to advanced analytics.",
+      "Your key to QuantiFore awaits.",
+      "Accessing the future of data analysis.",
+      "Empowering decisions through secure access.",
     ];
-
-    const intervalId = setInterval(() => {
-      const randomIndex = Math.floor(Math.random() * taglines.length);
-      setDynamicTagline(taglines[randomIndex]);
-    }, 3000);
-
-    return () => clearInterval(intervalId);
+    const id = setInterval(() => setTagline(lines[Math.floor(Math.random() * lines.length)]), 3200);
+    return () => clearInterval(id);
   }, []);
 
   const handleLogin = async () => {
-    setError("");
-
     if (!loginId.trim() || !password.trim()) {
       setError("Username and password cannot be empty.");
       return;
     }
-
+    setError("");
     setLoading(true);
     try {
-      const response = await fetch(LOGIN_URL, {
+      const res = await fetch(LOGIN_URL, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ login_id: loginId, password }),
       });
-
-      const data = await response.json();
-      console.log("Login response:", data);
-
-      if (!response.ok) {
-        throw new Error(data.detail || "Login failed");
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 401) throw new Error("Invalid email or password. Please check your credentials and try again.");
+        throw new Error(data.detail ?? "An unexpected error occurred. Please try again.");
       }
-      // Save required values to sessionStorage
-      const loginTime = Date.now();
+      const now = Date.now();
       sessionStorage.setItem("access_token", data.access_token);
       sessionStorage.setItem("org_id", data.org_id);
       sessionStorage.setItem("username", data.username);
       sessionStorage.setItem("organization_name", data.organization_name);
       sessionStorage.setItem("role", data.role);
-      sessionStorage.setItem("login_time", loginTime.toString());
-
+      sessionStorage.setItem("login_time", now.toString());
       navigate("/home");
     } catch (err: any) {
       setError(err.message);
@@ -72,101 +60,177 @@ const LoginPage: React.FC = () => {
     }
   };
 
+  const handleBackToHome = () => {
+    navigate("/");
+  };
+
   return (
-    <div className="min-h-screen bg-white text-gray-800 flex flex-col items-center justify-center p-4">
-      <div className="text-center mb-8">
-        <div className="flex flex-col items-center justify-center mb-4">
-          <img src="/qf-logo0.1.svg" alt="Quantifore Logo" className="h-16 md:h-20 w-auto mb-2" />
-        </div>
+    <div className="relative min-h-screen overflow-hidden bg-white text-brand-black">
+      {ENABLE_BG && (
+        <>
+          <div className="pointer-events-none absolute -top-32 -left-24 h-[34rem] w-[34rem] rounded-full bg-brand-red-100/30 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-24 -right-24 h-[34rem] w-[34rem] rounded-full bg-brand-cream-200/50 blur-3xl" />
+        </>
+      )}
 
-        <p className="text-gray-600 text-lg mt-2">{dynamicTagline}</p>
-      </div>
-
-      <form
-        className="w-full max-w-md p-8 rounded-lg shadow-2xl border-1 animate-fade-in"
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleLogin();
-        }}
+      {/* Simple Back Button */}
+      <motion.div 
+        className="relative z-20 p-6"
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.6 }}
       >
-        <h1 className="text-3xl font-lato font-semibold text-center text-red-800 mb-6">
-          Login/SignUp
-        </h1>
+        <motion.button
+          onClick={handleBackToHome}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-gray-600 hover:text-red-700 hover:bg-red-50 transition-all duration-300 group"
+          whileHover={{ scale: 1.02, x: -2 }}
+          whileTap={{ scale: 0.98 }}
+        >
+          <ArrowLeft className="w-5 h-5 group-hover:scale-110 transition-transform" />
+          <span className="font-medium">Back to Home</span>
+        </motion.button>
+      </motion.div>
 
-        <div className="relative mb-4">
-          <div className="bg-red-50 rounded-full flex items-center px-4 py-3 shadow-md">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-            </svg>
-            <input
-              type="email"
-              placeholder="Username or Email"
-              className="bg-transparent outline-none w-full ml-2 text-gray-800 placeholder-gray-400"
-              value={loginId}
-              onChange={(e) => setLoginId(e.target.value)}
+      <div className="relative z-10 flex min-h-screen items-center justify-center px-4 sm:px-6 lg:px-8 -mt-20">
+        <div className="w-full max-w-md">
+          <div className="flex flex-col items-center">
+            {/* Main Logo */}
+            <motion.img
+              src="/qf-logo0.1.svg"
+              alt="QuantiFore"
+              className="h-20 w-auto mb-4"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
             />
+            
+            {/* Welcome Header */}
+            <motion.h1
+              className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-red-700 bg-clip-text text-transparent mb-2 text-center"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.1 }}
+            >
+              Welcome Back
+            </motion.h1>
+
+            <motion.p
+              key={tagline}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35 }}
+              className="mb-8 text-center text-base text-neutral-600 leading-relaxed"
+            >
+              {tagline}
+            </motion.p>
           </div>
-        </div>
 
-        <div className="relative mb-6">
-          <div className="relative mb-6">
-            <div className="bg-red-50 rounded-full flex items-center px-4 py-3 shadow-md">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-              </svg>
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="Password"
-                className="bg-transparent outline-none w-full ml-2 text-gray-800 placeholder-gray-400 pr-8"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((prev) => !prev)}
-                className="absolute right-4 text-gray-500 hover:text-gray-700 focus:outline-none"
-              >
-                {showPassword ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {error && <p className="text-red-500 text-lg italic mb-4">{error}</p>}
-
-        <div className="flex items-center justify-center relative">
-          <button
-            className={`w-full font-bold py-3 rounded-full shadow-lg border-2 text-xl flex items-center justify-center transition-colors duration-300 ${loading
-              ? "bg-red-600 text-red-100 border-red-600 cursor-not-allowed"
-              : "bg-white text-red-700 hover:text-red-100 border-red-600 hover:bg-red-600"
-              }`}
-            type="submit"
-            onClick={handleLogin}
-            disabled={loading}
+          <motion.form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleLogin();
+            }}
+            className="rounded-3xl border border-brand-red-100 bg-brand-cream-50/80 backdrop-blur-sm p-8 shadow-xl"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
           >
-            {loading ? (
-              <>
-                <svg className="animate-spin h-5 w-5 mr-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <circle cx="12" cy="12" r="10" strokeWidth="4" strokeDasharray="31.4 31.4" strokeLinecap="round"></circle>
-                </svg>
-                Processing...
-              </>
-            ) : (
-              "ACCESS SYSTEM"
-            )}
-          </button>
-        </div>
-{/* 
-        <div className="text-center mt-4">
-          <a href="#" className="text-red-600 text-sm hover:text-red-800">Forgot Password?</a>
-        </div> */}
-      </form>
+            {/* Username */}
+            <label className="block mb-6">
+              <span className="text-sm font-medium text-gray-700 mb-2 block">Username or Email</span>
+              <div className="relative group">
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-500 group-focus-within:text-brand-red-700 transition-colors" />
+                <input
+                  value={loginId}
+                  onChange={(e) => setLoginId(e.target.value)}
+                  type="email"
+                  placeholder="Enter your username or email"
+                  className="w-full rounded-2xl bg-white border-2 border-brand-red-100 py-4 pl-12 pr-4 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-brand-red-300 focus:border-brand-red-300 transition-all shadow-sm hover:shadow-md"
+                />
+              </div>
+            </label>
 
-      <footer className="mt-8 text-center text-gray-500">
-        <p>© {new Date().getFullYear()} QuantiFore Pvt. Ltd. All rights reserved.</p>
-      </footer>
+            {/* Password */}
+            <label className="block mb-6">
+              <span className="text-sm font-medium text-gray-700 mb-2 block">Password</span>
+              <div className="relative group">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-500 group-focus-within:text-brand-red-700 transition-colors" />
+                <input
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  type={showPwd ? "text" : "password"}
+                  placeholder="Enter your password"
+                  className="w-full rounded-2xl bg-white border-2 border-brand-red-100 py-4 pl-12 pr-12 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-brand-red-300 focus:border-brand-red-300 transition-all shadow-sm hover:shadow-md"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPwd((p) => !p)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-8 h-8 text-neutral-500 hover:text-brand-red-700 transition-colors rounded-lg hover:bg-gray-100"
+                  aria-label={showPwd ? "Hide password" : "Show password"}
+                >
+                  {showPwd ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </label>
+
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-6 flex items-center gap-3 rounded-xl bg-brand-red-50 border border-brand-red-100 p-4 text-sm font-medium text-brand-red-800 shadow-sm"
+              >
+                <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+                <span>{error}</span>
+              </motion.div>
+            )}
+
+            {/* Login Button */}
+            <motion.button
+              type="submit"
+              disabled={loading}
+              className={`w-full rounded-2xl py-4 text-lg font-semibold text-white shadow-lg transition-all duration-300 ${
+                loading
+                  ? "bg-neutral-400 cursor-not-allowed"
+                  : "bg-gradient-to-r from-brand-red-700 to-brand-red-800 hover:from-brand-red-800 hover:to-brand-red-700 hover:shadow-xl"
+              }`}
+              whileHover={!loading ? { scale: 1.02, y: -1 } : {}}
+              whileTap={!loading ? { scale: 0.98 } : {}}
+            >
+              {loading ? (
+                <div className="flex items-center justify-center gap-2">
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  Authenticating...
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-2">
+                  <span>ACCESS SYSTEM</span>
+                  <motion.div
+                    animate={{ x: [0, 3, 0] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  >
+                    →
+                  </motion.div>
+                </div>
+              )}
+            </motion.button>
+
+            {/* Simplified Footer */}
+            <div className="mt-8 text-center space-y-3 border-t border-brand-red-100 pt-6">
+              <motion.button
+                onClick={handleBackToHome}
+                className="text-blue-600 hover:text-blue-700 font-medium hover:underline transition-colors text-sm"
+                whileHover={{ scale: 1.02 }}
+              >
+                Explore Quantifore Features
+              </motion.button>
+              
+              <p className="text-sm text-neutral-500">
+                © {new Date().getFullYear()} QuantiFore Pvt. Ltd.
+              </p>
+            </div>
+          </motion.form>
+        </div>
+      </div>
     </div>
   );
-};
-
-export default LoginPage; 
+}

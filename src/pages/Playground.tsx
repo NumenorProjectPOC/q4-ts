@@ -1,16 +1,19 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
+//Playground.tsx(Parent-Visualization Dashboard)
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, useReducer } from 'react';
 import GraphComponent from '../components/GraphComponent';
 import { fetchSavedModel, fetchGraphData, removeSavedModel, shareSavedModel } from '../services/quantiforeApi';
-import DashboardSwitcher from "../components/ui/DashboardSwitcher";
 import RightSidebar from "../components/RightSidebar";
 import { GraphData, NodeData, LinkData } from '../services/types';
-import { Calendar, Info, Eye, Pause, Play, RefreshCw, Search, Share2, Trash2 } from 'lucide-react';
+import { Calendar, Info, Eye, Pause, Play, RefreshCw, Search, Share2, Trash2, ArrowRight, TrendingUp, TrendingDown, Minus, Activity, Zap, Target, ChevronRight, ChevronLeft, Waypoints } from 'lucide-react';
 import { formatStockName } from '../utils/utility';
 import ConfirmationPopup from '../components/ui/ConfirmationPopup';
 import ShareModal from '../components/ui/ShareModal';
 import Toast from '../components/ui/Toast';
-import { simulateStockGrowth } from '../utils/simulation';
+import { enhancedSimulateStockGrowth, simulateStockGrowth } from '../utils/simulation';
 import { AnimatePresence, motion } from "framer-motion";
+import AISearchComponent from '../components/AISearchComponent';
+import { useNavigate } from 'react-router-dom';
+import Dock from '../components/ui/Dock';
 
 interface ValueUnit {
     value: number;
@@ -39,7 +42,7 @@ interface Model {
 }
 
 interface SimulationSettings {
-    timeUnit: "days" | "weeks" | "months" | "years";
+    timeUnit: "hours" | "days" | "weeks" | "months" | "years";
     value: number;
 }
 
@@ -57,7 +60,7 @@ const Playground: React.FC = () => {
     const [sidebarWidth, setSidebarWidth] = useState(0);
     const sidebarRef = useRef<HTMLDivElement>(null);
     const [isPaused, setIsPaused] = useState(false);
-    const [editedValue, setEditedValue] = useState<number | null>(null);
+    const [editedValue, setEditedValue] = useState<number | string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [currentStockName, setCurrentStockName] = useState("");
     const [runSimulation, setRunSimulation] = useState(false);
@@ -72,13 +75,18 @@ const Playground: React.FC = () => {
     const [modelToShare, setModelToShare] = useState<Stock | null>(null);
     const [confirmPopup, setConfirmPopup] = useState<{ model: Stock | null }>({ model: null });
     const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+    const [toastSocket, setToastSocket] = useState<{ type: "completed" | "error" | "warning", message: string } | null>(null);
     const [isPanelOpen, setIsPanelOpen] = useState(false);
-    const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false);
-    const [activeSection, setActiveSection] = useState<'details' | 'simulation' | 'both' | null>(null);
     const [visualizingModelId, setVisualizingModelId] = useState<string | null>(null);
     const [showPlaceholder, setShowPlaceholder] = useState(true);
-    const [showPills, setShowPills] = useState(false);
+    const [showAISearch, setShowAISearch] = useState(false);
+    const [showDetailsPanel, setShowDetailsPanel] = useState(false);
+    const [showSimulationPanel, setShowSimulationPanel] = useState(false);
+    const [, forceUpdate] = useReducer(x => x + 1, 0);
 
+    const navigate = useNavigate();
+
+    // Layout effect for sidebar width
     useLayoutEffect(() => {
         const updateSidebarWidth = () => {
             if (sidebarRef.current) {
@@ -102,22 +110,23 @@ const Playground: React.FC = () => {
         };
     }, []);
 
+    // Load saved models
     useEffect(() => {
-
         const loadSavedModels = async () => {
             try {
-                // Check cache first
                 const cached = sessionStorage.getItem("saved_models");
                 if (cached) {
-                    const parsed = JSON.parse(cached);
-                    if (cached.length > 0) {
-                        setSavedModels(parsed);
-                        console.log("Loaded saved models from sessionStorage:", parsed);
-                        return;
+                    try {
+                        const parsed = JSON.parse(cached);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            setSavedModels(parsed);
+                            return;
+                        }
+                    } catch (parseError) {
+                        sessionStorage.removeItem("saved_models");
                     }
                 }
 
-                // Fetch from API if not cached
                 const models = await fetchSavedModel();
                 const formatted = models.map((model) => ({
                     guid: model.model_guid,
@@ -126,13 +135,9 @@ const Playground: React.FC = () => {
                     sharedBy: model.shared_by_username || null,
                 }));
 
-                // Only store in sessionStorage if data exists
                 if (formatted.length > 0) {
                     sessionStorage.setItem("saved_models", JSON.stringify(formatted));
                     setSavedModels(formatted);
-                    console.log("Fetched and cached saved models:", formatted);
-                } else {
-                    console.warn("No models returned from API — not storing in cache.");
                 }
             } catch (error) {
                 console.error("Failed to fetch saved models", error);
@@ -146,46 +151,49 @@ const Playground: React.FC = () => {
         loadSavedModels();
     }, []);
 
+    // Fetch graph data when stock changes
     useEffect(() => {
         if (!currentStockName) return;
 
         setIsLoading(true);
         fetchGraphData(currentStockName)
             .then((data: GraphData) => {
-                console.log("GRAPHDATA →", data);
                 setGraphData(data);
+                setShowPlaceholder(false);
             })
             .catch((error) => {
                 console.error("Error fetching graph data:", error);
+                setToast({
+                    type: "error",
+                    message: "Failed to load graph data. Please try again.",
+                });
             })
             .finally(() => {
                 setIsLoading(false);
             });
     }, [currentStockName]);
 
-    // Replace the existing useEffect for visualization state
+    // Handle stored visualization state
     useEffect(() => {
         const storedVisualizingId = sessionStorage.getItem("visualizing_model_id");
         if (storedVisualizingId) {
             setVisualizingModelId(storedVisualizingId);
             setCurrentStockName(storedVisualizingId);
             setShowPlaceholder(false);
-            setIsLoading(true); // Add loading state
+            setIsLoading(true);
 
-            // Fetch data for the stored model
             fetchGraphData(storedVisualizingId)
                 .then((data: GraphData) => {
-                    console.log("GRAPHDATA →", data);
                     setGraphData(data);
                     setShowPlaceholder(false);
                 })
                 .catch((error) => {
                     console.error("Error fetching graph data:", error);
-                    // On error, reset to placeholder
                     setVisualizingModelId(null);
                     setShowPlaceholder(true);
                     setCurrentStockName("");
                     setGraphData(null);
+                    sessionStorage.removeItem("visualizing_model_id");
                 })
                 .finally(() => {
                     setIsLoading(false);
@@ -193,297 +201,115 @@ const Playground: React.FC = () => {
         }
     }, []);
 
-    // Add this effect to handle visualization state changes
+    // Handle visualization state changes
     useEffect(() => {
         if (visualizingModelId) {
             sessionStorage.setItem("visualizing_model_id", visualizingModelId);
             setShowPlaceholder(false);
+            setShowDetailsPanel(true);
+            setShowSimulationPanel(true);
         } else {
             sessionStorage.removeItem("visualizing_model_id");
             setShowPlaceholder(true);
             setCurrentStockName("");
             setGraphData(null);
+            setShowDetailsPanel(false);
+            setShowSimulationPanel(false);
         }
     }, [visualizingModelId]);
 
-    useEffect(() => {
-        if (graphData && !showPlaceholder) {
-            setActiveSection('both');
-            setShowPills(true);
-        } else {
-            setShowPills(false);
-            setActiveSection(null);
-        }
-    }, [graphData, showPlaceholder]);
-
     const setSelectedElement = useCallback((element: NodeData | LinkData | null) => {
+        setEditedValue(null);
         if (element && 'source' in element) {
-            // If the element is an edge
             setSelectedNode(null);
             setSelectedEdge(element as LinkData);
         } else if (element && 'id' in element) {
-            // If the element is a node
             setSelectedNode(element as NodeData);
             setSelectedEdge(null);
         } else {
-            // If the element is null
             setSelectedNode(null);
             setSelectedEdge(null);
         }
-
-        console.log("Selected element:", element);
     }, []);
 
-    const toggleSidebar = () => setIsSidebarCollapsed((prev) => !prev);
+    const handleSave = useCallback(() => {
+        if (!graphData || editedValue === null || editedValue === '' || editedValue === '-') return;
 
-    const toggleRightSidebar = () => setIsRightSidebarCollapsed((prev) => !prev);
+        const newValue = typeof editedValue === 'string' ? parseInt(editedValue, 10) : editedValue;
+        if (isNaN(newValue)) return;
 
-    const toggleSection = (section: 'details' | 'simulation') => {
-        if (activeSection === section) {
-            // If the clicked section is open, close it
-            setActiveSection(null);
-        } else if (activeSection === null) {
-            // If nothing is open, open the clicked section
-            setActiveSection(section);
-        } else if (activeSection === 'both') {
-            // If both are open, close the clicked section (keep the other open)
-            setActiveSection(section === 'details' ? 'simulation' : 'details');
+        const newGraphData = JSON.parse(JSON.stringify(graphData));
+
+        if (selectedNode) {
+            const nodeToUpdate = newGraphData.nodes.find((n: NodeData) => n.id === selectedNode.id);
+            if (nodeToUpdate) {
+                nodeToUpdate.value.value = newValue;
+            }
+            if (selectedNode.id === newGraphData.stock.guid) {
+                newGraphData.stock.value.value = newValue;
+            }
         } else {
-            // If the other section is open, open both
-            setActiveSection('both');
+            newGraphData.stock.value.value = newValue;
+            const mainStockNode = newGraphData.nodes.find((n: NodeData) => n.id === newGraphData.stock.guid);
+            if (mainStockNode) {
+                mainStockNode.value.value = newValue;
+            }
+        }
+
+        setGraphData(newGraphData);
+
+        if (selectedNode) {
+            setSelectedNode(prev => prev ? { ...prev, value: { ...prev.value, value: newValue } } : null);
+        }
+
+        setEditedValue(null);
+    }, [selectedNode, editedValue, graphData]);
+
+    const handleValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        if (val === '' || val === '-') {
+            setEditedValue(val);
+        } else {
+            const num = parseInt(val, 10);
+            if (!isNaN(num)) {
+                setEditedValue(num);
+            }
         }
     };
 
-    const collapseAllSections = () => {
-        setActiveSection(null);
-    };
+    const handleTimeUnitChange = useCallback((unit: "hours" | "days" | "weeks" | "months" | "years") => {
+        setSimulationSettings(prevSettings => ({
+            ...prevSettings,
+            timeUnit: unit,
+            value: 0
+        }));
+        setSimulationValue(0);
+        setAnimatedSimulationValue(0);
+    }, []);
 
-    // Rest of your functions (updateValue, animateSimulation, etc.)
-    const updateValue = useCallback((increment: boolean) => {
-        if (!selectedNode || !graphData) return;
-
-        // Function to recursively update related stocks
-        const updateRelatedStocks = (stockGuid: string, change: number, isMainStock: boolean = false) => {
-            // Find the stock being updated
-            let stockToUpdate;
-            if (isMainStock) {
-                stockToUpdate = graphData.stock;
-            } else {
-                stockToUpdate = graphData.nodes.find((node) => node.id === stockGuid);
-            }
-
-            if (!stockToUpdate) return; // Stock not found
-
-            // Update the stock's value directly
-            const currentValue = typeof stockToUpdate.value === 'object' ? stockToUpdate.value.value : 0;
-            const unit = typeof stockToUpdate.value === 'object' ? stockToUpdate.value.unit : '';
-            stockToUpdate.value = { value: currentValue + change, unit: unit };
-        };
-
-        if (selectedNode.id === graphData.stock.guid) {
-            const change = increment ? 1 : -1;
-            updateRelatedStocks(graphData.stock.guid, change, true);
-        } else {
-            const change = increment ? 1 : -1;
-            updateRelatedStocks(selectedNode.id, change);
-        }
-
-        setGraphData({ ...graphData });
-
-        if (selectedNode.id === graphData.stock.guid) {
-            setSelectedNode({
-                ...selectedNode,
-                value: graphData.stock.value
-            });
-        } else {
-            const updatedStock = graphData.nodes.find(
-                (node: NodeData) => node.id === selectedNode.id
-            );
-            if (updatedStock) {
-                setSelectedNode({
-                    ...selectedNode,
-                    value: updatedStock.value
-                });
-            }
-        }
-    }, [graphData, selectedNode]);
-
-    const animateSimulation = useCallback((targetValue: number, duration: number) => {
-        setRunSimulation(true);
-        setIsSimulating(true);
-
-        const timeInSeconds = (() => {
-            switch (simulationSettings.timeUnit) {
-                case "days": return targetValue * 86400;
-                case "weeks": return targetValue * 604800;
-                case "months": return targetValue * 2629746; // avg seconds
-                case "years": return targetValue * 31556952;
-                default: return 0;
-            }
-        })();
-
-        if (graphData) {
-            const startVals = {
-                [graphData.stock.guid]: graphData.stock.value.value,
-                ...graphData.nodes.reduce((acc, s) => {
-                    acc[s.id] = s.value.value;
-                    return acc;
-                }, {} as Record<string, number>)
-            };
-
-            const newVals = simulateStockGrowth(graphData, timeInSeconds, startVals);
-
-            setGraphData(prev => {
-                if (!prev) return prev;
-                return {
-                    ...prev,
-                    stock: {
-                        ...prev.stock,
-                        value: {
-                            ...prev.stock.value,
-                            value: newVals[prev.stock.guid],
-                        },
-                    },
-                    nodes: prev.nodes.map(rs => ({
-                        ...rs,
-                        value: {
-                            ...rs.value,
-                            value: newVals[rs.id],
-                        },
-                    })),
-                };
-            });
-        }
-
-        // animation part (optional)
-        const startTime = performance.now();
-        const animateSlider = (currentTime: number) => {
-            const elapsed = currentTime - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-            const newValue = simulationValue + (targetValue - simulationValue) * progress;
-            setAnimatedSimulationValue(newValue);
-            if (progress < 1) requestAnimationFrame(animateSlider);
-            else {
-                setSimulationValue(targetValue);
-                setAnimatedSimulationValue(targetValue);
-                setRunSimulation(false);
-                setIsSimulating(false);
-            }
-        };
-
-        requestAnimationFrame(animateSlider);
-    }, [graphData, simulationSettings.timeUnit, simulationValue]);
-
-    const handlePause = useCallback(() => {
-        setIsPaused(!isPaused);
-    }, [isPaused]);
+    const handleSliderChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const newValue = parseInt(e.target.value);
+        setSimulationValue(newValue);
+    }, []);
 
     const handleReset = useCallback(() => {
         setSimulationSettings(prevSettings => ({
             ...prevSettings,
             value: 0
         }));
+        setSimulationValue(0);
+        setAnimatedSimulationValue(0);
     }, []);
 
-    const handleTimeUnitChange = useCallback((unit: "days" | "weeks" | "months" | "years") => {
-        setSimulationSettings(prevSettings => ({
-            ...prevSettings,
-            timeUnit: unit,
-            value: 0
-        }));
+    const animateSimulation = useCallback((targetValue: number, duration: number) => {
+        setRunSimulation(true);
+        setIsSimulating(true);
+        setTimeout(() => {
+            setRunSimulation(false);
+            setIsSimulating(false);
+        }, duration);
     }, []);
 
-    const handleSliderChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        const newValue = parseInt(e.target.value);
-        setSimulationValue(newValue); // Update separate state variable
-    }, []);
-
-    const handleNodeValueChange = useCallback((nodeId: string, newValue: number) => {
-        setGraphData((prevGraphData) => {
-            if (!prevGraphData) return prevGraphData;
-            // Function to recursively update related stocks
-            const updateRelatedStocks = (stockGuid: string, change: number, isMainStock: boolean = false) => {
-                // Find the stock being updated
-                let stockToUpdate;
-                if (isMainStock) {
-                    stockToUpdate = prevGraphData.stock;
-                } else {
-                    stockToUpdate = prevGraphData.nodes.find((node) => node.id === stockGuid);
-                }
-
-                if (!stockToUpdate) return; // Stock not found
-
-                // Update the stock's value directly
-                const unit = typeof stockToUpdate.value === 'object' ? stockToUpdate.value.unit : '';
-                stockToUpdate.value = { value: newValue, unit: unit };
-            };
-
-            // Determine which stock to update and initiate recursive updates
-            if (nodeId === prevGraphData.stock.guid) {
-                updateRelatedStocks(prevGraphData.stock.guid, newValue, true); // True means this is the main stock
-            } else {
-                updateRelatedStocks(nodeId, newValue);
-            }
-
-
-            return { ...prevGraphData };
-        });
-    }, []);
-
-    const handleSave = useCallback(() => {
-        if (selectedNode && editedValue !== null) {
-            handleNodeValueChange(selectedNode?.id, editedValue);
-            setEditedValue(null);
-        }
-    }, [selectedNode, editedValue, handleNodeValueChange]);
-
-    const handleDiveIntoNode = useCallback(() => {
-        if (selectedNode && !selectedNode.isCenter) {
-            setCurrentStockName(selectedNode.id);
-        }
-    }, [selectedNode]);
-
-    const handleSearchQuery = async () => {
-        if (!searchQuery.trim()) return;
-        setIsSearchLoading(true);
-        try {
-            const data = null;
-            // const data = await fetchGraphData(searchQuery.trim());
-            // setGraphData(data);
-            // setCurrentStockName(searchQuery.trim());
-        } catch (err) {
-            console.error("Search failed:", err);
-        } finally {
-            setIsSearchLoading(false);
-            // optionally keep search open or close
-            setShowSearch(false);
-        }
-    };
-
-    const handleModelRemove = async (model: Stock) => {
-        try {
-            await removeSavedModel(model.guid);
-            setSavedModels(prev => prev.filter(m => m.guid !== model.guid));
-            setToast({ type: "success", message: `${model.name} removed.` });
-        } catch (err) {
-            console.error(err);
-            setToast({ type: "error", message: `Failed to remove ${model.name}.` });
-        }
-    };
-
-    const handleModelShare = async (email: string, model: Stock) => {
-        try {
-            await shareSavedModel(model.guid, email);
-            setToast({ type: "success", message: `Shared ${model.name} with ${email}.` });
-        } catch (err) {
-            console.error(err);
-            setToast({ type: "error", message: `Failed to share ${model.name}.` });
-        } finally {
-            setShowShareModal(false);
-        }
-    };
-
-    // Memoize simulationSettings
     const memoizedSimulationSettings = useMemo(() => ({
         timeUnit: simulationSettings.timeUnit,
         value: simulationSettings.value,
@@ -491,628 +317,601 @@ const Playground: React.FC = () => {
 
     const memoizedSelectedElement = useMemo(() => selectedNode || selectedEdge, [selectedNode, selectedEdge]);
 
-    useEffect(() => {
-        console.log("Selected Edge Updated:", selectedEdge);
-    }, [selectedEdge]);
+    // New: derived flag to decide whether to show right widgets
+  const shouldShowRightWidgets = !!graphData && !isLoading && !showPlaceholder;
 
     return (
-        <div className="h-screen bg-teal-50 text-text-primary flex flex-col">
-            <DashboardSwitcher />
-            <header className="shadow-sm border-b border-gray-200/80 px-6 py-4 bg-white/50 backdrop-blur-md">
-                <div className="flex items-center justify-between mb-5">
-                    <img src="/qf-logo0.1.svg" alt="Quantifore Logo" className="h-8 w-auto mt-3" />
+        <div className="relative flex flex-col h-screen w-full overflow-hidden bg-white text-gray-900">
+            {/* Header - Enhanced Red Theme */}
+            <header className="relative flex items-center justify-between px-8 h-20 bg-white shadow-lg border-b border-brand-red-100 z-30">
+                <div className="flex items-center space-x-4">
+                    <img src="/qf-logo0.1.svg" alt="Quantifore logo" className="h-8 select-none" />
+                    <div className="flex items-center space-x-2">
+                        <div className="p-2 bg-gradient-to-r from-red-100 to-red-200 rounded-lg">
+                            <Waypoints className="w-5 h-5 text-red-700" />
+                        </div>
+                        <div>
+                            <div className="text-lg font-semibold text-gray-900">
+                                {graphData ? formatStockName(graphData.stock.name) : 'Visualization'}
+                            </div>
+                            <div className="text-sm text-gray-600">Interactive model exploration and analysis</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    {graphData && (
+                        <div className="flex items-center gap-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            Live Data
+                        </div>
+                    )}
+                    <motion.button
+                        className="relative ml-4 rounded-full bg-white p-2.5 text-gray-700 shadow-lg hover:bg-red-50 border border-red-200"
+                        onClick={() => setIsPanelOpen(!isPanelOpen)}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.96 }}
+                        aria-label="Toggle right sidebar"
+                    >
+                        <motion.svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-5 w-5"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            animate={{ rotate: isPanelOpen ? 180 : 0 }}
+                            transition={{ duration: 0.3 }}
+                        >
+                            <motion.path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                animate={{
+                                    d: isPanelOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16",
+                                }}
+                            />
+                        </motion.svg>
+                    </motion.button>
                 </div>
             </header>
 
-            <div className="main-content p-2 md:p-4 flex flex-1 overflow-hidden relative">
-                {/* Left Sidebar - Overlay */}
-                <div className={`${isSidebarCollapsed ? "w-16" : "w-80"} absolute left-2 top-2 bottom-2 z-10 sidebar bg-gradient-to-br from-white/30 via-teal-300/30 to-white/10 backdrop-blur-xl border border-gray-200 rounded-lg p-2 flex flex-col text-gray-700 shadow-xl transition-all duration-300 flex-shrink-0 overflow-hidden`}>
-                    <button
-                        onClick={toggleSidebar}
-                        className={`${isSidebarCollapsed ? "right-3" : "right-1"} absolute top-2 bg-gray-100 hover:bg-gray-200 rounded-full p-1 z-10 shadow-xl transition-transform duration-300`}
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="#115e59" viewBox="0 0 24 24">
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={5}
-                                d={isSidebarCollapsed ? "M9 5l7 7-7 7" : "M15 19l-7-7 7-7"}
-                            />
-                        </svg>
-                    </button>
-                    {!isSidebarCollapsed && (
-                        <div className="mt-10 px-2 flex flex-col gap-4 w-full transition-all duration-500 ease-in-out">
-                            <div className="space-y-2 pb-8">
-                                <h3 className="text-md text-gray-800 font-semibold pb-2">Search for Models</h3>
-                                <input
-                                    type="text"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder="Search models..."
-                                    className="w-full px-4 py-2 rounded-full shadow-md border border-gray-200 bg-white placeholder-gray-400 focus:ring-2 focus:ring-teal-500 focus:outline-none text-sm"
-                                />
-                            </div>
-                            <div className="space-y-2 pt-2 border-t border-gray-300 pb-8">
-                                <h3 className="text-md font-medium text-gray-500 tracking-wide">Saved Models</h3>
-                                {savedModels.length > 0 ? (
-                                    savedModels.map((model) => {
-                                        const isSelected = visualizingModelId === model.name;
+            <div className="flex-1 relative overflow-hidden bg-gradient-to-br from-gray-50 via-white to-gray-100">
+                {/* Background decoration */}
+                <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                    <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full opacity-5 bg-gradient-to-br from-red-400 to-orange-400 blur-3xl"></div>
+                    <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full opacity-5 bg-gradient-to-tr from-blue-400 to-purple-400 blur-3xl"></div>
+                </div>
 
-                                        return (
-                                            // 1. Added 'group' class to the parent div
-                                            <div
-                                                key={model.guid}
-                                                className={`
-                                                    group
-                                                    p-4
-                                                    rounded-lg 
-                                                    flex justify-between items-center 
-                                                    transition-all duration-300
-                                                    text-gray-900
-                                                    ${isSelected ? "bg-gradient-to-r from-blue-200 to-cyan-200 shadow-md border-2 border-blue-300"
-                                                        : "bg-gradient-to-r from-cyan-100 to-teal-100 border-2 border-transparent hover:shadow-lg"
-                                                    }
-                                                `}
-                                            >
-                                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                    <span className="text-sm font-medium text-gray-900 truncate">
-                                                        {formatStockName(model.name)}
-                                                    </span>
-                                                    {isSelected && (
-                                                        <div className="w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white shadow-sm"></div>
-                                                    )}
-                                                </div>
-
-                                                {/* 2. Applied conditional visibility to the entire icon container */}
-                                                <div className={`flex items-center space-x-1 transition-opacity ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                                                    }`}>
-                                                    {/* Visualize */}
-                                                    <button
-                                                        onClick={() => {
-                                                            const isCurrentlyVisualizing = visualizingModelId === model.name;
-
-                                                            if (isCurrentlyVisualizing) {
-                                                                // If currently visualizing this model, stop visualization
-                                                                setVisualizingModelId(null);
-                                                                setSelectedModels(prev => prev.filter(m => m !== model.name));
-                                                            } else {
-                                                                // If not visualizing or visualizing different model, start visualization
-                                                                setVisualizingModelId(model.name);
-                                                                setCurrentStockName(model.name);
-                                                                setSelectedModels([model.name]);
-                                                            }
-                                                        }}
-                                                        className="p-1.5 rounded-md text-gray-500 hover:text-green-600 hover:bg-green-100/50 transition-colors"
-                                                        title={visualizingModelId === model.name ? "Stop Visualization" : "Visualize"}
-                                                    >
-                                                        <Eye size={15} />
-                                                    </button>
-
-                                                    {/* Share */}
-                                                    <button
-                                                        onClick={() => {
-                                                            setModelToShare(model);
-                                                            setShowShareModal(true);
-                                                        }}
-                                                        className="p-1.5 rounded-md text-gray-500 hover:text-blue-600 hover:bg-blue-100/50 transition-colors"
-                                                        title="Share"
-                                                    >
-                                                        <Share2 size={15} />
-                                                    </button>
-
-                                                    {/* Remove */}
-                                                    <button
-                                                        onClick={() => {
-                                                            setConfirmPopup({ model });
-                                                        }}
-                                                        className="p-1.5 rounded-md text-gray-500 hover:text-red-600 hover:bg-red-100/70 transition-colors"
-                                                        title="Remove"
-                                                    >
-                                                        <Trash2 size={15} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )
-                                    })
+                {/* Left Sidebar - Fixed Icon */}
+                <motion.div
+                    className={`${isSidebarCollapsed ? "w-16" : "w-94"} absolute left-6 top-6 bottom-6 z-20 bg-white/90 backdrop-blur-xl border border-gray-200 rounded-2xl shadow-2xl flex flex-col transition-all duration-300`}
+                    ref={sidebarRef}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.6 }}
+                >
+                    <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-red-50 rounded-t-2xl">
+                        <div className="flex items-center justify-between">
+                            {!isSidebarCollapsed && (
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-gradient-to-r from-red-600 to-red-700 rounded-lg">
+                                        <Waypoints className="w-4 h-4 text-white" />
+                                    </div>
+                                    <h2 className="font-bold text-gray-900">Model Search</h2>
+                                </div>
+                            )}
+                            <button
+                                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                                className="ms-[-10px] p-2 rounded-xl hover:bg-red-50 text-gray-600 transition-colors border border-red-200 shadow-sm"
+                            >
+                                {/* Fixed Icon Logic */}
+                                {isSidebarCollapsed ? (
+                                    <ChevronRight className="w-4 h-4" />
                                 ) : (
-                                    <p className="text-sm text-gray-500">No saved models found.</p>
+                                    <ChevronLeft className="w-4 h-4" />
                                 )}
+                            </button>
+                        </div>
+                    </div>
+
+                    {!isSidebarCollapsed ? (
+                        <div className="flex-1 flex flex-col">
+                            {/* AI Search Button - Enhanced Red Theme */}
+                            <div className="p-6 border-b border-gray-200">
+                                <motion.button
+                                    onClick={() => setShowAISearch(true)}
+                                    className="w-full flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-700 hover:to-red-800 transition-all duration-300 group shadow-lg hover:shadow-xl"
+                                    whileHover={{ scale: 1.02, y: -1 }}
+                                    whileTap={{ scale: 0.98 }}
+                                >
+                                    <div className="p-2 bg-white/20 rounded-lg">
+                                        <Search className="w-4 h-4" />
+                                    </div>
+                                    <span className="font-semibold">AI Stock Search</span>
+                                    <div className="ml-auto">
+                                        <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                                    </div>
+                                </motion.button>
+                            </div>
+
+                            {/* Saved Models - Enhanced Design */}
+                            <div className="flex-1 overflow-y-auto">
+                                <div className="p-6">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                                            <div className="w-2 h-2 bg-red-600 rounded-full"></div>
+                                            Saved Models
+                                        </h3>
+                                        <span className="text-xs bg-red-100 text-red-700 px-3 py-1 rounded-full font-semibold">
+                                            {savedModels.length}
+                                        </span>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        {savedModels.length > 0 ? savedModels.map((model) => {
+                                            const isSelected = visualizingModelId === model.name;
+                                            return (
+                                                <motion.div
+                                                    key={model.guid}
+                                                    className={`p-4 rounded-xl border transition-all group cursor-pointer ${isSelected
+                                                        ? 'bg-gradient-to-r from-red-50 to-red-100 border-red-300 shadow-lg'
+                                                        : 'bg-white border-gray-200 hover:border-red-300 hover:shadow-lg'}`}
+                                                    whileHover={{ scale: 1.02, y: -2 }}
+                                                    whileTap={{ scale: 0.98 }}
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="font-semibold text-gray-900 truncate mb-1">
+                                                                {formatStockName(model.name)}
+                                                            </div>
+                                                            {isSelected && (
+                                                                <div className="text-xs text-red-600 flex items-center gap-1 font-medium">
+                                                                    <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
+                                                                    Currently viewing
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-1 ml-2">
+                                                            <motion.button
+                                                                onClick={() => {
+                                                                    if (visualizingModelId === model.name) {
+                                                                        setVisualizingModelId(null);
+                                                                    } else {
+                                                                        setVisualizingModelId(model.name);
+                                                                        setCurrentStockName(model.name);
+                                                                    }
+                                                                }}
+                                                                className={`p-2 rounded-lg transition-all ${isSelected
+                                                                    ? 'text-red-600 hover:bg-red-200 bg-red-100'
+                                                                    : 'text-gray-400 hover:text-red-600 hover:bg-red-50'}`}
+                                                                title={isSelected ? "Stop Visualization" : "Visualize"}
+                                                                whileHover={{ scale: 1.1 }}
+                                                                whileTap={{ scale: 0.9 }}
+                                                            >
+                                                                <Eye className="w-4 h-4" />
+                                                            </motion.button>
+                                                            <motion.button
+                                                                onClick={() => {
+                                                                    setModelToShare(model);
+                                                                    setShowShareModal(true);
+                                                                }}
+                                                                className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
+                                                                title="Share"
+                                                                whileHover={{ scale: 1.1 }}
+                                                                whileTap={{ scale: 0.9 }}
+                                                            >
+                                                                <Share2 className="w-4 h-4" />
+                                                            </motion.button>
+                                                            <motion.button
+                                                                onClick={() => setConfirmPopup({ model })}
+                                                                className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all"
+                                                                title="Remove"
+                                                                whileHover={{ scale: 1.1 }}
+                                                                whileTap={{ scale: 0.9 }}
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </motion.button>
+                                                        </div>
+                                                    </div>
+                                                </motion.div>
+                                            );
+                                        }) : (
+                                            <div className="text-center py-12">
+                                                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                    <Search className="w-8 h-8 text-gray-400" />
+                                                </div>
+                                                <p className="text-sm text-gray-500 mb-1 font-medium">No saved models</p>
+                                                <p className="text-xs text-gray-400">Use AI search to find models</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         </div>
+                    ) : (
+                        // Collapsed state
+                        <div className="p-3">
+                            <button
+                                onClick={() => setShowAISearch(true)}
+                                className="w-full flex items-center justify-center bg-gradient-to-r from-red-600 to-red-700 text-white p-3 rounded-xl hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-lg"
+                                title="AI Data Search"
+                            >
+                                <Search className="w-4 h-4" />
+                            </button>
+                        </div>
+                    )}
+                </motion.div>
+
+                {/* Graph Area - Full Width */}
+                <div className="absolute inset-0">
+                    {showPlaceholder ? (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <motion.div
+                                className="text-center space-y-6"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.6 }}
+                            >
+                                <div className="w-20 h-20 bg-gradient-to-br from-red-100 to-red-200 rounded-full flex items-center justify-center mx-auto">
+                                    <Waypoints className="w-10 h-10 text-red-600" />
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-semibold text-gray-900 mb-2">Start Exploring Models</h3>
+                                    <p className="text-gray-500 max-w-md">
+                                        Select a saved model from the sidebar to visualize its network and relationships.
+                                    </p>
+                                </div>
+                            </motion.div>
+                        </div>
+                    ) : (
+                        <GraphComponent
+                            key={visualizingModelId}
+                            isLoading={isLoading}
+                            simulationSettings={memoizedSimulationSettings}
+                            simulationValue={simulationValue}
+                            graphData={graphData}
+                            selectedElement={memoizedSelectedElement}
+                            setSelectedElement={setSelectedElement}
+                            sidebarWidth={sidebarWidth}
+                            nodeValueChangeCallback={() => { }}
+                            runSimulation={runSimulation}
+                        />
                     )}
                 </div>
 
-                {showPlaceholder && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center space-y-6 z-0">
-                        <div className="w-24 h-24 bg-gradient-to-br from-teal-100 to-cyan-100 rounded-full flex items-center justify-center">
-                            <Search className="w-12 h-12 text-teal-500" />
-                        </div>
-                        <div className="space-y-2">
-                            <h3 className="text-2xl font-bold text-gray-700">Start Exploring Models</h3>
-                            <p className="text-gray-500 max-w-md">
-                                Click the eye icon next to any saved model to visualize its data and start playing with the interactive graph.
-                            </p>
-                        </div>
-                    </div>
-                )}
-
-                {/* Graph Container - Full Width */}
-                {!showPlaceholder && (
-                    <GraphComponent
-                        isLoading={isLoading}
-                        simulationSettings={memoizedSimulationSettings}
-                        simulationValue={simulationValue}
-                        graphData={graphData}
-                        selectedElement={memoizedSelectedElement}
-                        setSelectedElement={setSelectedElement}
-                        sidebarWidth={sidebarWidth}
-                        nodeValueChangeCallback={handleNodeValueChange}
-                        runSimulation={runSimulation}
-                    />
-                )}
-
-                {/* Right Sidebar - Replaced with expandable pills */}
-                {showPills && (
-                    <div className="absolute right-4 top-1/2 transform -translate-y-1/2 z-10 flex flex-col gap-4">
-                        {/* Stock Details Pill */}
-                        <div className="relative">
-                            <div className={`${(activeSection === 'details' || activeSection === 'both')
-                                ? 'bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/30'
-                                : ''
-                                }`}>
-                                <button
-                                    onClick={() => toggleSection('details')}
-                                    className={`w-full transition-all duration-300 ${(activeSection === 'details' || activeSection === 'both')
-                                        ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-xl px-6 py-4 rounded-t-2xl'
-                                        : 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg hover:shadow-xl hover:scale-105 p-4 rounded-full'
-                                        }`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className={`p-2 rounded-full ${(activeSection === 'details' || activeSection === 'both') ? 'bg-white/20' : 'bg-white/20'}`}>
-                                            <Info size={20} className="text-white" />
-                                        </div>
-                                        {(activeSection === 'details' || activeSection === 'both') && (
-                                            <div className="flex items-center justify-between w-full">
-                                                <span className="font-semibold text-lg whitespace-nowrap">Stock Details</span>
-                                                <div className="flex items-center gap-2">
-                                                    <div className="relative group">
-                                                        <button
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className="p-1 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
-                                                        >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                                                            </svg>
-                                                        </button>
-                                                        <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-white/95 text-gray-700 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200 ease-out pointer-events-none z-[60] shadow-md border border-gray-200 backdrop-blur-sm max-w-xs whitespace-nowrap">
-                                                            <span className="italic text-xs">Click on any node or edge to see detailed information</span>
-                                                        </div>
-                                                    </div>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); toggleSection('details'); }}
-                                                        className="p-1 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
-                                                        title="Minimize"
-                                                    >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                                                        </svg>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
-                                        {/* Show expand icon when minimized */}
-                                        {!(activeSection === 'details' || activeSection === 'both') && (
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8l4-4 4 4m0 8l-4 4-4-4" />
-                                            </svg>
-                                        )}
+                {/* Aligned Widgets - Both positioned from top with proper spacing */}
+                <AnimatePresence>
+                    {showDetailsPanel && shouldShowRightWidgets && (
+                        <motion.div
+                            initial={{ opacity: 0, x: 20, scale: 0.9 }}
+                            animate={{ opacity: 1, x: 0, scale: 1 }}
+                            exit={{ opacity: 0, x: 20, scale: 0.9 }}
+                            transition={{ duration: 0.3 }}
+                            className="absolute right-6 top-6 w-80 bg-white/95 backdrop-blur-xl border border-gray-200 rounded-2xl shadow-2xl z-20"
+                        >
+                            {/* Simple Panel Header */}
+                            <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-red-50 rounded-t-2xl">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 bg-gradient-to-r from-red-500 to-red-600 rounded-lg flex items-center justify-center shadow-lg">
+                                        <Info className="w-4 h-4 text-white" />
                                     </div>
-                                </button>
-
-                                {/* Stock Details Content */}
-                                <AnimatePresence>
-                                    {(activeSection === 'details' || activeSection === 'both') && (
-                                        <motion.div
-                                            initial={{ opacity: 0, scale: 0.8, y: -20 }}
-                                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                                            exit={{ opacity: 0, scale: 0.8, y: -20 }}
-                                            transition={{ duration: 0.3 }}
-                                            className="mt-4 w-80 bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/30 p-2run"
-                                        >
-                                            {/* Show Selected Node Details if available, otherwise show main stock */}
-                                            {selectedNode && selectedNode.id !== graphData?.stock.guid ? (
-                                                <div className="space-y-4">
-                                                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100">
-                                                        <h3 className="text-xl font-bold text-green-700 mb-3 flex items-center gap-2">
-                                                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                                                            {formatStockName(selectedNode.name || "")}
-                                                        </h3>
-
-                                                        {selectedNode.value !== undefined && (
-                                                            <div className="space-y-3">
-                                                                <div className="flex items-center justify-between">
-                                                                    <span className="text-gray-700 font-medium">Value:</span>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <input
-                                                                            type="number"
-                                                                            value={editedValue !== null ? editedValue : Math.round(selectedNode.value.value)}
-                                                                            onChange={(e) => setEditedValue(parseInt(e.target.value))}
-                                                                            className="w-20 px-3 py-2 text-center border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white shadow-sm"
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                                <div className="flex items-center justify-between">
-                                                                    <span className="text-gray-700 font-medium">Unit:</span>
-                                                                    <span className="text-gray-600 bg-gray-100 px-3 py-1 rounded-full text-sm">{selectedNode.value.unit}</span>
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="flex gap-3">
-                                                        <button
-                                                            onClick={handleSave}
-                                                            className="flex-1 py-3 px-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group"
-                                                        >
-                                                            <span className="relative z-10">Save Changes</span>
-                                                            <div className="absolute inset-0 bg-gradient-to-r from-green-600 to-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                                                        </button>
-                                                    </div>
-
-                                                    {/* {!selectedNode.isCenter && (
-                                                    <button
-                                                        onClick={handleDiveIntoNode}
-                                                        className="w-full py-3 px-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group"
-                                                    >
-                                                        <span className="relative z-10">Dive Deeper</span>
-                                                        <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                                                    </button>
-                                                )} */}
-                                                </div>
-                                            ) : selectedEdge?.relationshipList && selectedEdge.relationshipList.length > 0 ? (
-                                                /* Show Edge Details */
-                                                <div className="space-y-4">
-                                                    <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100">
-                                                        <h3 className="text-xl font-bold text-purple-700 mb-3 flex items-center gap-2">
-                                                            <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
-                                                            Connection Details
-                                                        </h3>
-
-                                                        <div className="space-y-3">
-                                                            {selectedEdge.relationshipList.map((rel, idx) => (
-                                                                <div key={idx} className="bg-white/80 rounded-lg p-4 border border-purple-200">
-                                                                    {/* Direction Header */}
-                                                                    <div className="mb-3 pb-2 border-b border-gray-200">
-                                                                        <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                                                                            <span className="text-purple-600">From:</span>
-                                                                            <span className="bg-purple-100 px-2 py-1 rounded text-purple-700">
-                                                                                {rel.fromName}
-                                                                            </span>
-                                                                            <span className="text-gray-400">→</span>
-                                                                            <span className="text-purple-600">To:</span>
-                                                                            <span className="bg-purple-100 px-2 py-1 rounded text-purple-700">
-                                                                                {rel.toName}
-                                                                            </span>
-                                                                        </h4>
-                                                                    </div>
-
-                                                                    {/* Relationship Details */}
-                                                                    {/* Relationship Details */}
-                                                                    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2 text-sm">
-                                                                        {/* Impact */}
-                                                                        <div className="flex items-baseline gap-2">
-                                                                            <span className="text-gray-600 font-medium">Impact:</span>
-                                                                            <span className={`font-semibold capitalize px-3 py-1 rounded-full text-xs ${rel.impact === 'positive' ? 'bg-green-100 text-green-800' :
-                                                                                    rel.impact === 'negative' ? 'bg-red-100 text-red-800' :
-                                                                                        'bg-gray-100 text-gray-800'
-                                                                                }`}>
-                                                                                {rel.impact}
-                                                                            </span>
-                                                                        </div>
-
-                                                                        {/* Weight */}
-                                                                        <div className="flex items-baseline gap-2">
-                                                                            <span className="text-gray-600 font-medium">Weight:</span>
-                                                                            <span className="font-semibold bg-gray-100 px-2 py-1 rounded text-gray-800">
-                                                                                {rel.weight}
-                                                                            </span>
-                                                                        </div>
-
-                                                                        {/* Flow */}
-                                                                        <div className="flex items-baseline gap-2">
-                                                                            <span className="text-gray-600 font-medium">Flow:</span>
-                                                                            <span className="font-semibold bg-gray-100 px-2 py-1 rounded text-gray-800">
-                                                                                {rel.flow}
-                                                                            </span>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                /* Show Main Stock Details as fallback */
-                                                graphData && (
-                                                    <div className="space-y-4">
-                                                        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-4 border border-blue-100">
-                                                            <h3 className="text-xl font-bold text-blue-700 mb-3 flex items-center gap-2">
-                                                                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                                                                {formatStockName(graphData.stock.name || "")}
-                                                            </h3>
-
-                                                            <div className="space-y-3">
-                                                                <div className="flex items-center justify-between">
-                                                                    <span className="text-gray-700 font-medium">Value:</span>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <input
-                                                                            type="number"
-                                                                            value={editedValue !== null ? editedValue : Math.round(graphData.stock.value.value)}
-                                                                            onChange={(e) => setEditedValue(parseInt(e.target.value))}
-                                                                            className="w-20 px-3 py-2 text-center border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white shadow-sm"
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                                <div className="flex items-center justify-between">
-                                                                    <span className="text-gray-700 font-medium">Unit:</span>
-                                                                    <span className="text-gray-600 bg-gray-100 px-3 py-1 rounded-full text-sm">{graphData.stock.value.unit}</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Save button applies for main stock as well */}
-                                                        <div className="flex gap-3">
-                                                            <button
-                                                                onClick={handleSave}
-                                                                className="flex-1 py-3 px-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group"
-                                                            >
-                                                                <span className="relative z-10">Save Changes</span>
-                                                                <div className="absolute inset-0 bg-gradient-to-r from-green-600 to-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                )
-                                            )}
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                            </div>
-                        </div>
-
-                        {/* Time Simulation Pill */}
-                        {graphData && (
-                            <div className="relative">
-                                <div className={`${(activeSection === 'simulation' || activeSection === 'both')
-                                    ? 'bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/30'
-                                    : ''
-                                    }`}>
-                                    <button
-                                        onClick={() => toggleSection('simulation')}
-                                        className={`w-full transition-all duration-300 ${(activeSection === 'simulation' || activeSection === 'both')
-                                            ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-xl px-6 py-4 rounded-t-2xl'
-                                            : 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg hover:shadow-xl hover:scale-105 p-4 rounded-full'
-                                            }`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className={`p-2 rounded-full ${(activeSection === 'simulation' || activeSection === 'both') ? 'bg-white/20' : 'bg-white/20'}`}>
-                                                <Calendar size={20} className="text-white" />
-                                            </div>
-                                            {(activeSection === 'simulation' || activeSection === 'both') && (
-                                                <div className="flex items-center justify-between w-full">
-                                                    <span className="font-semibold text-lg whitespace-nowrap">Time Simulation</span>
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="relative group">
-                                                            <button
-                                                                onClick={(e) => e.stopPropagation()}
-                                                                className="p-1 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
-                                                            >
-                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                                                                </svg>
-                                                            </button>
-                                                            <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-white/95 text-gray-700 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200 ease-out pointer-events-none z-[60] shadow-md border border-gray-200 backdrop-blur-sm max-w-xs whitespace-nowrap">
-                                                                <span className="italic text-xs">Project how your model's values will change over time</span>
-                                                            </div>
-                                                        </div>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); toggleSection('simulation'); }}
-                                                            className="p-1 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
-                                                            title="Minimize"
-                                                        >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                                                            </svg>
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            )}
-                                            {/* Show expand icon when minimized */}
-                                            {!(activeSection === 'simulation' || activeSection === 'both') && (
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8l4-4 4 4m0 8l-4 4-4-4" />
-                                                </svg>
-                                            )}
-                                        </div>
-                                    </button>
-
-                                    {/* Time Simulation Content */}
-                                    <AnimatePresence>
-                                        {(activeSection === 'simulation' || activeSection === 'both') && (
-                                            <motion.div
-                                                initial={{ opacity: 0, scale: 0.8, y: -20 }}
-                                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                                exit={{ opacity: 0, scale: 0.8, y: -20 }}
-                                                transition={{ duration: 0.3 }}
-                                                className="mt-4 w-80 bg-white/90 backdrop-blur-md rounded-2xl shadow-2xl border border-white/30 p-6 space-y-6"
-                                            >
-                                                {/* === NO CHANGE NEEDED === */}
-                                                {/* All the existing time simulation controls remain the same */}
-                                                <div>
-                                                    <h4 className="text-sm font-semibold text-gray-700 mb-3">Time Unit</h4>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        {(['days', 'weeks', 'months', 'years'] as const).map((unit) => (
-                                                            <button
-                                                                key={unit}
-                                                                onClick={() => handleTimeUnitChange(unit)}
-                                                                className={`px-4 py-3 text-sm font-medium rounded-xl transition-all duration-300 relative overflow-hidden group ${simulationSettings.timeUnit === unit
-                                                                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg scale-105'
-                                                                    : 'bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 hover:shadow-md hover:scale-102'
-                                                                    }`}
-                                                            >
-                                                                <span className="relative z-10 capitalize">{unit}</span>
-                                                                {simulationSettings.timeUnit === unit && (
-                                                                    <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-cyan-400 opacity-30 blur-sm"></div>
-                                                                )}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-
-                                                <div>
-                                                    <div className="flex justify-between items-center mb-3">
-                                                        <h4 className="text-sm font-semibold text-gray-700">Simulate Future</h4>
-                                                        <div className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-3 py-1 rounded-full text-sm font-bold">
-                                                            {simulationValue} {simulationSettings.timeUnit}
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="relative py-4">
-                                                        <div className="absolute h-3 top-1/2 left-0 right-0 -mt-1.5 bg-gradient-to-r from-blue-200 to-cyan-200 rounded-full shadow-inner"></div>
-                                                        <input
-                                                            type="range"
-                                                            min="0"
-                                                            max={
-                                                                simulationSettings.timeUnit === 'days' ? 365 :
-                                                                    simulationSettings.timeUnit === 'weeks' ? 52 :
-                                                                        simulationSettings.timeUnit === 'months' ? 36 : 10
-                                                            }
-                                                            value={simulationValue}
-                                                            onChange={handleSliderChange}
-                                                            className="appearance-none w-full h-3 bg-transparent rounded-full cursor-pointer relative z-10 slider-thumb"
-                                                            style={{ WebkitAppearance: 'none', background: 'transparent' }}
-                                                        />
-                                                    </div>
-
-                                                    <div className="flex justify-between text-xs text-gray-500">
-                                                        <span>Now</span>
-                                                        <span>
-                                                            {simulationSettings.timeUnit === 'days' ? '1 Year' :
-                                                                simulationSettings.timeUnit === 'weeks' ? '1 Year' :
-                                                                    simulationSettings.timeUnit === 'months' ? '3 Years' : '10 Years'}
-                                                        </span>
-                                                    </div>
-                                                </div>
-
-                                                {/* Simulation Controls */}
-                                                <div className="space-y-3">
-                                                    <button
-                                                        onClick={() => animateSimulation(simulationValue, 2000)}
-                                                        className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group"
-                                                    >
-                                                        <span className="relative z-10 flex items-center justify-center gap-2">
-                                                            <Play size={18} />
-                                                            Start Simulation
-                                                        </span>
-                                                        <div className="absolute inset-0 bg-gradient-to-r from-green-600 to-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                                                    </button>
-
-                                                    <div className="flex gap-3">
-                                                        <button
-                                                            onClick={handlePause}
-                                                            disabled={simulationValue === 0}
-                                                            className="flex-1 py-3 px-4 bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group disabled:opacity-50 disabled:cursor-not-allowed"
-                                                        >
-                                                            <span className="relative z-10 flex items-center justify-center gap-2">
-                                                                {isPaused ? <Play size={16} /> : <Pause size={16} />}
-                                                                {isPaused ? 'Resume' : 'Pause'}
-                                                            </span>
-                                                            <div className="absolute inset-0 bg-gradient-to-r from-yellow-600 to-orange-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                                                        </button>
-
-                                                        <button
-                                                            onClick={handleReset}
-                                                            className="flex-1 py-3 px-4 bg-gradient-to-r from-gray-500 to-gray-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group"
-                                                        >
-                                                            <span className="relative z-10 flex items-center justify-center gap-2">
-                                                                <RefreshCw size={16} />
-                                                                Reset
-                                                            </span>
-                                                            <div className="absolute inset-0 bg-gradient-to-r from-gray-600 to-gray-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
+                                    <h3 className="font-bold text-gray-900">
+                                        {selectedEdge ? 'Relationship Details' : 'Model Details'}
+                                    </h3>
                                 </div>
                             </div>
-                        )}
-                    </div>
-                )}
 
-                {confirmPopup.model && (
-                    <ConfirmationPopup
-                        title="Remove Saved Model"
-                        message={`Are you sure you want to remove ${confirmPopup.model.name}?`}
-                        onConfirm={() => {
-                            handleModelRemove(confirmPopup.model!);
-                            setConfirmPopup({ model: null });
-                        }}
-                        onCancel={() => setConfirmPopup({ model: null })}
-                    />
-                )}
+                            {/* Panel Content - Always Expanded */}
+                            <div className="p-6 space-y-4 max-h-80 overflow-y-auto">
+                                {selectedEdge?.relationshipList && selectedEdge.relationshipList.length > 0 ? (
+                                    /* Edge Details */
+                                    <div className="space-y-4">
+                                        {selectedEdge.relationshipList.map((rel, idx) => (
+                                            <motion.div
+                                                key={idx}
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                transition={{ delay: idx * 0.1 }}
+                                                className="bg-gradient-to-r from-white to-gray-50 rounded-xl p-4 border border-gray-200 shadow-sm"
+                                            >
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <div className="flex items-center gap-2">
+                                                        {rel.impact === 'positive' ? (
+                                                            <div className="p-1.5 bg-green-100 rounded-lg">
+                                                                <TrendingUp className="w-4 h-4 text-green-600" />
+                                                            </div>
+                                                        ) : rel.impact === 'negative' ? (
+                                                            <div className="p-1.5 bg-red-100 rounded-lg">
+                                                                <TrendingDown className="w-4 h-4 text-red-600" />
+                                                            </div>
+                                                        ) : (
+                                                            <div className="p-1.5 bg-gray-100 rounded-lg">
+                                                                <Minus className="w-4 h-4 text-gray-600" />
+                                                            </div>
+                                                        )}
+                                                        <span className={`text-sm font-bold capitalize ${rel.impact === 'positive' ? 'text-green-700' :
+                                                                rel.impact === 'negative' ? 'text-red-700' : 'text-gray-700'
+                                                            }`}>
+                                                            {rel.impact} Impact
+                                                        </span>
+                                                    </div>
+                                                    <div className="bg-white px-3 py-1 rounded-lg border border-gray-200">
+                                                        <span className="text-sm font-bold text-gray-900">
+                                                            {Math.round(rel.weight * 100)}%
+                                                        </span>
+                                                    </div>
+                                                </div>
 
-                {showShareModal && modelToShare && (
-                    <ShareModal
-                        isStock={false}
-                        itemLabel={modelToShare.name}
-                        itemGuid={modelToShare.guid}
-                        onClose={() => {
-                            setShowShareModal(false);
-                            setModelToShare(null);
-                        }}
-                    />
-                )}
+                                                <div className="bg-white rounded-xl p-3 mb-3 border border-gray-100">
+                                                    <div className="flex items-center justify-between text-sm">
+                                                        <div className="flex-1">
+                                                            <div className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-medium">From</div>
+                                                            <div className="font-bold text-gray-900">
+                                                                {formatStockName(rel.fromName)}
+                                                            </div>
+                                                        </div>
+                                                        <div className="mx-4 flex items-center">
+                                                            <ArrowRight className="w-5 h-5 text-red-500" />
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <div className="text-gray-500 mb-1 text-xs uppercase tracking-wider font-medium">To</div>
+                                                            <div className="font-bold text-gray-900">
+                                                                {formatStockName(rel.toName)}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
 
-                {toast && (
-                    <Toast
-                        type={toast.type}
-                        message={toast.message}
-                        onClose={() => setToast(null)}
-                    />
-                )}
+                                                <div className="flex items-center justify-between text-xs text-gray-600">
+                                                    <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-lg font-medium">
+                                                        Flow: {rel.flow}
+                                                    </span>
+                                                    <span className="bg-purple-50 text-purple-700 px-2 py-1 rounded-lg font-medium">
+                                                        Weight: {rel.weight}
+                                                    </span>
+                                                </div>
+                                            </motion.div>
+                                        ))}
+                                    </div>
+                                ) : selectedNode ? (
+                                    /* Node Details */
+                                    <div className="space-y-4">
+                                        <div className="bg-gradient-to-r from-red-50 to-red-100 rounded-xl p-4 border border-red-200">
+                                            <div className="flex items-center gap-3 mb-4">
+                                                <div className="w-8 h-8 bg-gradient-to-r from-red-500 to-red-600 rounded-lg flex items-center justify-center shadow-lg">
+                                                    <Target className="w-4 h-4 text-white" />
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-bold text-gray-900">
+                                                        {formatStockName(selectedNode.name || "")}
+                                                    </h4>
+                                                    <p className="text-sm text-gray-600">Node Value</p>
+                                                </div>
+                                            </div>
 
+                                            <div className="space-y-3">
+                                                <div className="bg-white rounded-lg p-3 border border-red-100">
+                                                    <label className="text-sm font-semibold text-gray-700 mb-2 block">Current Value</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="number"
+                                                            value={editedValue !== null ? editedValue : Math.round(selectedNode.value?.value || 0)}
+                                                            onChange={handleValueChange}
+                                                            className="w-full px-3 py-2 pr-16 border border-red-200 rounded-lg focus:ring-2 focus:ring-red-300 focus:border-red-300 font-bold"
+                                                        />
+                                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-gray-600 bg-gray-50 px-3 py-1 rounded-md border border-red-100">
+                                                            {selectedNode.value?.unit || 'units'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <motion.button
+                                                    onClick={handleSave}
+                                                    className="w-full px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:from-red-700 hover:to-red-800 transition-all font-bold shadow-lg hover:shadow-xl"
+                                                    whileHover={{ scale: 1.02 }}
+                                                    whileTap={{ scale: 0.98 }}
+                                                >
+                                                    <span className="flex items-center justify-center gap-2">
+                                                        <Zap className="w-4 h-4" />
+                                                        Save Changes
+                                                    </span>
+                                                </motion.button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : graphData ? (
+                                    /* Default Details */
+                                    <div className="space-y-4">
+                                        <div className="bg-gradient-to-r from-red-50 to-red-100 rounded-xl p-4 border border-red-200">
+                                            <div className="flex items-center gap-3 mb-4">
+                                                <div className="w-8 h-8 bg-gradient-to-r from-red-500 to-red-600 rounded-lg flex items-center justify-center shadow-lg">
+                                                    <Target className="w-4 h-4 text-white" />
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-bold text-gray-900">
+                                                        {formatStockName(graphData.stock.name)}
+                                                    </h4>
+                                                    <p className="text-sm text-gray-600">Main Stock</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-3">
+                                                <div className="bg-white rounded-lg p-3 border border-red-100">
+                                                    <label className="text-sm font-semibold text-gray-700 mb-2 block">Current Value</label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="number"
+                                                            value={editedValue !== null ? editedValue : Math.round(graphData.stock.value.value)}
+                                                            onChange={handleValueChange}
+                                                            className="w-full px-3 py-2 pr-16 border border-red-200 rounded-lg focus:ring-2 focus:ring-red-300 focus:border-red-300 font-bold"
+                                                        />
+                                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-gray-600 bg-gray-50 px-3 py-1 rounded-md border border-red-100">
+                                                            {graphData.stock.value.unit}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <motion.button
+                                                    onClick={handleSave}
+                                                    className="w-full px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:from-red-700 hover:to-red-800 transition-all font-bold shadow-lg hover:shadow-xl"
+                                                    whileHover={{ scale: 1.02 }}
+                                                    whileTap={{ scale: 0.98 }}
+                                                >
+                                                    <span className="flex items-center justify-center gap-2">
+                                                        <Zap className="w-4 h-4" />
+                                                        Save Changes
+                                                    </span>
+                                                </motion.button>
+                                            </div>
+                                        </div>
+
+                                        <div className="text-center py-4">
+                                            <Info className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                                            <p className="text-sm text-gray-500">
+                                                Click on nodes or edges to see detailed information
+                                            </p>
+                                        </div>
+                                    </div>
+                                ) : null}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* Aligned Simulation Panel - Positioned below Details panel */}
+                <AnimatePresence>
+                    {showSimulationPanel && shouldShowRightWidgets && (
+                        <motion.div
+                            initial={{ opacity: 0, x: 20, scale: 0.9 }}
+                            animate={{ opacity: 1, x: 0, scale: 1 }}
+                            exit={{ opacity: 0, x: 20, scale: 0.9 }}
+                            transition={{ duration: 0.3, delay: 0.1 }}
+                            className="absolute right-6 top-96 w-80 bg-white/95 backdrop-blur-xl border border-gray-200 rounded-b-2xl shadow-2xl z-20"
+                        >
+                            {/* Simple Panel Header */}
+                            <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-green-50 rounded-t-2xl">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-lg flex items-center justify-center shadow-lg">
+                                        <Activity className="w-4 h-4 text-white" />
+                                    </div>
+                                    <h3 className="font-bold text-gray-900">Time Simulation</h3>
+                                </div>
+                            </div>
+
+                            {/* Panel Content - Always Expanded */}
+                            <div className="p-6 space-y-6">
+                                {/* Time Unit Selection */}
+                                <div>
+                                    <label className="text-sm font-bold text-gray-700 mb-3 block flex items-center gap-2">
+                                        <Calendar className="w-4 h-4" />
+                                        Time Unit
+                                    </label>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {(['hours', 'days', 'weeks', 'months', 'years'] as const).map((unit) => (
+                                            <motion.button
+                                                key={unit}
+                                                onClick={() => handleTimeUnitChange(unit)}
+                                                className={`px-3 py-2 text-sm rounded-lg border transition-all font-semibold ${simulationSettings.timeUnit === unit
+                                                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500 border-emerald-300 text-white shadow-lg'
+                                                        : 'bg-white border-gray-200 text-gray-600 hover:bg-green-50 hover:border-emerald-200'
+                                                    }`}
+                                                whileHover={{ scale: 1.05 }}
+                                                whileTap={{ scale: 0.95 }}
+                                            >
+                                                <span className="capitalize">{unit}</span>
+                                            </motion.button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Time Slider */}
+                                <div>
+                                    <div className="flex justify-between items-center mb-3">
+                                        <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                                            <Target className="w-4 h-4" />
+                                            Future Projection
+                                        </label>
+                                        <span className="text-sm bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-700 px-3 py-1 rounded-full font-bold">
+                                            {simulationValue} {simulationSettings.timeUnit}
+                                        </span>
+                                    </div>
+
+                                    <div className="relative mb-2">
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max={
+                                                simulationSettings.timeUnit === 'hours' ? 168 :
+                                                    simulationSettings.timeUnit === 'days' ? 365 :
+                                                        simulationSettings.timeUnit === 'weeks' ? 52 :
+                                                            simulationSettings.timeUnit === 'months' ? 36 : 10
+                                            }
+                                            value={simulationValue}
+                                            onChange={handleSliderChange}
+                                            className="w-full h-3 bg-gradient-to-r from-emerald-200 to-teal-200 rounded-lg appearance-none cursor-pointer slider-modern"
+                                        />
+                                    </div>
+
+                                    <div className="flex justify-between text-xs text-gray-500 font-medium">
+                                        <span>Now</span>
+                                        <span>
+                                            {simulationSettings.timeUnit === 'hours' ? '1 Week' :
+                                                simulationSettings.timeUnit === 'days' ? '1 Year' :
+                                                    simulationSettings.timeUnit === 'weeks' ? '1 Year' :
+                                                        simulationSettings.timeUnit === 'months' ? '3 Years' : '10 Years'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Control Buttons */}
+                                <div className="space-y-3">
+                                    <motion.button
+                                        onClick={() => animateSimulation(simulationValue, 2000)}
+                                        disabled={isSimulating}
+                                        className="w-full px-4 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 transition-all font-bold disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
+                                        whileHover={{ scale: isSimulating ? 1 : 1.02 }}
+                                        whileTap={{ scale: isSimulating ? 1 : 0.98 }}
+                                    >
+                                        {isSimulating ? (
+                                            <>
+                                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                Running Simulation...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Play className="w-4 h-4" />
+                                                Start Simulation
+                                            </>
+                                        )}
+                                    </motion.button>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <motion.button
+                                            onClick={() => setIsPaused(!isPaused)}
+                                            disabled={simulationValue === 0}
+                                            className="px-3 py-2 bg-gradient-to-r from-amber-100 to-orange-100 text-amber-700 rounded-lg hover:from-amber-200 hover:to-orange-200 transition-all font-bold disabled:opacity-50 text-sm flex items-center justify-center gap-1 border border-amber-200"
+                                            whileHover={{ scale: simulationValue === 0 ? 1 : 1.05 }}
+                                            whileTap={{ scale: simulationValue === 0 ? 1 : 0.95 }}
+                                        >
+                                            {isPaused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
+                                            {isPaused ? 'Resume' : 'Pause'}
+                                        </motion.button>
+                                        <motion.button
+                                            onClick={handleReset}
+                                            className="px-3 py-2 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 rounded-lg hover:from-gray-200 hover:to-gray-300 transition-all font-bold text-sm flex items-center justify-center gap-1 border border-gray-300"
+                                            whileHover={{ scale: 1.05 }}
+                                            whileTap={{ scale: 0.95 }}
+                                        >
+                                            <RefreshCw className="w-3 h-3" />
+                                            Reset
+                                        </motion.button>
+                                    </div>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
-            {/* Menu button*/}
-            <motion.button
-                className="fixed top-5 right-8 z-[60] p-2 rounded-full bg-white/70 backdrop-blur-md text-gray-700 hover:bg-white/90 transition-all shadow-lg hover:scale-105"
-                onClick={() => setIsPanelOpen(!isPanelOpen)}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                aria-label={isPanelOpen ? "Close menu" : "Open menu"}
-            >
-                <motion.svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-6 w-6"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    animate={{ rotate: isPanelOpen ? 180 : 0 }}
-                    transition={{ duration: 0.3 }}
-                >
-                    <motion.path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        animate={{
-                            d: isPanelOpen
-                                ? "M6 18L18 6M6 6l12 12"
-                                : "M4 6h16M4 12h16M4 18h16"
-                        }}
-                        transition={{ duration: 0.3 }}
-                    />
-                </motion.svg>
-            </motion.button>
 
             {/* Backdrop and Sidebar */}
             <AnimatePresence>
@@ -1123,13 +922,88 @@ const Playground: React.FC = () => {
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             transition={{ duration: 0.35 }}
-                            className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
+                            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
                             onClick={() => setIsPanelOpen(false)}
                         />
                         <RightSidebar isOpen={isPanelOpen} onClose={() => setIsPanelOpen(false)} />
                     </>
                 )}
             </AnimatePresence>
+
+            {/* Modals and Popups */}
+            {confirmPopup.model && (
+                <ConfirmationPopup
+                    title="Remove Saved Model"
+                    message={`Are you sure you want to remove ${confirmPopup.model.name}?`}
+                    onConfirm={() => {
+                        setConfirmPopup({ model: null });
+                    }}
+                    onCancel={() => setConfirmPopup({ model: null })}
+                />
+            )}
+
+            {showShareModal && modelToShare && (
+                <ShareModal
+                    isStock={false}
+                    itemLabel={modelToShare.name}
+                    itemGuid={modelToShare.guid}
+                    onClose={() => {
+                        setShowShareModal(false);
+                        setModelToShare(null);
+                    }}
+                />
+            )}
+
+            {toast && (
+                <Toast
+                    type={toast.type}
+                    message={toast.message}
+                    onClose={() => setToast(null)}
+                />
+            )}
+
+            {toastSocket && (
+                <Toast
+                    type={toastSocket.type === 'completed' ? 'success' : toastSocket.type}
+                    message={toastSocket.message}
+                    onClose={() => setToastSocket(null)}
+                />
+            )}
+
+            <AISearchComponent
+                isOpen={showAISearch}
+                onClose={() => setShowAISearch(false)}
+                onStockFound={() => { }}
+                onAddToFavorites={() => { }}
+                onRemoveFromFavorites={() => { }}
+                onShowToast={() => { }}
+                onGoToDashboard={() => { }}
+                currentTab="visualization"
+            />
+
+            <style>{`
+                .slider-modern::-webkit-slider-thumb {
+                    appearance: none;
+                    width: 20px;
+                    height: 20px;
+                    border-radius: 50%;
+                    background: linear-gradient(45deg, #10b981, #14b8a6);
+                    cursor: pointer;
+                    border: 2px solid white;
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+                }
+                    
+                .slider-modern::-moz-range-thumb {
+                    width: 20px;
+                    height: 20px;
+                    border-radius: 50%;
+                    background: linear-gradient(45deg, #10b981, #14b8a6);
+                    cursor: pointer;
+                    border: 2px solid white;
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+                }
+            `}</style>
+            <Dock />
         </div>
     );
 };

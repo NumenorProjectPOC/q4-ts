@@ -1,8 +1,10 @@
+//GraphComponent(child):
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import * as d3 from 'd3';
-import { GraphData, NodeData, LinkData, Relationship } from '../services/types'; // Assuming Relationship is exported
+import { GraphData, NodeData, LinkData, Relationship } from '../services/types';
 import { formatLargeNumber, formatStockName } from '../utils/utility';
 import LoadingScreen from './ui/LoadingScreen';
+import { Loader, RotateCcw } from 'lucide-react';
 
 interface GraphComponentProps {
     graphData: GraphData | null;
@@ -29,7 +31,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
 }) => {
     const svgRef = useRef<SVGSVGElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
-    const [nodeColors, setNodeColors] = useState<Record<string, [string, string]>>({});
+    const [nodeColors, setNodeColors] = useState<Record<string, string>>({});
     const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
     const [animatedValues, setAnimatedValues] = useState<Record<string, number>>({});
     const [initialRender, setInitialRender] = useState(true);
@@ -37,7 +39,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
 
     // Zoom behavior ref
     const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
-    const simulationRef = useRef<d3.Simulation<NodeData, any> | null>(null); // Use 'any' for links due to dynamic props
+    const simulationRef = useRef<d3.Simulation<NodeData, any> | null>(null);
 
     // Calculate container dimensions and observe changes
     useEffect(() => {
@@ -74,7 +76,12 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
         }));
     }, [graphData]);
 
-    // *** MODIFIED SECTION START ***
+    // At top, just below imports
+    function getFontSize(text: string, radius: number, maxFont: number, minFont: number) {
+        const size = Math.floor((radius * 2) / Math.max(text.length, 1) * 1.2)+5;
+        return `${Math.max(minFont, Math.min(maxFont, size))}px`;
+    }
+
     // This hook is updated to correctly process the pre-structured edges from the API.
     const links = useMemo(() => {
         if (!graphData || !graphData.edges || !graphData.nodes) {
@@ -88,7 +95,6 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
         });
 
         // The edges are already processed for bidirectionality.
-        // We just need to add the `source` and `target` IDs that D3 requires.
         const d3Links = graphData.edges.map(edge => {
             if (!edge.relationshipList || edge.relationshipList.length === 0) {
                 console.warn("Edge object has no relationships:", edge);
@@ -122,73 +128,77 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
         return d3Links.filter(link => link !== null) as (LinkData & { source: string, target: string })[];
 
     }, [graphData]);
-    // *** MODIFIED SECTION END ***
+    const centerColor = '#FF9999';
+    const labelColor = '#1F2937';
 
-    // Initialize node colors
+    // Updated node colors with light shades
     useEffect(() => {
-        if (!graphData) return;
+        if (!graphData || !nodes.length) return;
 
-        const availableColors: [string, string][] = [
-            ['#B0E2FF', d3.color('#B0E2FF')!.darker(0.9).toString()],
-            ['#FFDAB9', d3.color('#FFDAB9')!.darker(0.9).toString()],
-            ['#E6E6FA', d3.color('#E6E6FA')!.darker(0.9).toString()],
-            ['#E6FFE6', d3.color('#E6FFE6')!.darker(0.9).toString()],
-            ['#B2DFDB', d3.color('#B2DFDB')!.darker(0.9).toString()],
-            ['#FFE4E1', d3.color('#FFE4E1')!.darker(0.9).toString()],
+        // Light color palette with red, cream, peach, brown, grey shades
+        const lightColors: string[] = [
+            '#FFB3BA', // Pastel Red
+            '#FFDFBA', // Pastel Peach
+            '#FFFFBA', // Pastel Yellow
+            '#BAFFC9', // Pastel Green
+            '#BAE1FF', // Pastel Blue
+            '#E0BBE4', // Pastel Lavender
+            '#FFDAC1', // Pastel Cream
+            '#C7CEEA', // Pastel Periwinkle
+            '#F4E1D2', // Pastel Beige
+            '#D5E8D4', // Pastel Mint
+            '#FFE4E1', // Misty Rose
+            '#E8E9F3', // Light Grey-Blue
+            '#F0F0F0', // Light Grey
+            '#FCE1E4', // Pastel Pink
+            '#E8DFE0', // Pastel Mauve
+            '#FFF5E1', // Pastel Ivory
         ];
 
-        let initialNodeColors: Record<string, [string, string]> = {};
-        const storedNodeColors = sessionStorage.getItem('nodeColors');
+        const newNodeColors: Record<string, string> = {};
 
-        if (storedNodeColors) {
-            try {
-                initialNodeColors = JSON.parse(storedNodeColors);
-            } catch (error) {
-                console.error("Error parsing node colors from session storage:", error);
-                initialNodeColors = {};
+        nodes.forEach((node, index) => {
+            if (node.isCenter) {
+                // Center node gets a slightly darker red for emphasis
+                newNodeColors[node.id] = '#FF9999';
+            } else {
+                // Use light colors for other nodes
+                const colorIndex = index % lightColors.length;
+                newNodeColors[node.id] = lightColors[colorIndex];
             }
-        }
+        });
 
-        // Assign colors if not found in session storage
-        if (Object.keys(initialNodeColors).length === 0) {
-            nodes.forEach(node => {
-                if (node.isCenter) {
-                    initialNodeColors[node.id] = ['#6A958F', d3.color('#6A958F')!.darker(0.7).toString()];
-                } else {
-                    const colorIndex = Math.floor(Math.random() * availableColors.length);
-                    initialNodeColors[node.id] = availableColors[colorIndex];
-                }
-            });
-
-            sessionStorage.setItem('nodeColors', JSON.stringify(initialNodeColors));
-        } else {
-            // Ensure all nodes have colors
-            nodes.forEach(node => {
-                if (!initialNodeColors[node.id]) {
-                    if (node.isCenter) {
-                        initialNodeColors[node.id] = ['#6A958F', d3.color('#6A958F')!.darker(0.7).toString()];
-                    } else {
-                        const colorIndex = Math.floor(Math.random() * availableColors.length);
-                        initialNodeColors[node.id] = availableColors[colorIndex];
-                    }
-                }
-            });
-        }
-
-        setNodeColors(initialNodeColors);
+        setNodeColors(newNodeColors);
+        
+        // Store colors in session storage
+        sessionStorage.setItem('nodeColors', JSON.stringify(newNodeColors));
     }, [nodes, graphData]);
 
     // Main rendering effect
     useEffect(() => {
         if (!graphData || !svgRef.current || containerDimensions.width === 0 || links.length === 0) return;
 
+        if (simulationRef.current) {
+            const previousNodes = simulationRef.current.nodes();
+            const nodePositionMap = new Map(previousNodes.map(node => [node.id, { x: node.x, y: node.y, vx: node?.vx, vy: node?.vy, fx: node.fx, fy: node.fy }]));
+            
+            nodes.forEach(node => {
+                if (nodePositionMap.has(node.id)) {
+                    const pos = nodePositionMap.get(node.id)!;
+                    Object.assign(node, pos);
+                }
+            });
+        }
+
         const svg = d3.select(svgRef.current);
         svg.selectAll("*").remove();
 
         const width = containerDimensions.width;
         const height = containerDimensions.height;
-        const nodeRadius = 50;
-        const centerNodeRadius = 70;
+        
+        // Standard node sizes
+        const nodeRadius = 40; 
+        const centerNodeRadius = 50; 
 
         // Create zoom behavior
         const zoom = d3.zoom<SVGSVGElement, unknown>()
@@ -205,80 +215,74 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
         // Create main group for all elements
         const g = svg.append("g");
 
-        // Define gradients and markers
+        // Edge colors matching theme
         const edgeColor = d3.scaleOrdinal<string>()
-        .domain(['positive', 'negative', 'neutral'])
-            .range(['#6A958F', '#DC143C', '#888']);
+            .domain(['positive', 'negative', 'neutral'])
+            .range(['#10B981', '#EF4444', '#9CA3AF']); // Green, Red, Gray
         
         const defs = svg.append("defs");
         const impacts = ['positive', 'negative', 'neutral'];
         impacts.forEach(impact => {
             const color = edgeColor(impact);
 
-            // End arrow for each impact type
+            // Arrow markers with better styling
             defs.append("marker")
                 .attr("id", `arrowhead-${impact}`)
                 .attr("viewBox", "-2 -8 12 16")
                 .attr("refX", 8)
                 .attr("refY", 0)
                 .attr("orient", "auto")
-                .attr("markerWidth", 5)
-                .attr("markerHeight", 5)
+                .attr("markerWidth", 6)
+                .attr("markerHeight", 6)
                 .attr("markerUnits", "strokeWidth")
-                .append("svg:path")
+                .append("path")
                 .attr("d", "M 0,-6 L 10,0 L 0,6 Z")
                 .attr("fill", color)
                 .attr("stroke", color)
                 .attr("stroke-width", 1);
 
-            // Start arrow for each impact type
             defs.append("marker")
                 .attr("id", `arrowhead-start-${impact}`)
                 .attr("viewBox", "-2 -8 12 16")
                 .attr("refX", 2)
                 .attr("refY", 0)
                 .attr("orient", "auto")
-                .attr("markerWidth", 5)
-                .attr("markerHeight", 5)
+                .attr("markerWidth", 6)
+                .attr("markerHeight", 6)
                 .attr("markerUnits", "strokeWidth")
-                .append("svg:path")
+                .append("path")
                 .attr("d", "M 10,-6 L 0,0 L 10,6 Z")
                 .attr("fill", color)
                 .attr("stroke", color)
                 .attr("stroke-width", 1);
         });
 
-        const centerInnerGradient = defs.append("linearGradient")
-            .attr("id", "centerInnerGradient")
-            .attr("x1", "0%")
-            .attr("y1", "0%")
-            .attr("x2", "100%")
-            .attr("y2", "100%");
+        // Create subtle drop shadow filter
+        const filter = defs.append("filter")
+            .attr("id", "drop-shadow")
+            .attr("x", "-50%")
+            .attr("y", "-50%")
+            .attr("width", "200%")
+            .attr("height", "200%");
 
-        centerInnerGradient.append("stop")
-            .attr("offset", "0%")
-            .attr("stop-color", "#B8D7D9");
+        filter.append("feGaussianBlur")
+            .attr("in", "SourceAlpha")
+            .attr("stdDeviation", 3);
 
-        centerInnerGradient.append("stop")
-            .attr("offset", "100%")
-            .attr("stop-color", "#F5D6D6");
+        filter.append("feOffset")
+            .attr("dx", 0)
+            .attr("dy", 2)
+            .attr("result", "offsetblur");
 
-        Object.entries(nodeColors).forEach(([key, [colorStart, colorEnd]]) => {
-            const gradient = defs.append("linearGradient")
-                .attr("id", `nodeGradient-${key}`)
-                .attr("x1", "0%")
-                .attr("y1", "0%")
-                .attr("x2", "100%")
-                .attr("y2", "100%");
+        const feComponentTransfer = filter.append("feComponentTransfer");
+        feComponentTransfer.append("feFuncA")
+            .attr("type", "linear")
+            .attr("slope", 0.2);
 
-            gradient.append("stop")
-                .attr("offset", "0%")
-                .attr("stop-color", colorStart);
-
-            gradient.append("stop")
-                .attr("offset", "100%")
-                .attr("stop-color", colorEnd);
-        });
+        const feMerge = filter.append("feMerge");
+        feMerge.append("feMergeNode");
+        feMerge.append("feMergeNode")
+            .attr("in", "SourceGraphic");
 
         // Load saved positions
         const storedNodePositions = sessionStorage.getItem('nodePositions');
@@ -313,7 +317,6 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
                 node.fx = initialPositions[node.id].x;
                 node.fy = initialPositions[node.id].y;
             } else {
-                const centerNode = nodes.find(n => n.isCenter);
                 if (node.isCenter) {
                     node.x = width / 2;
                     node.y = height / 2;
@@ -328,14 +331,14 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
             }
         });
 
-        // Create simulation with better forces
+        // Create simulation
         const simulation = d3.forceSimulation(nodes)
-            .force("link", d3.forceLink(links).id((d: any) => d.id).distance(200).strength(0.3))
-            .force("charge", d3.forceManyBody().strength(-800))
+            .force("link", d3.forceLink(links).id((d: any) => d.id).distance(180).strength(0.2))
+            .force("charge", d3.forceManyBody().strength(-600))
             .force("center", d3.forceCenter(width / 2, height / 2))
             .force("collision", d3.forceCollide((d: any) => (d.isCenter ? centerNodeRadius : nodeRadius) + 10))
             .alphaDecay(0.02)
-            .velocityDecay(0.3);
+            .velocityDecay(0.4);
 
         simulationRef.current = simulation;
 
@@ -345,8 +348,8 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
             .data(links)
             .join("line")
             .attr("stroke", (d: any) => edgeColor(d.relationshipList?.[0]?.impact))
-            .attr("stroke-width", 3)
-            .attr("opacity", 0.8)
+            .attr("stroke-width", 2)
+            .attr("opacity", 0.7)
             .attr("class", "link")
             .style("cursor", "pointer")
             .attr("marker-end", (d: any) => {
@@ -369,95 +372,171 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
                 });
             });
 
-        // Create center nodes
+        // Create center nodes with filled colors
         const centerGroup = g.append("g")
             .selectAll("g")
             .data(nodes.filter((d: any) => d.isCenter))
             .join("g")
             .style("cursor", "pointer");
 
+        // Center node filled circle
         centerGroup.append("circle")
-            .attr("r", centerNodeRadius + 10)
-            .attr("fill", (d: any) => `url(#nodeGradient-${d.id})`)
-            .style("filter", "drop-shadow(0px 0px 10px rgba(106, 149, 143, 0.5))")
+            .attr("r", centerNodeRadius)
+            .attr("fill", (d: any) => nodeColors[d.id])
+            .attr("stroke", "#ffffff")
+            .attr("stroke-width", 3)
+            .style("filter", "url(#drop-shadow)")
+            .attr("opacity", 0.9);
+
+        // Center node border ring
+        centerGroup.append("circle")
+            .attr("r", centerNodeRadius)
+            .attr("fill", "none")
+            .attr("stroke", "#ffffff")
+            .attr("stroke-width", 2)
+            .attr("opacity", 0.8);
+
+        // Make entire center node clickable
+        centerGroup.append("circle")
+            .attr("r", centerNodeRadius)
+            .attr("fill", "transparent")
+            .style("cursor", "pointer")
             .on("click", (event: any, d: any) => {
                 event.stopPropagation();
                 setSelectedElement(d);
             });
 
-        centerGroup.append("circle")
-            .attr("r", centerNodeRadius - 10)
-            .attr("fill", "url(#centerInnerGradient)");
-
-        // Add text to center nodes
-        centerGroup.each(function (d: any) {
+        // Center node text
+        centerGroup.each(function(d: any) {
             const group = d3.select(this);
-            const animatedValue = animatedValues[d.id];
-            const roundedValue = animatedValue !== undefined ? Math.round(animatedValue) : Math.round(d.value.value);
-
+            const name = formatStockName(d.name);
+            const valueText = formatLargeNumber(
+              (animatedValues[d.id] ?? d.value.value) | 0
+            );
+          
+            // Node name
             group.append("text")
-                .attr("text-anchor", "middle")
-                .attr("dy", "1em")
-                .attr("class", "node-name")
-                .style("font-size", "10px")
-                .style("fill", "#2C3333")
-                .style("font-weight", "normal")
-                .text(formatStockName(d.name));
-
+              .attr("text-anchor", "middle")
+              .attr("dy", d.isCenter ? "-0.5em" : "-0.6em")
+              .attr("class", "node-name")
+              .style("font-family", "system-ui, -apple-system, sans-serif")
+              .style("fill", labelColor)
+              .style("font-weight", "600")
+              .style("font-size", getFontSize(name, centerNodeRadius - 8, 14, 8))
+              .text(name);
+          
+            // Node value
             group.append("text")
-                .attr("text-anchor", "middle")
-                .attr("dy", "-0.35em")
-                .attr("class", "node-value")
-                .style("font-size", "16px")
-                .style("fill", "#2C3333")
-                .style("font-weight", "bold")
-                .text(formatLargeNumber(roundedValue))
-                .append("title")
-                .text(`${roundedValue} ${d.value.unit}`);
-        });
+              .attr("text-anchor", "middle")
+              .attr("dy", "0.6em")
+              .attr("class", "node-value")
+              .style("font-family", "system-ui, -apple-system, sans-serif")
+              .style("fill", labelColor)
+              .style("font-weight", "700")
+              .style("font-size", getFontSize(valueText, centerNodeRadius - 8, 16, 10))
+              .text(valueText)
+              .append("title")
+              .text(`${valueText} ${d.value.unit}`);
+          });
+          
 
-        // Create regular nodes
+        // Create regular nodes with filled colors
         const nodeGroups = g.append("g")
             .selectAll("g")
             .data(nodes.filter((d: any) => !d.isCenter))
             .join("g")
             .style("cursor", "pointer");
 
+        // Regular node filled circle
         nodeGroups.append("circle")
             .attr("r", nodeRadius)
-            .attr("fill", (d: any) => `url(#nodeGradient-${d.id})`)
-            .style("filter", (d: any) => `drop-shadow(0px 0px 10px ${nodeColors[d.id]?.[0]})`)
-            .attr("opacity", (d: any) => d.isSecondary ? 0.5 : 1)
+            .attr("fill", (d: any) => nodeColors[d.id])
+            .attr("stroke", "#ffffff")
+            .attr("stroke-width", 2.5)
+            .style("filter", "url(#drop-shadow)")
+            .attr("opacity", (d: any) => d.isSecondary ? 0.8 : 0.9);
+
+        // Regular node border ring
+        nodeGroups.append("circle")
+            .attr("r", nodeRadius)
+            .attr("fill", "none")
+            .attr("stroke", "#ffffff")
+            .attr("stroke-width", 1.5)
+            .attr("opacity", 0.7);
+
+        // Make entire regular node clickable
+        nodeGroups.append("circle")
+            .attr("r", nodeRadius)
+            .attr("fill", "transparent")
+            .style("cursor", "pointer")
             .on("click", (event: any, d: any) => {
                 event.stopPropagation();
                 setSelectedElement(d);
             });
 
-        // Add text to regular nodes
-        nodeGroups.each(function (d: any) {
+        // Regular node text
+        nodeGroups.each(function(d: any) {
             const group = d3.select(this);
-            const animatedValue = animatedValues[d.id];
-            const roundedValue = animatedValue !== undefined ? Math.round(animatedValue) : Math.round(d.value.value);
-
+            const name = formatStockName(d.name);
+            const valueText = formatLargeNumber(
+              (animatedValues[d.id] ?? d.value.value) | 0
+            );
+          
             group.append("text")
-                .attr("text-anchor", "middle")
-                .attr("dy", "1em")
-                .attr("class", "node-name")
-                .style("font-size", "10px")
-                .style("fill", "#2C3333")
-                .style("font-weight", "normal")
-                .text(formatStockName(d.name));
-
+              .attr("text-anchor", "middle")
+              .attr("dy", "-0.4em")
+              .attr("class", "node-name")
+              .style("font-family", "system-ui, -apple-system, sans-serif")
+              .style("fill", labelColor)
+              .style("font-weight", "600")
+              .style("font-size", getFontSize(name, nodeRadius - 6, 12, 6))
+              .text(name);
+          
             group.append("text")
-                .attr("text-anchor", "middle")
-                .attr("dy", "-0.35em")
-                .attr("class", "node-value")
-                .style("font-size", "16px")
-                .style("fill", "#2C3333")
-                .style("font-weight", "bold")
-                .text(formatLargeNumber(roundedValue))
-                .append("title")
-                .text(`${roundedValue} ${d.value.unit}`);
+              .attr("text-anchor", "middle")
+              .attr("dy", "0.5em")
+              .attr("class", "node-value")
+              .style("font-family", "system-ui, -apple-system, sans-serif")
+              .style("fill", labelColor)
+              .style("font-weight", "700")
+              .style("font-size", getFontSize(valueText, nodeRadius - 6, 14, 8))
+              .text(valueText)
+              .append("title")
+              .text(`${valueText} ${d.value.unit}`);
+          });
+          
+
+        // Add hover effects
+        nodeGroups.on("mouseenter", function(event: any, d: any) {
+            d3.select(this).select("circle:first-child")
+                .transition()
+                .duration(200)
+                .attr("stroke-width", 4)
+                .attr("r", nodeRadius + 3)
+                .attr("opacity", 1);
+        }).on("mouseleave", function(event: any, d: any) {
+            d3.select(this).select("circle:first-child")
+                .transition()
+                .duration(200)
+                .attr("stroke-width", 2.5)
+                .attr("r", nodeRadius)
+                .attr("opacity", (d: any) => d.isSecondary ? 0.8 : 0.9);
+        });
+
+        centerGroup.on("mouseenter", function(event: any, d: any) {
+            d3.select(this).select("circle:first-child")
+                .transition()
+                .duration(200)
+                .attr("stroke-width", 4)
+                .attr("r", centerNodeRadius + 3)
+                .attr("opacity", 1);
+        }).on("mouseleave", function(event: any, d: any) {
+            d3.select(this).select("circle:first-child")
+                .transition()
+                .duration(200)
+                .attr("stroke-width", 3)
+                .attr("r", centerNodeRadius)
+                .attr("opacity", 0.9);
         });
 
         // Drag behavior
@@ -482,7 +561,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
         nodeGroups.call(drag as any);
         centerGroup.call(drag as any);
 
-        // Simulation tick
+        // Simulation tick with smooth edges
         simulation.on("tick", () => {
             link
                 .attr("x1", (d: any) => {
@@ -490,7 +569,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
                     const dy = d.target.y - d.source.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
                     if (distance === 0) return d.source.x;
-                    const sourceRadius = d.source.isCenter ? centerNodeRadius + 10 : nodeRadius;
+                    const sourceRadius = d.source.isCenter ? centerNodeRadius + 2 : nodeRadius + 2;
                     const offsetX = (dx / distance) * sourceRadius;
                     return d.source.x + offsetX;
                 })
@@ -499,7 +578,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
                     const dy = d.target.y - d.source.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
                     if (distance === 0) return d.source.y;
-                    const sourceRadius = d.source.isCenter ? centerNodeRadius + 10 : nodeRadius;
+                    const sourceRadius = d.source.isCenter ? centerNodeRadius + 2 : nodeRadius + 2;
                     const offsetY = (dy / distance) * sourceRadius;
                     return d.source.y + offsetY;
                 })
@@ -508,7 +587,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
                     const dy = d.target.y - d.source.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
                     if (distance === 0) return d.target.x;
-                    const targetRadius = d.target.isCenter ? centerNodeRadius + 10 : nodeRadius;
+                    const targetRadius = d.target.isCenter ? centerNodeRadius + 2 : nodeRadius + 2;
                     const offsetX = (dx / distance) * targetRadius;
                     return d.target.x - offsetX;
                 })
@@ -517,7 +596,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
                     const dy = d.target.y - d.source.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
                     if (distance === 0) return d.target.y;
-                    const targetRadius = d.target.isCenter ? centerNodeRadius + 10 : nodeRadius;
+                    const targetRadius = d.target.isCenter ? centerNodeRadius + 2 : nodeRadius + 2;
                     const offsetY = (dy / distance) * targetRadius;
                     return d.target.y - offsetY;
                 });
@@ -543,7 +622,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
             simulation.stop();
         };
 
-    }, [graphData, nodeColors, links, setSelectedElement, nodes, containerDimensions, sidebarWidth, animatedValues]);
+    }, [graphData, nodeColors, links, setSelectedElement, nodes, containerDimensions, animatedValues]);
 
     // Handle simulation animation
     useEffect(() => {
@@ -624,9 +703,14 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
     return (
         <div
             ref={containerRef}
-            style={{ width: "100%", height: "100%", position: "relative", backgroundColor: "#f8f9fa" }}
+            style={{ width: "100%", height: "100%", position: "relative", backgroundColor: "#FAFAFA" }}
         >
-            {isLoading && <LoadingScreen message="Loading visualization..." fullscreen={false} />}
+            {isLoading && (
+                <div className="flex flex-col items-center justify-center h-full p-6">
+                  <Loader className="w-10 h-10 animate-spin text-brand-red-600" />
+                  <p className="text-brand-gray-600 font-extrabold animate-pulse">Loading Visualization...</p>
+                </div>
+              )}
             {!isLoading && (
                 <>
                     <div className="absolute inset-0">
@@ -635,26 +719,19 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
                             width="100%"
                             height="100%"
                             style={{ cursor: "grab" }}
-                            onMouseDown={(e) => { if (e.target === svgRef.current) (e.target as SVGElement).style.cursor = "grabbing"; }}
+                            onMouseDown={(e) => { if (e.target === svgRef.current) (e.target as SVGElement).style.cursor = "pointer"; }}
                             onMouseUp={(e) => { (e.target as SVGElement).style.cursor = "grab"; }}
                         />
                     </div>
-                    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex flex-row justify-center items-center gap-2 z-10">
-                        <button
-                            onClick={() => { if (svgRef.current && zoomBehaviorRef.current) d3.select(svgRef.current).transition().duration(200).call(zoomBehaviorRef.current.scaleBy, 1.5); }}
-                            className="w-10 h-10 bg-white border border-gray-300 rounded-full flex items-center justify-center hover:bg-gray-50 shadow-lg text-lg font-semibold"
-                            title="Zoom In"
-                        >+</button>
-                        <button
-                            onClick={() => { if (svgRef.current && zoomBehaviorRef.current) d3.select(svgRef.current).transition().duration(200).call(zoomBehaviorRef.current.scaleBy, 0.67); }}
-                            className="w-10 h-10 bg-white border border-gray-300 rounded-full flex items-center justify-center hover:bg-gray-50 shadow-lg text-lg font-semibold"
-                            title="Zoom Out"
-                        >-</button>
+                    {/* Clean Reset Zoom Button */}
+                    <div className="absolute top-6 right-6 z-10">
                         <button
                             onClick={resetZoom}
-                            className="w-10 h-10 bg-white border border-gray-300 rounded-full flex items-center justify-center hover:bg-gray-50 shadow-lg text-sm"
+                            className="w-12 h-12 bg-white border border-gray-200 rounded-lg flex items-center justify-center hover:bg-gray-50 shadow-md text-gray-600 transition-all duration-200 hover:shadow-lg group"
                             title="Reset Zoom"
-                        >⌂</button>
+                        >
+                            <RotateCcw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-300" />
+                        </button>
                     </div>
                 </>
             )}

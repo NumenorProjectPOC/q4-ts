@@ -1,51 +1,41 @@
-@import url('https://fonts.googleapis.com/css2?family=Keania+One&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Saira+Stencil+One&display=swap');
+/* index.css file */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-
 .map-label {
   font-family: "Orbitron", sans-serif;
-  /* Futuristic digital font */
   font-size: 10px;
   font-weight: bold;
-  color: #00ffea;
-  /* Neon Cyan Text */
+  color: #1e293b;
   text-transform: uppercase;
   padding: 4px 2px;
   border-radius: 6px;
   text-align: center;
   white-space: nowrap;
   position: relative;
-  /* background: rgba(10, 10, 10, 0.8); Dark semi-transparent background */
-
-  /* Glowing Neon Border */
-  /* border: 2px solid transparent;
-  border-image: linear-gradient(90deg, #ff00ff, #00ffff, #ff00ff) 1;
-  background-clip: padding-box;
-  box-shadow: 0 0 5px #ff00ff, 0 0 10px #00ffff; Neon Glow Effect */
-
-  /* Animation */
-  animation: glow-flicker 1.5s infinite alternate;
 }
-
-/* Flickering Glow Effect */
-@keyframes glow-flicker {}
-
 
 body {
   margin: 0;
   padding: 0;
-  font-family: 'Roboto', sans-serif;
+  position: relative;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   background-color: #FFFFFF;
-  color: #2C3333 !important;
+  color: #1e293b !important;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .quantifore-heading {
-  font-family: 'Keania One', cursive;
+  font-family: 'Inter', sans-serif;
+  font-weight: 300;
+  letter-spacing: -0.02em;
 }
 
 .allow-sidebar-overlap {
@@ -58,143 +48,81 @@ body {
 }
 
 :root {
-  --body-bg: var(--background);
-  --navbar-bg: var(--navbar);
-  --navbar-text: var(--background);
-
-  --main-node: var(--main-node);
-  --node-1: var(--node-color-1);
-  --node-2: var(--node-color-2);
-  --node-3: var(--node-color-3);
-  --node-glow: rgba(106, 149, 143, 0.2);
-
-  --button-primary: var(--button-primary);
-  --button-hover: #587b76;
-  --button-text: var(--background);
-
-  --text-primary: #2C3333;
-  --text-secondary: #5C6B6B;
-
-  --card-bg: var(--background);
-  --card-border: var(--light-gray);
-  --hover-effect: rgba(106, 149, 143, 0.1);
+  --body-bg: #ffffff;
+  --navbar-bg: #f8fafc;
+  --navbar-text: #1e293b;
+  --main-node: #475569;
+  --node-1: #64748b;
+  --node-2: #94a3b8;
+  --node-3: #cbd5e1;
+  --node-glow: rgba(71, 85, 105, 0.1);
+  --button-primary: #1e293b;
+  --button-hover: #334155;
+  --button-text: #ffffff;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --card-bg: #ffffff;
+  --card-border: #e2e8f0;
+  --hover-effect: rgba(71, 85, 105, 0.05);
 }
 
 .navbar {
   background-color: var(--navbar-bg) !important;
   color: var(--navbar-text) !important;
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.5);
 }
 
 .button {
   background-color: var(--button-primary) !important;
   color: var(--button-text) !important;
+  font-weight: 500;
+  letter-spacing: -0.01em;
 }
 
+/* Professional scrollbar styling */
+/* ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+} */
+
+/* Custom range slider styling */
 input[type=range]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background: linear-gradient(to right, #3b82f6, #ec4899);
+  background: linear-gradient(135deg, #1e293b, #334155);
   cursor: pointer;
-  box-shadow: 0 0 5px rgba(0, 0, 0, 0.2), 0 0 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(30, 41, 59, 0.3);
+  border: 2px solid #ffffff;
 }
 
 input[type=range]::-webkit-slider-thumb:hover {
-  box-shadow: 0 0 0 5px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 8px rgba(30, 41, 59, 0.1);
+  transform: scale(1.1);
 }
 
-/* Hide scrollbar for Chrome, Safari and Opera */
-.scrollbar-none::-webkit-scrollbar {
-  display: none;
-}
-
-/* Hide scrollbar for IE, Edge and Firefox */
-.scrollbar-none {
-  -ms-overflow-style: none;
-  /* IE and Edge */
-  scrollbar-width: none;
-  /* Firefox */
-}
-
-.mapboxgl-popup-content {
-  background-color: transparent !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-  border-radius: 0 !important;
-}
-
-.mapboxgl-popup-tip {
-  display: none !important;
-}
-
-.main-marker {
-  width: 40px;
-  height: 40px;
-  background-color: rgba(255, 165, 0, 0.1);
-  border: 3px solid rgba(255, 165, 0, 0.8);
-  border-radius: 50%;
-  /* animation: blink-pulse 1.8s infinite ease-in-out; */
-  box-shadow: 0 0 14px rgba(255, 165, 0, 0.4);
-
-  /* ✅ These are crucial for correct alignment */
-  position: absolute;
-  top: 0;
-  left: 0;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-}
-
-.related-marker {
-  width: 12px;
-  height: 12px;
-  background-color: dodgerblue;
-  border-radius: 50%;
-  position: relative;
-  transform: translate(-50%, -50%);
-}
-
-@keyframes blink-pulse {
-  0% {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 0.9;
-  }
-  50% {
-    transform: translate(-50%, -50%) scale(1.5);
-    opacity: 0.4;
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 0.9;
-  }
-}
-
-
-@keyframes blob {
-  0% {
-    transform: translate(0px, 0px) scale(1);
-  }
-
-  33% {
-    transform: translate(30px, -50px) scale(1.1);
-  }
-
-  66% {
-    transform: translate(-20px, 20px) scale(0.9);
-  }
-
-  100% {
-    transform: translate(0px, 0px) scale(1);
-  }
-}
-
+/* Professional fade animations */
 @keyframes fade-in-up {
   0% {
     opacity: 0;
-    transform: translateY(16px) scale(0.95);
+    transform: translateY(32px) scale(0.95);
   }
-
   100% {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -202,132 +130,125 @@ input[type=range]::-webkit-slider-thumb:hover {
 }
 
 .animate-fade-in-up {
-  animation: fade-in-up 0.3s ease-out both;
+  animation: fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.outer-marker {
-  position: relative;
-  width: 20px;
-  height: 20px;
-  background-color: transparent;
+/* Professional glass morphism effect */
+.glass-effect {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.tooltip {
-  transition: opacity 0.2s ease;
-  pointer-events: none;
-  line-height: 1.3;
-  font-family: 'Segoe UI', sans-serif;
+/* Professional shadows */
+.shadow-professional {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
-.inner-blink {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background-color: #f97316;
-  animation: blink 1.5s infinite ease-in-out;
-  box-shadow: 0 0 10px rgba(249, 115, 22, 0.8), 0 0 20px rgba(249, 115, 22, 0.4);
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+.shadow-professional-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
-@keyframes blink {
-
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-
-  50% {
-    opacity: 0.4;
-    transform: scale(1.6);
-  }
+/* Hide scrollbar for specific elements */
+/* .scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
 
-/* Fixed blinking animation for location markers - using only opacity and box-shadow */
-@keyframes location-blink {
-  0%, 100% { 
-    opacity: 1; 
-    box-shadow: 0 2px 4px rgba(0,0,0,0.3), 0 0 0 0 rgba(16, 185, 129, 0.4);
-  }
-  50% { 
-    opacity: 0.7; 
-    box-shadow: 0 2px 4px rgba(0,0,0,0.3), 0 0 15px 3px rgba(16, 185, 129, 0.6);
-  }
-}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+} */
 
-/* Fixed blinking animation for main event markers */
-@keyframes main-event-blink {
-  0%, 100% { 
-    opacity: 1; 
-    box-shadow: 0 4px 8px rgba(0,0,0,0.3), 0 0 0 0 rgba(59, 130, 246, 0.4);
-  }
-  50% { 
-    opacity: 0.8; 
-    box-shadow: 0 4px 8px rgba(0,0,0,0.3), 0 0 20px 5px rgba(59, 130, 246, 0.6);
-  }
-}
-
-/* Fixed blinking animation for related event markers */
-@keyframes related-event-blink {
-  0%, 100% { 
-    opacity: 1; 
-    box-shadow: 0 2px 6px rgba(0,0,0,0.3), 0 0 0 0 rgba(245, 158, 11, 0.4);
-  }
-  50% { 
-    opacity: 0.8; 
-    box-shadow: 0 2px 6px rgba(0,0,0,0.3), 0 0 15px 3px rgba(245, 158, 11, 0.6);
-  }
-}
-
-/* Hover tooltip styles */
-.marker-tooltip {
-  position: absolute;
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-  pointer-events: none;
-  z-index: 1000;
-  transform: translateX(-50%) translateY(-120%);
-  left: 50%;
-  top: 0;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.marker-tooltip.show {
-  opacity: 1;
-}
-
-.marker-tooltip::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-top-color: rgba(0, 0, 0, 0.8);
-}
-
-@keyframes pulse-blink {
-  0%, 100% {
-    opacity: 0.8;
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
-  }
-  50% {
-    opacity: 0.4;
-    box-shadow: 0 0 10px 8px rgba(16, 185, 129, 0.2);
-  }
-}
-
+/* Professional form inputs */
 @layer components {
   .form-input {
-    @apply block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors sm:text-sm;
+    @apply block w-full px-4 py-3 bg-white border border-slate-200 rounded-xl shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent transition-all duration-200 sm:text-sm font-light;
   }
+  
+  .form-input:focus {
+    @apply shadow-professional;
+  }
+}
+
+/* Professional button variants */
+.btn-primary {
+  @apply bg-gradient-to-r from-slate-800 to-slate-900 text-white px-6 py-3 rounded-xl font-medium text-sm shadow-lg hover:shadow-xl transition-all duration-200 border border-slate-700;
+}
+
+.btn-secondary {
+  @apply bg-white text-slate-700 px-6 py-3 rounded-xl font-medium text-sm shadow-lg hover:shadow-xl transition-all duration-200 border border-slate-200 hover:border-slate-300;
+}
+
+/* Typography improvements */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 300;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+p {
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+/* Professional transitions */
+* {
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Custom selection colors */
+::selection {
+  background-color: rgba(30, 41, 59, 0.1);
+  color: #1e293b;
+}
+
+::-moz-selection {
+  background-color: rgba(30, 41, 59, 0.1);
+  color: #1e293b;
+}
+
+.bg-gradient-radial {
+  background: radial-gradient(circle, var(--tw-gradient-stops));
+}
+
+/* Enhanced glass morphism for interactive elements */
+.glass-interactive {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+/* Smooth blob transitions */
+.blob-container {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Enhanced selection for dark theme */
+::selection {
+  background-color: rgba(59, 130, 246, 0.3);
+  color: #ffffff;
+}
+
+::-moz-selection {
+  background-color: rgba(59, 130, 246, 0.3);
+  color: #ffffff;
+}
+
+@supports(padding: max(0px)) {
+  .safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
 }

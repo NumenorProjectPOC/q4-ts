@@ -2,8 +2,24 @@ import React, { useEffect, useRef, useState } from "react";
 import mapboxgl, { Marker, Popup } from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import RightSidebar from "../components/RightSidebar";
-import DashboardSwitcher from "../components/ui/DashboardSwitcher";
 import { AnimatePresence, motion } from "framer-motion";
+import Dock from "../components/ui/Dock";
+import {
+  BarChart3,
+  Menu,
+  ChevronLeft,
+  ChevronRight,
+  MapPin,
+  Activity,
+  TrendingUp,
+  TrendingDown,
+  ArrowRight,
+  Globe,
+  Eye,
+  Share2,
+  Trash2,
+  Search
+} from "lucide-react";
 
 // Use environment variable or fallback
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN || 'pk.eyJ1IjoidGVzdCIsImEiOiJjbGFtcGxlIn0.test';
@@ -99,13 +115,13 @@ export default function SignalTrackerPage() {
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const mapContainer = useRef<HTMLDivElement>(null);
   const [activeEvent, setActiveEvent] = useState<SignalEvent | null>(null);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
   const [viewMode, setViewMode] = useState<'location' | 'contributing'>('location');
   const [selectedStock, setSelectedStock] = useState<string>('ASIA_GW');
   const arrowLayerId = "animated-arrows";
   const [isPanelOpen, setIsPanelOpen] = useState(false);
 
-  // FIXED: Updated useEffect for map initialization
+  // Map initialization with custom style
   useEffect(() => {
     if (mapRef.current || !mapContainer.current) return;
 
@@ -116,7 +132,6 @@ export default function SignalTrackerPage() {
       zoom: 1.3,
       projection: "mercator",
       maxBounds: [[-180, -85], [180, 85]],
-      // FIXED: Add these options for better marker handling
       preserveDrawingBuffer: true,
       antialias: true
     });
@@ -151,27 +166,22 @@ export default function SignalTrackerPage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       mapRef.current?.resize();
-    }, 300); // Match transition duration
+    }, 300);
     return () => clearTimeout(timer);
-  }, [isCollapsed, isPanelOpen]);
+  }, [isLeftSidebarCollapsed, isPanelOpen]);
 
-  const toggleCollapse = () => setIsCollapsed((prev) => !prev);
-
-  // FIXED: Updated renderEventsOnMap function
   const renderEventsOnMap = () => {
     const map = mapRef.current;
     if (!map) return;
 
     // Clear existing markers and layers
     document.querySelectorAll(".mapboxgl-marker").forEach((el) => el.remove());
-    // ❗ Remove layers first, then sources to avoid error
     if (map.getLayer("animated-arrows")) {
       map.removeLayer("animated-arrows");
     }
     if (map.getSource("animated-arrows")) {
       map.removeSource("animated-arrows");
     }
-
     if (map.getLayer("arrow-symbols")) {
       map.removeLayer("arrow-symbols");
     }
@@ -183,12 +193,10 @@ export default function SignalTrackerPage() {
     if (!currentEvent) return;
 
     if (viewMode === 'location') {
-      // Show location markers for the selected stock
       const locationData = mockLocationData[selectedStock] || [];
       locationData.forEach((location) => {
         const el = document.createElement("div");
         el.className = "outer-marker";
-
         el.style.cssText = `
         position: relative;
         width: 24px;
@@ -200,25 +208,22 @@ export default function SignalTrackerPage() {
         width: 100%;
         height: 100%;
         border-radius: 50%;
-        background: linear-gradient(45deg, #10b981, #059669);
+        background: linear-gradient(45deg, #DC2626, #B91C1C);
         border: 2px solid white;
         animation: pulse-blink 2s infinite ease-in-out;
+        box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
       `;
         el.appendChild(pulse);
 
-
-        // Create tooltip
         const tooltip = document.createElement("div");
         tooltip.className = "marker-tooltip";
         tooltip.innerHTML = `<strong>${location.location}</strong><br/>Value: ${location.value}`;
         el.appendChild(tooltip);
 
-        // Enhanced hover effects
         el.addEventListener('mouseenter', () => {
           el.style.filter = 'brightness(1.2)';
-          el.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4), 0 0 20px rgba(16, 185, 129, 0.6)';
+          el.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4), 0 0 20px rgba(220, 38, 38, 0.6)';
           el.style.zIndex = '1000';
-          // Remove the transform scale to prevent positioning issues
           tooltip.classList.add('show');
         });
 
@@ -237,23 +242,20 @@ export default function SignalTrackerPage() {
           .addTo(map);
       });
     } else {
-      // Show contributing events with connections
       drawContributingEvents(currentEvent);
     }
   };
 
-  // FIXED: Updated drawContributingEvents function
   const drawContributingEvents = (mainEvent: SignalEvent) => {
     const map = mapRef.current;
     if (!map) return;
 
-    // Create main event marker with enhanced blinking
     const mainEl = document.createElement("div");
     mainEl.className = "main-event-marker";
     mainEl.style.cssText = `
     position: relative;
-    width: 24px;
-    height: 24px;
+    width: 28px;
+    height: 28px;
   `;
 
     const pulse = document.createElement("div");
@@ -261,23 +263,21 @@ export default function SignalTrackerPage() {
     width: 100%;
     height: 100%;
     border-radius: 50%;
-    background: linear-gradient(45deg, #10b981, #059669);
-    border: 2px solid white;
+    background: linear-gradient(45deg, #DC2626, #B91C1C);
+    border: 3px solid white;
     animation: pulse-blink 2s infinite ease-in-out;
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
   `;
     mainEl.appendChild(pulse);
 
-    // Create tooltip for main event
     const mainTooltip = document.createElement("div");
     mainTooltip.className = "marker-tooltip";
     mainTooltip.innerHTML = `<strong>${mainEvent.name}</strong><br/>Value: ${mainEvent.value}<br/>Main Event`;
     mainEl.appendChild(mainTooltip);
 
-    // Enhanced hover effects for main event
     mainEl.addEventListener('mouseenter', () => {
       mainEl.style.filter = 'brightness(1.2)';
-      mainEl.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4), 0 0 25px rgba(59, 130, 246, 0.8)';
-      // Remove transform scale
+      mainEl.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4), 0 0 25px rgba(220, 38, 38, 0.8)';
       mainTooltip.classList.add('show');
     });
 
@@ -294,8 +294,7 @@ export default function SignalTrackerPage() {
       .setLngLat([mainEvent.location.lng, mainEvent.location.lat])
       .addTo(map);
 
-    // Create related event markers and connections
-    mainEvent.related.forEach((relatedEvent, index) => {
+    mainEvent.related.forEach((relatedEvent) => {
       const relatedEl = document.createElement("div");
       relatedEl.className = "related-event-marker";
       relatedEl.style.cssText = `
@@ -309,23 +308,21 @@ export default function SignalTrackerPage() {
     width: 100%;
     height: 100%;
     border-radius: 50%;
-    background: linear-gradient(45deg, #10b981, #059669);
+    background: linear-gradient(45deg, #F59E0B, #D97706);
     border: 2px solid white;
     animation: pulse-blink 2s infinite ease-in-out;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
   `;
       relatedEl.appendChild(pulse);
 
-      // Create tooltip for related event
       const relatedTooltip = document.createElement("div");
       relatedTooltip.className = "marker-tooltip";
       relatedTooltip.innerHTML = `<strong>${relatedEvent.name}</strong><br/>Value: ${relatedEvent.value}<br/>Trend: ${relatedEvent.trend}`;
       relatedEl.appendChild(relatedTooltip);
 
-      // Enhanced hover effects for related events
       relatedEl.addEventListener('mouseenter', () => {
         relatedEl.style.filter = 'brightness(1.2)';
         relatedEl.style.boxShadow = '0 2px 8px rgba(0,0,0,0.4), 0 0 18px rgba(245, 158, 11, 0.8)';
-        // Remove transform scale
         relatedTooltip.classList.add('show');
       });
 
@@ -343,7 +340,6 @@ export default function SignalTrackerPage() {
         .addTo(map);
     });
 
-    // Draw curved connections
     drawCurvedConnections(mainEvent);
   };
 
@@ -367,7 +363,6 @@ export default function SignalTrackerPage() {
     });
 
     if (arcFeatures.length > 0) {
-
       if (!map.getSource(arrowLayerId)) {
         map.addSource(arrowLayerId, {
           type: "geojson",
@@ -385,7 +380,7 @@ export default function SignalTrackerPage() {
             visibility: "visible",
           },
           paint: {
-            "line-color": "#FFD700",
+            "line-color": "#DC2626",
             "line-width": 3,
             "line-opacity": ["interpolate", ["linear"], ["zoom"], 1, 0.4, 5, 0.9],
             "line-dasharray": [2, 2],
@@ -393,7 +388,6 @@ export default function SignalTrackerPage() {
         });
       }
 
-      // Add arrow symbols
       const arrowPoints = mainEvent.related.map((rel) => {
         const midLng = (mainEvent.location.lng + rel.location.lng) / 2;
         const midLat = (mainEvent.location.lat + rel.location.lat) / 2 + 2;
@@ -428,7 +422,7 @@ export default function SignalTrackerPage() {
             "text-size": 14,
           },
           paint: {
-            "text-color": "#FFD700",
+            "text-color": "#DC2626",
           },
         });
       }
@@ -451,29 +445,41 @@ export default function SignalTrackerPage() {
     const locationData = mockLocationData[selectedStock] || [];
     return (
       <div className="space-y-4">
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-          <h4 className="font-semibold text-blue-800 mb-2">Selected Stock: {selectedStock}</h4>
-          <p className="text-sm text-blue-600">Showing latest values across Asia region</p>
+        <div className="bg-gradient-to-r from-red-50 to-red-100 p-4 rounded-2xl border border-red-200 shadow-sm">
+          <h4 className="font-bold text-red-800 mb-2 flex items-center gap-2">
+            <MapPin className="w-4 h-4" />
+            Selected Stock: {selectedStock}
+          </h4>
+          <p className="text-sm text-red-700">Showing latest values across Asia region</p>
         </div>
 
         <div className="space-y-3">
-          <h5 className="font-medium text-gray-700">Regional Values</h5>
+          <h5 className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+            <div className="w-2 h-2 bg-green-600 rounded-full" />
+            Regional Values
+          </h5>
           {locationData.map((item, index) => (
-            <div key={index} className="bg-gradient-to-r from-green-100 to-emerald-100 p-3 rounded-lg border border-green-200">
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+              className="bg-white/90 p-4 rounded-2xl border border-gray-200/60 shadow-sm hover:shadow-lg transition-all duration-300 group"
+            >
               <div className="flex justify-between items-center">
                 <div>
-                  <p className="font-medium text-gray-800">{item.location}</p>
+                  <p className="font-bold text-gray-900">{item.location}</p>
                   <p className="text-sm text-gray-600">Latest Value</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-lg font-bold text-green-700">{item.value}</p>
+                  <p className="text-xl font-bold text-green-700">{item.value}</p>
                   <div className="flex items-center text-sm text-green-600">
-                    <span className="mr-1">📈</span>
+                    <Activity className="w-3 h-3 mr-1" />
                     <span>Active</span>
                   </div>
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
       </div>
@@ -486,36 +492,52 @@ export default function SignalTrackerPage() {
 
     return (
       <div className="space-y-4">
-        <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
-          <h4 className="font-semibold text-purple-800 mb-2">Selected Stock: {selectedStock}</h4>
-          <p className="text-sm text-purple-600">Showing related contributing events</p>
+        <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-2xl border border-purple-200 shadow-sm">
+          <h4 className="font-bold text-purple-800 mb-2 flex items-center gap-2">
+            <Activity className="w-4 h-4" />
+            Selected Stock: {selectedStock}
+          </h4>
+          <p className="text-sm text-purple-700">Showing related contributing events</p>
         </div>
 
         <div className="space-y-3">
-          <h5 className="font-medium text-gray-700">Contributing Events</h5>
+          <h5 className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+            <div className="w-2 h-2 bg-orange-600 rounded-full" />
+            Contributing Events
+          </h5>
           {mainEvent.related.map((event, index) => (
-            <div key={index} className="bg-gradient-to-r from-orange-100 to-red-100 p-3 rounded-lg border border-orange-200">
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+              className="bg-white/90 p-4 rounded-2xl border border-gray-200/60 shadow-sm hover:shadow-lg transition-all duration-300 group"
+            >
               <div className="flex justify-between items-center">
                 <div>
-                  <p className="font-medium text-gray-800">{event.name}</p>
+                  <p className="font-bold text-gray-900">{event.name}</p>
                   <p className="text-sm text-gray-600">{event.location.place}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-lg font-bold text-orange-700">{event.value}</p>
+                  <p className="text-xl font-bold text-orange-700">{event.value}</p>
                   <div className="flex items-center text-sm">
-                    <span className="mr-1">
-                      {event.trend === 'up' ? '📈' : event.trend === 'down' ? '📉' : '➡️'}
-                    </span>
-                    <span className={`${event.trend === 'up' ? 'text-red-600' :
-                      event.trend === 'down' ? 'text-green-600' :
-                        'text-gray-600'
+                    {event.trend === 'up' ? (
+                      <TrendingUp className="w-3 h-3 mr-1 text-red-600" />
+                    ) : event.trend === 'down' ? (
+                      <TrendingDown className="w-3 h-3 mr-1 text-green-600" />
+                    ) : (
+                      <ArrowRight className="w-3 h-3 mr-1 text-gray-600" />
+                    )}
+                    <span className={`font-medium ${event.trend === 'up' ? 'text-red-600' :
+                        event.trend === 'down' ? 'text-green-600' :
+                          'text-gray-600'
                       }`}>
                       {event.trend}
                     </span>
                   </div>
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
       </div>
@@ -523,216 +545,350 @@ export default function SignalTrackerPage() {
   };
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-teal-50 via-cyan-50 to-blue-50 overflow-x-hidden">
-      <DashboardSwitcher />
-      <div className={`transition-all duration-300`}>
-        <div className="flex flex-col h-screen">
-          {/* Navbar */}
-          <div className=" shadow-sm border-b border-gray-200 px-6 py-4">
-            <div className="flex items-center justify-between mb-5">
-              <img src="/qf-logo0.1.svg" alt="Quantifore Logo" className="h-8 w-auto mt-3" />
-              {/* Right-aligned controls */}
-              <div className="flex items-center space-x-6">
-                {/* View Mode Toggle Group */}
-                <div className="flex items-center space-x-4">
-                  <span className="text-sm text-gray-600">View Mode:</span>
-                  <div className="flex bg-gray-100 rounded-lg mt-2 p-1">
-                    <button
-                      onClick={() => setViewMode('location')}
-                      className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'location'
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-gray-600 hover:text-gray-800'
-                        }`}
-                    >
-                      Location
-                    </button>
-                    <button
-                      onClick={() => setViewMode('contributing')}
-                      className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'contributing'
-                        ? 'bg-purple-600 text-white shadow-sm'
-                        : 'text-gray-600 hover:text-gray-800'
-                        }`}
-                    >
-                      Contributing Events
-                    </button>
-                  </div>
-                </div>
-                {!isPanelOpen && <div className="w-12" />}
-              </div>
-            </div>
-
-          </div>
-
-          <div className="flex flex-1 p-4 lg:p-8 overflow-hidden">
-            {/* Sidebar */}
-            <div
-              className={`transition-all duration-300 ease-in-out relative ${isCollapsed ? "w-16 md:w-20" : "w-80"
-                } bg-gradient-to-br from-white/40 via-teal-200/30 to-white/20 backdrop-blur-xl border border-gray-200 rounded-lg shadow-lg flex-shrink-0 flex flex-col`}
-            >
-              <button
-                onClick={toggleCollapse}
-                className={`absolute top-4 ${isCollapsed ? "left-1/2 -translate-x-1/2" : "right-4"} bg-white hover:bg-gray-100 rounded-full p-1 shadow z-10`}
-                aria-label="Toggle sidebar"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6 text-teal-700"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d={isCollapsed ? "M9 5l7 7-7 7" : "M15 19l-7-7 7-7"}
-                  />
-                </svg>
-              </button>
-
-              {!isCollapsed && (
-                <div className="mt-16 px-4 flex flex-col gap-6 h-full overflow-y-auto">
-                  {/* Stock Selection */}
-                  <div className="space-y-2">
-                    <h3 className="text-md text-gray-800 font-semibold pb-2">Tracking Stocks</h3>
-                    {mockEvents.map((event) => (
-                      <div
-                        key={event.id}
-                        onClick={() => setSelectedStock(event.id)}
-                        className={`p-3 rounded-lg cursor-pointer transition-all ${selectedStock === event.id
-                          ? 'bg-gradient-to-r from-blue-200 to-cyan-200 shadow-md border-2 border-blue-300'
-                          : 'bg-gradient-to-r from-cyan-100 to-teal-100 hover:shadow-lg'
-                          } text-gray-800`}
-                      >
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-medium">{event.name}</p>
-                            <p className="text-sm text-gray-600">{event.region}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-semibold">{event.value}</p>
-                            <span className="text-xs">
-                              {event.trend === 'up' ? '📈' : event.trend === 'down' ? '📉' : '➡️'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Dynamic Content Based on Toggle */}
-                  <div className="border-t border-gray-300 pt-4">
-                    {viewMode === 'location' ? renderLocationView() : renderContributingView()}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Map Container */}
-            <div className="flex-1 p-6 lg:p-12">
-              <div className="w-full h-full bg-white rounded-2xl shadow-2xl relative">
-                <div className="absolute top-6 right-6 z-10 space-y-2">
-                  <button
-                    className="bg-white backdrop-blur-sm text-sm text-teal-700 px-3 py-1 rounded-full shadow hover:shadow-md transition"
-                    onClick={() => {
-                      if (!mapRef.current) return;
-                      mapRef.current.flyTo({ center: [0, 20], zoom: 1.3 });
-                    }}
-                  >
-                    World View
-                  </button>
-                </div>
-                <div ref={mapContainer} className="w-full h-full rounded-2xl shadow-lg relative z-0" />
-
-                {/* FIXED: Updated CSS with safe animations and proper positioning */}
-                <style>{`
-                  /* FIXED: Safe pulse animation that doesn't displace markers */
-                  @keyframes pulse-safe {
-                    0% { 
-                      transform: scale(1); 
-                      opacity: 0.6; 
-                    }
-                    50% { 
-                      transform: scale(1.2); 
-                      opacity: 0.3; 
-                    }
-                    100% { 
-                      transform: scale(1); 
-                      opacity: 0.6; 
-                    }
-                  }
-                  
-                  /* Ensure map container has proper positioning */
-                  .mapboxgl-map {
-                    position: relative !important;
-                    overflow: hidden !important;
-                  }
-                  
-                  /* Fix marker positioning */
-                  .mapboxgl-marker {
-                    position: absolute !important;
-                    will-change: transform !important;
-                    pointer-events: auto !important;
-                  }
-                  
-                  /* Prevent transforms from affecting marker positioning */
-                  .location-marker, .main-event-marker, .related-event-marker {
-                    position: relative !important;
-                    transform-origin: center center !important;
-                  }
-                `}</style>
-              </div>
-            </div>
-          </div>
-
-          {/* Status Bar */}
-          <div className="bg-white border-t border-gray-200 px-6 py-3">
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center space-x-4">
-                <span className="text-gray-600">Active Stock: <span className="font-medium">{selectedStock}</span></span>
-                <span className="text-gray-600">Mode: <span className="font-medium capitalize">{viewMode}</span></span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="text-gray-600">Live Data Connected</span>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div className="h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 text-gray-900 antialiased relative overflow-hidden flex flex-col">
+      {/* Background decoration */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full opacity-5 bg-gradient-to-br from-red-400 to-orange-400 blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full opacity-5 bg-gradient-to-tr from-blue-400 to-purple-400 blur-3xl" />
       </div>
 
-      {/* Menu button*/}
-      <motion.button
-        className="fixed top-5 right-8 z-[60] p-2 rounded-full bg-white/70 backdrop-blur-md text-gray-700 hover:bg-white/90 transition-all shadow-lg hover:scale-105"
-        onClick={() => setIsPanelOpen(!isPanelOpen)}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        aria-label={isPanelOpen ? "Close menu" : "Open menu"}
-      >
-        <motion.svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-6 w-6"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          animate={{ rotate: isPanelOpen ? 180 : 0 }}
-          transition={{ duration: 0.3 }}
+      {/* Header */}
+      <header className="flex items-center justify-between px-8 h-20 bg-white shadow-sm border-b border-gray-200/60 sticky top-0 z-30 flex-shrink-0">
+        <motion.div
+          className="flex items-center space-x-4"
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5 }}
         >
-          <motion.path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            animate={{
-              d: isPanelOpen
-                ? "M6 18L18 6M6 6l12 12"
-                : "M4 6h16M4 12h16M4 18h16"
-            }}
-            transition={{ duration: 0.3 }}
-          />
-        </motion.svg>
-      </motion.button>
+          <img src="/qf-logo0.1.svg" alt="Quantifore logo" className="h-8 select-none" />
+          <div className="flex items-center space-x-2">
+            <Activity className="w-5 h-5 text-red-600" />
+            <span className="text-lg font-semibold text-gray-900">Signal</span>
+          </div>
+        </motion.div>
 
-      {/* Backdrop and Sidebar */}
+        <div className="flex items-center gap-3">
+          {/* View Mode Toggle */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">View Mode:</span>
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('location')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'location'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-800'
+                  }`}
+              >
+                Location
+              </button>
+              <button
+                onClick={() => setViewMode('contributing')}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'contributing'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-800'
+                  }`}
+              >
+                Contributing Events
+              </button>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            Live Data Connected
+          </div>
+          <motion.button
+            onClick={() => setIsPanelOpen(!isPanelOpen)}
+            className="rounded-lg p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-all duration-200 shadow-sm border border-gray-200/50"
+            aria-label="Open menu"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <Menu className="h-5 w-5" />
+          </motion.button>
+        </div>
+      </header>
+
+      {/* Main Content - Fixed height layout */}
+      <main className="flex flex-1 overflow-hidden relative min-h-0">
+        {/* Left Sidebar - Fixed with internal scrolling and proper responsive width */}
+        <motion.aside
+          className={`${
+            isLeftSidebarCollapsed ? "w-16" : "w-94"
+          } bg-white/90 backdrop-blur-xl border border-gray-200/60 rounded-2xl shadow-2xl flex flex-col transition-all duration-300 m-6 flex-shrink-0`}
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          {/* Sidebar header (fixed) */}
+          <div className="p-6 border-b border-gray-200/60 bg-gradient-to-r from-gray-50/80 to-red-50/80 rounded-t-2xl flex-shrink-0">
+            <div className="flex items-center justify-between">
+              {!isLeftSidebarCollapsed && (
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-gradient-to-r from-red-600 to-red-700 rounded-lg shadow-sm">
+                    <MapPin className="w-4 h-4 text-white" />
+                  </div>
+                  <h2 className="font-bold text-gray-900">Signal Tracker</h2>
+                </div>
+              )}
+              <button
+                onClick={() => setIsLeftSidebarCollapsed(v => !v)}
+                className="ms-[-10px] p-2 rounded-xl hover:bg-red-50 text-gray-600 transition-colors border border-red-200/50 shadow-sm"
+                aria-label={isLeftSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              >
+                {isLeftSidebarCollapsed ? (
+                  <ChevronRight className="w-4 h-4" />
+                ) : (
+                  <ChevronLeft className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Sidebar content */}
+          {!isLeftSidebarCollapsed ? (
+            <div className="flex-1 flex flex-col min-h-0">
+              {/* AI Search button (fixed) */}
+              <div className="p-6 border-b border-gray-200/60 flex-shrink-0">
+                <motion.button
+                  onClick={() => console.debug("AI Stock Search clicked")}
+                  className="w-full flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-700 hover:to-red-800 transition-all duration-300 group shadow-lg hover:shadow-xl"
+                  whileHover={{ scale: 1.02, y: -1 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <div className="p-2 bg-white/20 rounded-lg">
+                    <Search className="w-4 h-4" />
+                  </div>
+                  <span className="font-semibold">AI Stock Search</span>
+                  <div className="ml-auto">
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </div>
+                </motion.button>
+              </div>
+
+              {/* Scrollable content */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                      <div className="w-2 h-2 bg-red-600 rounded-full" />
+                      Tracking Stocks
+                    </h3>
+                    <span className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded-full font-semibold">
+                      {mockEvents.length}
+                    </span>
+                  </div>
+
+                  {/* Stock cards */}
+                  <div className="space-y-3 mb-8">
+                    {mockEvents.map((event, index) => {
+                      const isSelected = selectedStock === event.id;
+                      return (
+                        <motion.div
+                          key={event.id}
+                          onClick={() => setSelectedStock(event.id)}
+                          className={`p-4 rounded-2xl border transition-all group cursor-pointer overflow-hidden relative ${
+                            isSelected
+                              ? "bg-gradient-to-r from-red-50 to-red-100 border-red-300 shadow-lg"
+                              : "bg-white/90 border-gray-200/60 hover:border-red-300 hover:shadow-lg"
+                          }`}
+                          whileHover={{ scale: 1.02, y: -2 }}
+                          whileTap={{ scale: 0.98 }}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.06 }}
+                        >
+                          {isSelected && (
+                            <div className="absolute -top-10 -right-10 w-20 h-20 rounded-full bg-gradient-to-br from-red-400 to-red-600 opacity-10" />
+                          )}
+
+                          <div className="flex justify-between items-start relative z-10">
+                            <div>
+                              <p className="font-bold text-gray-900 mb-1">{event.name}</p>
+                              <p className="text-sm text-gray-600">{event.region}</p>
+                              {isSelected && (
+                                <div className="text-xs text-red-600 flex items-center gap-1 font-medium mt-1">
+                                  <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+                                  Currently viewing
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <p className="text-lg font-bold text-gray-900">{event.value}</p>
+                              <div className="flex items-center text-sm">
+                                {event.trend === "up" ? (
+                                  <TrendingUp className="w-3 h-3 mr-1 text-red-600" />
+                                ) : event.trend === "down" ? (
+                                  <TrendingDown className="w-3 h-3 mr-1 text-green-600" />
+                                ) : (
+                                  <ArrowRight className="w-3 h-3 mr-1 text-gray-600" />
+                                )}
+                                <span
+                                  className={`font-medium ${
+                                    event.trend === "up"
+                                      ? "text-red-600"
+                                      : event.trend === "down"
+                                      ? "text-green-600"
+                                      : "text-gray-600"
+                                  }`}
+                                >
+                                  {event.trend}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Action buttons */}
+                          <div className="mt-3 flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                            <button
+                              className={`p-2 rounded-lg transition-all ${
+                                isSelected
+                                  ? "text-red-600 hover:bg-red-200 bg-red-100"
+                                  : "text-gray-400 hover:text-red-600 hover:bg-red-50"
+                              }`}
+                              title={isSelected ? "Stop Visualization" : "Visualize"}
+                              onClick={e => {
+                                e.stopPropagation();
+                                setSelectedStock(event.id);
+                              }}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button
+                              className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
+                              title="Share"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <Share2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all"
+                              title="Remove"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Dynamic content based on view mode */}
+                  <div className="border-t border-gray-200/60 pt-6">
+                    {viewMode === "location" ? renderLocationView() : renderContributingView()}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            // Collapsed state
+            <div className="p-3">
+              <button
+                // onClick={() => setIsAiSearchOpen(true)}
+                className="w-full flex items-center justify-center bg-gradient-to-r from-red-600 to-red-700 text-white p-3 rounded-xl hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-lg"
+                title="AI Data Search"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </motion.aside>
+
+        { }
+        <section 
+          className={`flex-1 flex flex-col bg-white/50 backdrop-blur-sm relative min-h-0 transition-all duration-300 ${
+            isLeftSidebarCollapsed ? 'ml-0' : 'ml-0'
+          }`}
+        >
+          <div className="flex-1 p-6 pr-6 pb-24 min-h-0">
+            <motion.div
+              className="h-full bg-white/90 rounded-2xl shadow-2xl relative overflow-hidden"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.6 }}
+            >
+              {/* Map Controls */}
+              <div className="absolute top-6 right-6 z-10 space-y-2">
+                <motion.button
+                  className="bg-white/95 backdrop-blur-sm text-sm text-gray-700 px-4 py-2 rounded-full shadow-lg hover:shadow-xl transition-all border border-gray-200/50 font-medium flex items-center gap-2"
+                  onClick={() => {
+                    if (!mapRef.current) return;
+                    mapRef.current.flyTo({ center: [0, 20], zoom: 1.3 });
+                  }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Globe className="w-4 h-4" />
+                  World View
+                </motion.button>
+              </div>
+
+              {/* Map */}
+              <div ref={mapContainer} className="w-full h-full rounded-2xl" />
+
+              {/* Map Tooltip Styles */}
+              <style>{`
+                @keyframes pulse-blink {
+                  0%, 100% { 
+                    opacity: 1; 
+                    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+                  }
+                  50% { 
+                    opacity: 0.8;
+                    box-shadow: 0 0 0 10px rgba(220, 38, 38, 0);
+                  }
+                }
+
+                .mapboxgl-map {
+                  position: relative !important;
+                  overflow: hidden !important;
+                }
+                
+                .mapboxgl-marker {
+                  position: absolute !important;
+                  will-change: transform !important;
+                  pointer-events: auto !important;
+                }
+                
+                .marker-tooltip {
+                  position: absolute;
+                  bottom: 100%;
+                  left: 50%;
+                  transform: translateX(-50%) translateY(-8px);
+                  background: rgba(0, 0, 0, 0.9);
+                  color: white;
+                  padding: 8px 12px;
+                  border-radius: 8px;
+                  font-size: 12px;
+                  white-space: nowrap;
+                  opacity: 0;
+                  visibility: hidden;
+                  transition: all 0.2s ease;
+                  z-index: 1000;
+                  pointer-events: none;
+                }
+
+                .marker-tooltip.show {
+                  opacity: 1;
+                  visibility: visible;
+                }
+
+                .marker-tooltip::after {
+                  content: '';
+                  position: absolute;
+                  top: 100%;
+                  left: 50%;
+                  transform: translateX(-50%);
+                  border: 4px solid transparent;
+                  border-top-color: rgba(0, 0, 0, 0.9);
+                }
+              `}</style>
+            </motion.div>
+          </div>
+        </section>
+      </main>
+
+      {/* Overlay Sidebar */}
       <AnimatePresence>
         {isPanelOpen && (
           <>
@@ -741,13 +897,15 @@ export default function SignalTrackerPage() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.35 }}
-              className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
               onClick={() => setIsPanelOpen(false)}
             />
             <RightSidebar isOpen={isPanelOpen} onClose={() => setIsPanelOpen(false)} />
           </>
         )}
       </AnimatePresence>
+
+      <Dock />
     </div>
   );
 }

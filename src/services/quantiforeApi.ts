@@ -10,6 +10,21 @@ import {
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
+// --- New interfaces for AlertPage ---
+export interface FavoriteStockFull {
+  fav_stocks_guid: string;
+  stock_name: string;
+  monitored: boolean;
+  email_alert: string[];
+  sms_alert: string[];
+  lower_threshold: number | null;
+  upper_threshold: number | null;
+  last_alert: string;
+  last_alert_status: string;
+  last_alert_frequency: string;
+  latest_value: number | null;
+}
+
 const removeOrgUser = async (userId: string): Promise<void> => {
   const token = sessionStorage.getItem("access_token");
   const response = await fetch(`${API_BASE_URL}/org/org/remove-user`, {
@@ -138,7 +153,14 @@ const fetchGraphData = async (stockName: string): Promise<any> => {
   }
 };
 
-const fetchFavoriteStocks = async (): Promise<FavoriteStock[]> => {
+// --- Updated fetchFavoriteStocks with overloads for backward compatibility ---
+// Overloaded function signatures
+async function fetchFavoriteStocks(): Promise<FavoriteStock[]>;
+async function fetchFavoriteStocks(fullData: true): Promise<FavoriteStockFull[]>;
+async function fetchFavoriteStocks(fullData?: boolean): Promise<FavoriteStock[] | FavoriteStockFull[]>;
+
+// Implementation
+async function fetchFavoriteStocks(fullData: boolean = false): Promise<FavoriteStock[] | FavoriteStockFull[]> {
   const token = sessionStorage.getItem("access_token");
   const response = await fetch(`${API_BASE_URL}/org/user/favorites`, {
     method: "GET",
@@ -155,6 +177,12 @@ const fetchFavoriteStocks = async (): Promise<FavoriteStock[]> => {
   const data = await response.json();
   console.log("Favorite stocks data:", data);
 
+  // Return full data for AlertPage
+  if (fullData) {
+    return data as FavoriteStockFull[];
+  }
+
+  // Return formatted data for other pages (maintains backward compatibility)
   const formatted = data.map((item: any) => ({
     label: item.stock_name,
     value: item.stock_name,
@@ -163,6 +191,70 @@ const fetchFavoriteStocks = async (): Promise<FavoriteStock[]> => {
   }));
 
   return formatted;
+}
+
+// --- New API functions for AlertPage ---
+const updateAlertStatus = async (guid: string, monitored: boolean): Promise<void> => {
+  const token = sessionStorage.getItem("access_token");
+  const response = await fetch(`${API_BASE_URL}/org/user/favorites/${guid}`, {
+    method: "PATCH",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ monitored }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to update alert status");
+  }
+};
+
+const deleteAlert = async (guid: string): Promise<void> => {
+  const token = sessionStorage.getItem("access_token");
+  const response = await fetch(`${API_BASE_URL}/org/user/favorites/${guid}`, {
+    method: "DELETE",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to delete alert");
+  }
+};
+
+const createAlert = async (alertData: Partial<FavoriteStockFull>): Promise<void> => {
+  const token = sessionStorage.getItem("access_token");
+  const response = await fetch(`${API_BASE_URL}/org/user/favorites`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(alertData),
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to create alert");
+  }
+};
+
+const updateAlert = async (guid: string, alertData: Partial<FavoriteStockFull>): Promise<void> => {
+  const token = sessionStorage.getItem("access_token");
+  const response = await fetch(`${API_BASE_URL}/org/user/favorites/${guid}`, {
+    method: "PUT",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(alertData),
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to update alert");
+  }
 };
 
 const fetchSavedModel = async (): Promise<Model[]> => {
@@ -220,8 +312,6 @@ const fetchMonitoredStockData = async (guids: string[], days: number = 6000): Pr
     throw error;
   }
 };
-
-
 
 const fetchOrgUsers = async (signal?: AbortSignal): Promise<OrgUser[]> => {
   const token = sessionStorage.getItem("access_token");
@@ -376,8 +466,36 @@ const toggleStockMonitoring = async (stock_guid: string, monitored: boolean): Pr
   }
 };
 
+const addFavoriteStock = async (favStocksGuid: string): Promise<void> => {
+  const token = sessionStorage.getItem("access_token");
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/org/favorites/add`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        fav_stocks_guid: favStocksGuid
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error("Failed to add favorite stock:", errorData);
+      throw new Error(`Failed to add favorite stock. Status: ${response.status}`);
+    }
+
+    console.log("Favorite stock added successfully");
+  } catch (error) {
+    console.error("Error adding favorite stock:", error);
+    throw error;
+  }
+};
 
 export {
+  // Existing exports
   addOrgUser,
   removeOrgUser,
   toggleStockMonitoring,
@@ -390,7 +508,14 @@ export {
   removeFavoriteStock,
   removeSavedModel,
   shareSavedModel,
-  setStockAlert
+  setStockAlert,
+  addFavoriteStock,
+  
+  // New exports for AlertPage
+  updateAlertStatus,
+  deleteAlert,
+  createAlert,
+  updateAlert,
 };
 
 // async function fetchDomains(regions: string, framework: string): Promise<string[]> {
