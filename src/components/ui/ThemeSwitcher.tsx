@@ -69,53 +69,6 @@ const ThemeSwitcher: React.FC<ThemeSwitcher> = ({
             exit={{ opacity: 0, scale: 0.8 }}
             className="flex flex-col gap-3 mb-4"
           >
-            {/* Mode toggle */}
-            <motion.button
-              onClick={onModeToggle}
-              onHoverStart={() => setShowTooltip('mode')}
-              onHoverEnd={() => setShowTooltip(null)}
-              className={`relative w-12 h-12 rounded-full border-2 shadow-lg backdrop-blur-sm transition-all duration-200 hover:scale-110 ${
-                isDarkMode
-                  ? 'bg-gradient-to-br from-orange-400 to-yellow-400 border-orange-300/50'
-                  : 'bg-gradient-to-br from-slate-700 to-slate-900 border-slate-600/50'
-              }`}
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <motion.div
-                animate={{ rotate: isDarkMode ? 0 : 180 }}
-                transition={{ duration: 0.3 }}
-                className="flex items-center justify-center w-full h-full"
-              >
-                {isDarkMode ? (
-                  <Sun className="w-5 h-5 text-white drop-shadow-sm" />
-                ) : (
-                  <Moon className="w-5 h-5 text-white drop-shadow-sm" />
-                )}
-              </motion.div>
-              
-              {/* Tooltip */}
-              <AnimatePresence>
-                {showTooltip === 'mode' && (
-                  <motion.div
-                    initial={{ opacity: 0, x: 10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 10 }}
-                    className={`absolute right-full mr-3 top-1/2 -translate-y-1/2 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap shadow-lg border ${
-                      isDarkMode
-                        ? 'bg-slate-800/95 border-slate-700/50 text-white'
-                        : 'bg-white/95 border-neutral-200/60 text-neutral-900'
-                    }`}
-                  >
-                    Switch to {isDarkMode ? 'Light' : 'Dark'} Mode
-                    <div className={`absolute left-full top-1/2 -translate-y-1/2 border-4 border-transparent ${
-                      isDarkMode ? 'border-l-slate-800/95' : 'border-l-white/95'
-                    }`} />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.button>
-
             {/* Auto theme */}
             <motion.button
               onClick={() => onThemeChange('brand-auto')}

@@ -32,6 +32,7 @@ import {
   fetchFavoriteStocks,
   fetchMonitoredStockData,
   removeFavoriteStock,
+  setStockAlert,
   toggleStockMonitoring,
 } from "../services/quantiforeApi";
 import { formatStockName } from "../utils/utility";
@@ -120,7 +121,7 @@ const MainPage: React.FC = () => {
       if (sessionData) {
         return JSON.parse(sessionData);
       }
-      
+
       const localData = localStorage.getItem(key);
       if (localData) {
         const parsed = JSON.parse(localData);
@@ -138,7 +139,7 @@ const MainPage: React.FC = () => {
     const lastUpdated = loadFromStorage(STORAGE_KEYS.LAST_UPDATED);
     const now = Date.now();
     const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
-    
+
     if (!lastUpdated || (now - lastUpdated) > CACHE_DURATION) {
       // Clear old monitoring data
       sessionStorage.removeItem(STORAGE_KEYS.MONITORING_DATA);
@@ -182,24 +183,24 @@ const MainPage: React.FC = () => {
       try {
         setIsFavoritesLoading(true);
         clearOldData();
-        
+
         // Try to load from storage first
         const cachedFavorites = loadFromStorage(STORAGE_KEYS.FAVORITE_STOCKS);
         const cachedMonitoringData = loadFromStorage(STORAGE_KEYS.MONITORING_DATA);
         const cachedSelectedData = loadFromStorage(STORAGE_KEYS.SELECTED_DATA);
-        
+
         if (cachedFavorites && cachedMonitoringData && cachedSelectedData) {
           console.log('Loading from cache...');
           setDataOptions(cachedFavorites);
           setData(cachedMonitoringData);
           setSelectedData(cachedSelectedData);
-          
+
           // Set active index to first monitored item
-          const firstMonitoredIndex = cachedSelectedData.findIndex((value: string) => 
+          const firstMonitoredIndex = cachedSelectedData.findIndex((value: string) =>
             cachedFavorites.find((fav: DataOption) => fav.value === value)?.monitored
           );
           setActiveDataIndex(Math.max(0, firstMonitoredIndex));
-          
+
           setIsFavoritesLoading(false);
           return;
         }
@@ -212,7 +213,7 @@ const MainPage: React.FC = () => {
           label: formatStockName(stock.label),
           guid: stock.guid,
         }));
-        
+
         saveToStorage(STORAGE_KEYS.FAVORITE_STOCKS, formatted);
         setDataOptions(formatted);
 
@@ -222,7 +223,7 @@ const MainPage: React.FC = () => {
           const monitoredValues = monitoredItems.map((d: DataOption) => d.value);
           await fetchInitialMonitoredData(monitoredGuids, monitoredValues);
         }
-        
+
       } catch (error) {
         console.error('Error loading favorites:', error);
         setToast({ type: "error", message: "Could not load favorites. Please try again." });
@@ -250,15 +251,15 @@ const MainPage: React.FC = () => {
 
       setSelectedData(values);
       setData(resultData);
-      
+
       // Save to storage
       saveToStorage(STORAGE_KEYS.MONITORING_DATA, resultData);
       saveToStorage(STORAGE_KEYS.SELECTED_DATA, values);
       saveToStorage(STORAGE_KEYS.LAST_UPDATED, Date.now());
-      
+
       const loadingMap = Object.fromEntries(guids.map((g) => [g, false]));
       setMonitoredDataLoading(loadingMap);
-      
+
       console.log('Monitoring data cached successfully');
     } catch (error) {
       console.error('Error fetching monitoring data:', error);
@@ -291,14 +292,14 @@ const MainPage: React.FC = () => {
             upper_threshold: (result[0] as { upper_threshold?: number }).upper_threshold || 0,
             lower_threshold: (result[0] as { lower_threshold?: number }).lower_threshold || 0,
           };
-          
+
           const newSelectedData = [...selectedData, value];
           const newData = [...data, formatted];
-          
+
           setSelectedData(newSelectedData);
           setData(newData);
           setActiveDataIndex(selectedData.length);
-          
+
           // Update storage
           saveToStorage(STORAGE_KEYS.MONITORING_DATA, newData);
           saveToStorage(STORAGE_KEYS.SELECTED_DATA, newSelectedData);
@@ -309,16 +310,16 @@ const MainPage: React.FC = () => {
         const indexToRemove = selectedData.findIndex((d) => d === value);
         const newSelectedData = selectedData.filter((d) => d !== value);
         const newData = data.filter((_, idx) => idx !== indexToRemove);
-        
+
         setSelectedData(newSelectedData);
         setData(newData);
-        
+
         if (activeDataIndex === indexToRemove) {
           setActiveDataIndex(0);
         } else if (activeDataIndex > indexToRemove) {
           setActiveDataIndex((prev) => prev - 1);
         }
-        
+
         // Update storage
         saveToStorage(STORAGE_KEYS.MONITORING_DATA, newData);
         saveToStorage(STORAGE_KEYS.SELECTED_DATA, newSelectedData);
@@ -339,10 +340,10 @@ const MainPage: React.FC = () => {
         label: formatStockName(fav.label),
         guid: fav.guid,
       }));
-      
+
       saveToStorage(STORAGE_KEYS.FAVORITE_STOCKS, formattedFavorites);
       setDataOptions(formattedFavorites);
-      
+
     } catch (error) {
       console.error('Error toggling monitoring:', error);
       setToast({ type: "error", message: `Could not ${newMonitorState ? "monitor" : "unmonitor"} ${label}` });
@@ -356,23 +357,23 @@ const MainPage: React.FC = () => {
       await removeFavoriteStock(dataItem.guid);
       const updated = dataOptions.filter((d) => d.guid !== dataItem.guid);
       setDataOptions(updated);
-      
+
       // Update storage
       saveToStorage(STORAGE_KEYS.FAVORITE_STOCKS, updated);
-      
+
       // Also remove from monitoring if it was being monitored
       if (selectedData.includes(dataItem.value)) {
         const indexToRemove = selectedData.findIndex((d) => d === dataItem.value);
         const newSelectedData = selectedData.filter((d) => d !== dataItem.value);
         const newData = data.filter((_, idx) => idx !== indexToRemove);
-        
+
         setSelectedData(newSelectedData);
         setData(newData);
-        
+
         saveToStorage(STORAGE_KEYS.MONITORING_DATA, newData);
         saveToStorage(STORAGE_KEYS.SELECTED_DATA, newSelectedData);
       }
-      
+
       setToast({ type: "error", message: `${dataItem.label} removed from favorites.` });
     } catch (error) {
       console.error('Error removing favorite:', error);
@@ -384,47 +385,60 @@ const MainPage: React.FC = () => {
     if (!alertModalData) return;
 
     try {
-      if (alertData.alertFrequency || alertData.emailNotifications.length || alertData.phoneNotifications.length) {
-        const alertPreferences = {
-          stockGuid: alertModalData.guid,
-          stockName: alertModalData.label,
-          alertFrequency: alertData.alertFrequency,
-          emailNotifications: alertData.emailNotifications,
-          phoneNotifications: alertData.phoneNotifications,
-          createdAt: new Date().toISOString()
-        };
+      // Use setStockAlert API
+      await setStockAlert(
+        alertModalData.guid,
+        alertData.upperThreshold || 0,
+        alertData.lowerThreshold || 0,
+        alertData.alertFrequency || 'daily',
+        alertData.emailNotifications || [],
+        alertData.phoneNotifications || []
+      );
 
-        const existingPrefs = JSON.parse(localStorage.getItem('alertPreferences') || '{}');
-        existingPrefs[alertModalData.guid] = alertPreferences;
-        localStorage.setItem('alertPreferences', JSON.stringify(existingPrefs));
-      }
-
-      setToast({
-        type: "success",
-        message: `Alert thresholds successfully configured for ${alertModalData.label}!`
+      // Update the current monitoring data with new thresholds
+      const newData = data.map((item, idx) => {
+        if (selectedData[idx] === alertModalData.value) {
+          // If there's no existing data for this index, keep it as null
+          if (!item) return null;
+          // Preserve existing stock_data and set the correct threshold keys
+          return {
+            ...item,
+            upper_threshold: alertData.upperThreshold ?? 0,
+            lower_threshold: alertData.lowerThreshold ?? 0
+          } as DataAPIResponse;
+        }
+        return item;
       });
 
-      return Promise.resolve();
+      setData(newData);
+
+      // Update storage with new thresholds
+      saveToStorage(STORAGE_KEYS.MONITORING_DATA, newData);
+
+      setToast({
+        type: 'success',
+        message: `Alert thresholds successfully configured for ${alertModalData.label}!`
+      });
 
     } catch (error) {
       console.error("Error setting alert:", error);
       setToast({
-        type: "error",
+        type: 'error',
         message: `Failed to configure alert for ${alertModalData.label}.`
       });
-      throw new Error(`Failed to configure alert for ${alertModalData.label}.`);
     }
   };
 
+
   useEffect(() => {
     if (selectedData.length === 0) return;
-    
+
     const interval = setInterval(async () => {
       try {
         console.log('Refreshing monitoring data...');
         const monitoredItems = dataOptions.filter((d) => selectedData.includes(d.value));
         const monitoredGuids = monitoredItems.map((d) => d.guid);
-        
+
         if (monitoredGuids.length > 0) {
           const dataList = await fetchMonitoredStockData(monitoredGuids);
           const resultData = monitoredGuids.map((guid) => {
@@ -475,8 +489,8 @@ const MainPage: React.FC = () => {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.9, y: -10 }}
           className={`absolute z-50 min-w-[200px] rounded-xl border shadow-lg backdrop-blur-xl ${isDarkMode
-              ? 'bg-slate-900/95 border-neutral-700/50'
-              : 'bg-white/95 border-neutral-200/60'
+            ? 'bg-slate-900/95 border-neutral-700/50'
+            : 'bg-white/95 border-neutral-200/60'
             }`}
           style={{
             left: Math.min(position.x, window.innerWidth - 220),
@@ -496,12 +510,12 @@ const MainPage: React.FC = () => {
               }}
               disabled={isLoading}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isMonitored
-                  ? isDarkMode
-                    ? 'text-red-400 hover:bg-red-900/20'
-                    : 'text-red-600 hover:bg-red-50'
-                  : isDarkMode
-                    ? 'text-white hover:bg-white/10'
-                    : 'text-neutral-700 hover:bg-neutral-100'
+                ? isDarkMode
+                  ? 'text-red-400 hover:bg-red-900/20'
+                  : 'text-red-600 hover:bg-red-50'
+                : isDarkMode
+                  ? 'text-white hover:bg-white/10'
+                  : 'text-neutral-700 hover:bg-neutral-100'
                 }`}
             >
               {isLoading ? (
@@ -519,8 +533,8 @@ const MainPage: React.FC = () => {
                 onClose();
               }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isDarkMode
-                  ? 'text-white hover:bg-white/10'
-                  : 'text-neutral-700 hover:bg-neutral-100'
+                ? 'text-white hover:bg-white/10'
+                : 'text-neutral-700 hover:bg-neutral-100'
                 }`}
             >
               <Share2 className="w-4 h-4" />
@@ -536,8 +550,8 @@ const MainPage: React.FC = () => {
                 onClose();
               }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isDarkMode
-                  ? 'text-white hover:bg-white/10'
-                  : 'text-neutral-700 hover:bg-neutral-100'
+                ? 'text-white hover:bg-white/10'
+                : 'text-neutral-700 hover:bg-neutral-100'
                 }`}
             >
               <Bell className="w-4 h-4" />
@@ -552,8 +566,8 @@ const MainPage: React.FC = () => {
                 onClose();
               }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isDarkMode
-                  ? 'text-red-400 hover:bg-red-900/20'
-                  : 'text-red-600 hover:bg-red-50'
+                ? 'text-red-400 hover:bg-red-900/20'
+                : 'text-red-600 hover:bg-red-50'
                 }`}
             >
               <Trash2 className="w-4 h-4" />
@@ -569,27 +583,27 @@ const MainPage: React.FC = () => {
 
   return (
     <div className={`h-screen flex flex-col transition-all duration-500 font-inter antialiased relative overflow-hidden ${isDarkMode
-        ? 'bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white'
-        : 'bg-gradient-to-br from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
+      ? 'bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white'
+      : 'bg-gradient-to-br from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
       }`}>
 
       {/* Enhanced Professional Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className={`absolute -top-40 -right-40 w-96 h-96 rounded-full opacity-5 blur-3xl ${isDarkMode
-            ? 'bg-gradient-to-br from-red-500 to-neutral-600'
-            : 'bg-gradient-to-br from-red-400 to-neutral-400'
+          ? 'bg-gradient-to-br from-red-500 to-neutral-600'
+          : 'bg-gradient-to-br from-red-400 to-neutral-400'
           }`} />
         <div className={`absolute -bottom-40 -left-40 w-96 h-96 rounded-full opacity-5 blur-3xl ${isDarkMode
-            ? 'bg-gradient-to-tr from-neutral-600 to-red-500'
-            : 'bg-gradient-to-tr from-neutral-400 to-red-400'
+          ? 'bg-gradient-to-tr from-neutral-600 to-red-500'
+          : 'bg-gradient-to-tr from-neutral-400 to-red-400'
           }`} />
       </div>
 
       {/* MOBILE MINIMAL HEADER */}
       {isMobile ? (
         <header className={`flex items-center justify-between px-4 h-16 backdrop-blur-xl shadow-sm border-b flex-shrink-0 z-30 transition-all duration-500 ${isDarkMode
-            ? 'bg-slate-900/90 border-neutral-700/30'
-            : 'bg-white/90 border-neutral-200/60'
+          ? 'bg-slate-900/90 border-neutral-700/30'
+          : 'bg-white/90 border-neutral-200/60'
           }`}>
           {/* Q Logo */}
           <motion.div
@@ -614,8 +628,8 @@ const MainPage: React.FC = () => {
             <motion.button
               onClick={() => setIsPanelOpen(!isPanelOpen)}
               className={`rounded-lg p-2.5 transition-all duration-200 shadow-sm border backdrop-blur-sm ${isDarkMode
-                  ? 'text-white/80 hover:text-white hover:bg-white/10 bg-white/5 border-white/20'
-                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80 bg-white/60 border-neutral-200/60'
+                ? 'text-white/80 hover:text-white hover:bg-white/10 bg-white/5 border-white/20'
+                : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80 bg-white/60 border-neutral-200/60'
                 }`}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -627,8 +641,8 @@ const MainPage: React.FC = () => {
       ) : (
         /* DESKTOP HEADER - Same as original */
         <header className={`flex items-center justify-between px-4 sm:px-8 lg:px-12 h-20 sm:h-24 backdrop-blur-xl shadow-sm border-b flex-shrink-0 z-30 transition-all duration-500 ${isDarkMode
-            ? 'bg-slate-900/90 border-neutral-700/30'
-            : 'bg-white/90 border-neutral-200/60'
+          ? 'bg-slate-900/90 border-neutral-700/30'
+          : 'bg-white/90 border-neutral-200/60'
           }`}>
           <motion.div
             className="flex items-center space-x-3 sm:space-x-5"
@@ -661,8 +675,8 @@ const MainPage: React.FC = () => {
           <div className="flex items-center space-x-3">
             {/* Live Connection Status */}
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${isDarkMode
-                ? 'bg-white/5 text-emerald-400 border border-white/20'
-                : 'bg-white/60 text-emerald-700 border border-neutral-200/60'
+              ? 'bg-white/5 text-emerald-400 border border-white/20'
+              : 'bg-white/60 text-emerald-700 border border-neutral-200/60'
               }`}>
               <motion.div
                 className="w-1.5 h-1.5 bg-emerald-500 rounded-full"
@@ -682,8 +696,8 @@ const MainPage: React.FC = () => {
             <motion.button
               onClick={() => setIsPanelOpen(!isPanelOpen)}
               className={`rounded-lg sm:rounded-xl p-2 sm:p-3 transition-all duration-200 shadow-sm border backdrop-blur-sm ${isDarkMode
-                  ? 'text-white/80 hover:text-white hover:bg-white/10 bg-white/5 border-white/20'
-                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80 bg-white/60 border-neutral-200/60'
+                ? 'text-white/80 hover:text-white hover:bg-white/10 bg-white/5 border-white/20'
+                : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80 bg-white/60 border-neutral-200/60'
                 }`}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -706,8 +720,8 @@ const MainPage: React.FC = () => {
               <motion.button
                 onClick={() => setIsAiSearchOpen(true)}
                 className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-300 shadow-md ${isDarkMode
-                    ? 'bg-red-800 text-white hover:bg-red-700'
-                    : 'bg-neutral-800 text-white hover:bg-neutral-700'
+                  ? 'bg-red-800 text-white hover:bg-red-700'
+                  : 'bg-neutral-800 text-white hover:bg-neutral-700'
                   }`}
                 whileTap={{ scale: 0.98 }}
               >
@@ -747,12 +761,12 @@ const MainPage: React.FC = () => {
                           if (isSelected) setActiveDataIndex(dataIndex);
                         }}
                         className={`flex-shrink-0 w-48 p-3 rounded-xl border transition-all duration-300 cursor-pointer relative ${isActive
-                            ? isDarkMode
-                              ? "bg-slate-900/80 border-red-500/50 shadow-lg shadow-red-500/10"
-                              : "bg-white border-red-500/50 shadow-lg shadow-red-500/10"
-                            : isDarkMode
-                              ? "bg-slate-900/60 border-neutral-700/50 hover:border-neutral-600/70"
-                              : "bg-white/80 border-neutral-200/60 hover:border-neutral-300/80"
+                          ? isDarkMode
+                            ? "bg-slate-900/80 border-red-500/50 shadow-lg shadow-red-500/10"
+                            : "bg-white border-red-500/50 shadow-lg shadow-red-500/10"
+                          : isDarkMode
+                            ? "bg-slate-900/60 border-neutral-700/50 hover:border-neutral-600/70"
+                            : "bg-white/80 border-neutral-200/60 hover:border-neutral-300/80"
                           }`}
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
@@ -792,8 +806,8 @@ const MainPage: React.FC = () => {
                               setActiveDropdownStock(dataItem);
                             }}
                             className={`p-1.5 rounded-lg transition-colors ${isDarkMode
-                                ? 'hover:bg-white/10 text-white/70'
-                                : 'hover:bg-neutral-100 text-neutral-500'
+                              ? 'hover:bg-white/10 text-white/70'
+                              : 'hover:bg-neutral-100 text-neutral-500'
                               }`}
                           >
                             <MoreVertical className="w-4 h-4" />
@@ -842,8 +856,8 @@ const MainPage: React.FC = () => {
               <button
                 onClick={() => setIsLeftSidebarCollapsed((v) => !v)}
                 className={`ms-[-16px] p-2 sm:p-3 rounded-xl transition-all backdrop-blur-sm shadow-sm border ${isDarkMode
-                    ? 'hover:bg-white/10 text-white/80 hover:text-white border-white/20'
-                    : 'hover:bg-neutral-100/80 text-neutral-600 hover:text-neutral-900 border-neutral-200/60'
+                  ? 'hover:bg-white/10 text-white/80 hover:text-white border-white/20'
+                  : 'hover:bg-neutral-100/80 text-neutral-600 hover:text-neutral-900 border-neutral-200/60'
                   }`}
               >
                 {isLeftSidebarCollapsed ? (
@@ -862,8 +876,8 @@ const MainPage: React.FC = () => {
                   <motion.button
                     onClick={() => setIsAiSearchOpen(true)}
                     className={`w-full flex items-center gap-3 p-3 sm:p-4 rounded-2xl transition-all duration-300 group shadow-lg hover:shadow-xl ${isDarkMode
-                        ? 'bg-red-800 text-white hover:bg-red-700'
-                        : 'bg-neutral-800 text-white hover:bg-neutral-700'
+                      ? 'bg-red-800 text-white hover:bg-red-700'
+                      : 'bg-neutral-800 text-white hover:bg-neutral-700'
                       }`}
                     whileTap={{ scale: 0.98 }}
                   >
@@ -884,8 +898,8 @@ const MainPage: React.FC = () => {
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       className={`w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-4 rounded-xl border text-sm sm:text-base transition-all placeholder-opacity-60 ${isDarkMode
-                          ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
-                          : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
+                        ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
+                        : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
                         } focus:outline-none focus:ring-2 focus:ring-red-500/20`}
                     />
                   </div>
@@ -900,8 +914,8 @@ const MainPage: React.FC = () => {
                         Favorites
                       </h3>
                       <span className={`text-xs sm:text-sm px-3 py-1.5 rounded-full font-bold ${isDarkMode
-                          ? 'bg-white/10 text-white/70 border border-white/20'
-                          : 'bg-neutral-100/80 text-neutral-600 border border-neutral-200/60'
+                        ? 'bg-white/10 text-white/70 border border-white/20'
+                        : 'bg-neutral-100/80 text-neutral-600 border border-neutral-200/60'
                         }`}>
                         {dataOptions.length}
                       </span>
@@ -928,12 +942,12 @@ const MainPage: React.FC = () => {
                                 if (isSelected) setActiveDataIndex(dataIndex);
                               }}
                               className={`p-4 sm:p-5 rounded-2xl border transition-all duration-300 group cursor-pointer relative overflow-hidden ${isActive
-                                  ? isDarkMode
-                                    ? "bg-slate-900/80 border-red-500/50 shadow-lg shadow-red-500/10"
-                                    : "bg-white border-red-500/50 shadow-lg shadow-red-500/10"
-                                  : isDarkMode
-                                    ? "bg-slate-900/60 border-neutral-700/50 hover:border-neutral-600/70 hover:bg-slate-900/80"
-                                    : "bg-white/80 border-neutral-200/60 hover:border-neutral-300/80 hover:bg-white hover:shadow-md"
+                                ? isDarkMode
+                                  ? "bg-slate-900/80 border-red-500/50 shadow-lg shadow-red-500/10"
+                                  : "bg-white border-red-500/50 shadow-lg shadow-red-500/10"
+                                : isDarkMode
+                                  ? "bg-slate-900/60 border-neutral-700/50 hover:border-neutral-600/70 hover:bg-slate-900/80"
+                                  : "bg-white/80 border-neutral-200/60 hover:border-neutral-300/80 hover:bg-white hover:shadow-md"
                                 }`}
                               initial={{ opacity: 0, y: 10 }}
                               animate={{ opacity: 1, y: 0 }}
@@ -976,10 +990,10 @@ const MainPage: React.FC = () => {
                                     }}
                                     disabled={isLoading}
                                     className={`p-2 sm:p-3 rounded-xl transition-all ${isSelected
-                                        ? "text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                                        : isDarkMode
-                                          ? "text-white/60 hover:text-white hover:bg-white/10"
-                                          : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100/80"
+                                      ? "text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                      : isDarkMode
+                                        ? "text-white/60 hover:text-white hover:bg-white/10"
+                                        : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100/80"
                                       }`}
                                     title={isSelected ? "Stop Monitoring" : "Start Monitoring"}
                                     whileTap={{ scale: 0.9 }}
@@ -1000,8 +1014,8 @@ const MainPage: React.FC = () => {
                                       setLowerThreshold(matched ? matched?.lower_threshold?.toString() : "");
                                     }}
                                     className={`p-2 sm:p-3 rounded-xl transition-all ${isDarkMode
-                                        ? "text-white/60 hover:text-white hover:bg-white/10"
-                                        : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100/80"
+                                      ? "text-white/60 hover:text-white hover:bg-white/10"
+                                      : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100/80"
                                       }`}
                                     title="Set Alert"
                                     whileTap={{ scale: 0.9 }}
@@ -1015,8 +1029,8 @@ const MainPage: React.FC = () => {
                                       setConfirmPopup({ data: dataItem });
                                     }}
                                     className={`p-2 sm:p-3 rounded-xl transition-all ${isDarkMode
-                                        ? "text-white/60 hover:text-red-400 hover:bg-white/10"
-                                        : "text-neutral-500 hover:text-red-600 hover:bg-neutral-100/80"
+                                      ? "text-white/60 hover:text-red-400 hover:bg-white/10"
+                                      : "text-neutral-500 hover:text-red-600 hover:bg-neutral-100/80"
                                       }`}
                                     title="Remove"
                                     whileTap={{ scale: 0.9 }}
@@ -1046,8 +1060,8 @@ const MainPage: React.FC = () => {
                 <motion.button
                   onClick={() => setIsAiSearchOpen(true)}
                   className={`w-12 h-12 flex items-center justify-center rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl ${isDarkMode
-                      ? 'bg-red-800 text-white hover:bg-red-700'
-                      : 'bg-neutral-800 text-white hover:bg-neutral-700'
+                    ? 'bg-red-800 text-white hover:bg-red-700'
+                    : 'bg-neutral-800 text-white hover:bg-neutral-700'
                     }`}
                   title="AI Stock Search"
                   whileTap={{ scale: 0.95 }}
@@ -1062,15 +1076,15 @@ const MainPage: React.FC = () => {
         {/* MAIN CONTENT SECTION - RESPONSIVE GRAPH HEIGHT */}
         <section
           className={`${isMobile
-              ? 'flex-1 p-4 min-h-0'
-              : 'flex-1 min-h-0'
+            ? 'flex-1 p-4 min-h-0'
+            : 'flex-1 min-h-0'
             }`}
           style={!isMobile ? { height: 'calc(100vh - 200px)' } : undefined}
         >
           {selectedData.length === 0 ? (
             <div className={`flex flex-col items-center justify-center h-full rounded-2xl sm:rounded-3xl border shadow-lg backdrop-blur-xl ${isDarkMode
-                ? 'border-neutral-700/50 bg-slate-900/60'
-                : 'border-neutral-200/60 bg-white/95'
+              ? 'border-neutral-700/50 bg-slate-900/60'
+              : 'border-neutral-200/60 bg-white/95'
               }`}>
               <motion.div
                 className="text-center space-y-6 sm:space-y-8 p-8 sm:p-12"
@@ -1079,8 +1093,8 @@ const MainPage: React.FC = () => {
                 transition={{ duration: 0.6 }}
               >
                 <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl flex items-center justify-center mx-auto relative ${isDarkMode
-                    ? 'bg-white/5'
-                    : 'bg-gradient-to-tr from-neutral-200/80 to-neutral-300/80'
+                  ? 'bg-white/5'
+                  : 'bg-gradient-to-tr from-neutral-200/80 to-neutral-300/80'
                   }`}>
                   <TrendingUp className={`w-10 h-10 sm:w-12 sm:h-12 ${isDarkMode ? 'text-red-500' : 'text-neutral-600'
                     }`} />
@@ -1104,8 +1118,8 @@ const MainPage: React.FC = () => {
                 <motion.button
                   onClick={() => setIsAiSearchOpen(true)}
                   className={`px-6 sm:px-8 py-3 sm:py-4 rounded-2xl transition-all duration-300 font-bold shadow-lg hover:shadow-xl text-sm sm:text-base ${isDarkMode
-                      ? 'bg-red-800 text-white hover:bg-red-700'
-                      : 'bg-neutral-800 text-white hover:bg-neutral-700'
+                    ? 'bg-red-800 text-white hover:bg-red-700'
+                    : 'bg-neutral-800 text-white hover:bg-neutral-700'
                     }`}
                   whileTap={{ scale: 0.97 }}
                 >
@@ -1190,8 +1204,8 @@ const MainPage: React.FC = () => {
                           key={dataValue}
                           layout
                           className={`rounded-2xl border p-4 sm:p-6 cursor-pointer transition-all duration-300 backdrop-blur-xl hover:shadow-lg ${isDarkMode
-                              ? 'border-neutral-700/50 bg-slate-900/60 hover:border-neutral-600/70 hover:bg-slate-900/80'
-                              : 'border-neutral-200/60 bg-white/80 hover:border-neutral-300/80 hover:bg-white hover:shadow-md'
+                            ? 'border-neutral-700/50 bg-slate-900/60 hover:border-neutral-600/70 hover:bg-slate-900/80'
+                            : 'border-neutral-200/60 bg-white/80 hover:border-neutral-300/80 hover:bg-white hover:shadow-md'
                             }`}
                           onClick={() => setActiveDataIndex(index)}
                           whileHover={{ y: -2 }}
@@ -1209,8 +1223,8 @@ const MainPage: React.FC = () => {
                             />
                           </div>
                           <div className={`h-16 sm:h-20 rounded-xl flex items-center justify-center relative overflow-hidden ${isDarkMode
-                              ? 'bg-white/5'
-                              : 'bg-neutral-100/70'
+                            ? 'bg-white/5'
+                            : 'bg-neutral-100/70'
                             }`}>
                             {chartPoints && chartPoints.length > 0 ? (
                               <div className="w-full h-full p-2 opacity-80">

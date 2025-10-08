@@ -1,3 +1,4 @@
+//Mobile Responsive AlertPage.tsx
 import React, { useState, useEffect } from "react";
 import { Search, BellPlus, Trash2, Edit, Pause, Play, Mail, Phone, X, AlertTriangle, Loader, Bell, Menu } from "lucide-react";
 import RightSidebar from "../components/RightSidebar";
@@ -11,7 +12,8 @@ import {
   deleteAlert,
   createAlert,
   updateAlert,
-  type FavoriteStockFull
+  type FavoriteStockFull,
+  setStockAlert
 } from "../services/quantiforeApi";
 
 type Alert = FavoriteStockFull;
@@ -69,20 +71,37 @@ export default function AlertPage() {
 
   const handleSaveAlert = async (alertData: Partial<Alert>) => {
     try {
-      if (editingAlert) {
-        await updateAlert(editingAlert.fav_stocks_guid, alertData);
-      } else {
-        await createAlert(alertData);
+      // Determine GUID for setStockAlert and validate
+      const guid = editingAlert ? editingAlert.fav_stocks_guid : alertData.fav_stocks_guid;
+      if (!guid) {
+        setError('Stock GUID is required to create/update alert');
+        return;
       }
 
+      await setStockAlert(
+        guid,
+        alertData.upper_threshold ?? 0,
+        alertData.lower_threshold ?? 0,
+        alertData.last_alert_frequency ?? 'daily',
+        alertData.email_alert ?? [],
+        alertData.sms_alert ?? []
+      );
+
+      // Refresh alerts data
       const data = await fetchFavoriteStocks(true);
       setAlerts(data);
+
+      // Refresh monitoring data for main page
+      sessionStorage.removeItem('monitoring_data');
+      sessionStorage.removeItem('monitoring_last_updated');
+
     } catch (err) {
       console.error("Error saving alert:", err);
-      setError("Failed to save alert");
+      setError('Failed to save alert');
     }
     setIsModalOpen(false);
   };
+
 
   const handleDelete = async (guid: string) => {
     try {
@@ -123,8 +142,8 @@ export default function AlertPage() {
 
   const renderEmptyState = () => (
     <div className={`flex flex-col items-center justify-center h-full rounded-2xl sm:rounded-3xl border shadow-lg backdrop-blur-xl ${isDarkMode
-        ? 'border-neutral-700/50 bg-slate-900/60'
-        : 'border-neutral-200/60 bg-white/95'
+      ? 'border-neutral-700/50 bg-slate-900/60'
+      : 'border-neutral-200/60 bg-white/95'
       }`}>
       <motion.div
         className="text-center space-y-6 sm:space-y-8 p-8 sm:p-12"
@@ -133,8 +152,8 @@ export default function AlertPage() {
         transition={{ duration: 0.6 }}
       >
         <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl flex items-center justify-center mx-auto relative ${isDarkMode
-            ? 'bg-white/5'
-            : 'bg-gradient-to-tr from-neutral-200/80 to-neutral-300/80'
+          ? 'bg-white/5'
+          : 'bg-gradient-to-tr from-neutral-200/80 to-neutral-300/80'
           }`}>
           <Bell className={`w-10 h-10 sm:w-12 sm:h-12 ${isDarkMode ? 'text-red-500' : 'text-neutral-600'
             }`} />
@@ -155,8 +174,8 @@ export default function AlertPage() {
         <motion.button
           onClick={() => handleOpenModal()}
           className={`px-6 sm:px-8 py-3 sm:py-4 rounded-2xl transition-all duration-300 font-bold shadow-lg hover:shadow-xl text-sm sm:text-base ${isDarkMode
-              ? 'bg-red-800 text-white hover:bg-red-700'
-              : 'bg-neutral-800 text-white hover:bg-neutral-700'
+            ? 'bg-red-800 text-white hover:bg-red-700'
+            : 'bg-neutral-800 text-white hover:bg-neutral-700'
             }`}
           whileTap={{ scale: 0.97 }}
         >
@@ -168,26 +187,26 @@ export default function AlertPage() {
 
   return (
     <div className={`relative flex flex-col h-screen w-full overflow-hidden transition-all duration-500 font-inter antialiased ${isDarkMode
-        ? 'bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white'
-        : 'bg-gradient-to-br from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
+      ? 'bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white'
+      : 'bg-gradient-to-br from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
       }`}>
       {/* Enhanced Professional Background - Same as Landing Page */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className={`absolute -top-40 -right-40 w-96 h-96 rounded-full opacity-5 blur-3xl ${isDarkMode
-            ? 'bg-gradient-to-br from-red-500 to-neutral-600'
-            : 'bg-gradient-to-br from-red-400 to-neutral-400'
+          ? 'bg-gradient-to-br from-red-500 to-neutral-600'
+          : 'bg-gradient-to-br from-red-400 to-neutral-400'
           }`} />
         <div className={`absolute -bottom-40 -left-40 w-96 h-96 rounded-full opacity-5 blur-3xl ${isDarkMode
-            ? 'bg-gradient-to-tr from-neutral-600 to-red-500'
-            : 'bg-gradient-to-tr from-neutral-400 to-red-400'
+          ? 'bg-gradient-to-tr from-neutral-600 to-red-500'
+          : 'bg-gradient-to-tr from-neutral-400 to-red-400'
           }`} />
       </div>
 
       {/* MOBILE MINIMAL HEADER */}
       {isMobile ? (
         <header className={`flex items-center justify-between px-4 h-16 backdrop-blur-xl shadow-sm border-b flex-shrink-0 z-30 transition-all duration-500 ${isDarkMode
-            ? 'bg-slate-900/90 border-neutral-700/30'
-            : 'bg-white/90 border-neutral-200/60'
+          ? 'bg-slate-900/90 border-neutral-700/30'
+          : 'bg-white/90 border-neutral-200/60'
           }`}>
           {/* Q Logo */}
           <motion.div
@@ -212,8 +231,8 @@ export default function AlertPage() {
             <motion.button
               onClick={() => setIsPanelOpen(!isPanelOpen)}
               className={`rounded-lg p-2.5 transition-all duration-200 shadow-sm border backdrop-blur-sm ${isDarkMode
-                  ? 'text-white/80 hover:text-white hover:bg-white/10 bg-white/5 border-white/20'
-                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80 bg-white/60 border-neutral-200/60'
+                ? 'text-white/80 hover:text-white hover:bg-white/10 bg-white/5 border-white/20'
+                : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80 bg-white/60 border-neutral-200/60'
                 }`}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -225,8 +244,8 @@ export default function AlertPage() {
       ) : (
         /* DESKTOP HEADER */
         <header className={`flex items-center justify-between px-4 sm:px-8 lg:px-12 h-20 sm:h-24 backdrop-blur-xl shadow-sm border-b flex-shrink-0 z-30 transition-all duration-500 ${isDarkMode
-            ? 'bg-slate-900/90 border-neutral-700/30'
-            : 'bg-white/90 border-neutral-200/60'
+          ? 'bg-slate-900/90 border-neutral-700/30'
+          : 'bg-white/90 border-neutral-200/60'
           }`}>
           <motion.div
             className="flex items-center space-x-3 sm:space-x-5"
@@ -259,8 +278,8 @@ export default function AlertPage() {
           <div className="flex items-center space-x-3">
             {/* Live Connection Status */}
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${isDarkMode
-                ? 'bg-white/5 text-emerald-400 border border-white/20'
-                : 'bg-white/60 text-emerald-700 border border-neutral-200/60'
+              ? 'bg-white/5 text-emerald-400 border border-white/20'
+              : 'bg-white/60 text-emerald-700 border border-neutral-200/60'
               }`}>
               <motion.div
                 className="w-1.5 h-1.5 bg-emerald-500 rounded-full"
@@ -280,8 +299,8 @@ export default function AlertPage() {
             <motion.button
               onClick={() => setIsPanelOpen(!isPanelOpen)}
               className={`rounded-lg sm:rounded-xl p-2 sm:p-3 transition-all duration-200 shadow-sm border backdrop-blur-sm ${isDarkMode
-                  ? 'text-white/80 hover:text-white hover:bg-white/10 bg-white/5 border-white/20'
-                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80 bg-white/60 border-neutral-200/60'
+                ? 'text-white/80 hover:text-white hover:bg-white/10 bg-white/5 border-white/20'
+                : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80 bg-white/60 border-neutral-200/60'
                 }`}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -304,8 +323,8 @@ export default function AlertPage() {
               <div className="flex gap-3 overflow-x-auto pb-2">
                 <motion.div
                   className={`flex-shrink-0 w-32 p-3 rounded-xl border transition-all duration-300 ${isDarkMode
-                      ? 'bg-slate-900/60 border-neutral-700/50'
-                      : 'bg-white/80 border-neutral-200/60'
+                    ? 'bg-slate-900/60 border-neutral-700/50'
+                    : 'bg-white/80 border-neutral-200/60'
                     }`}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -325,8 +344,8 @@ export default function AlertPage() {
 
                 <motion.div
                   className={`flex-shrink-0 w-32 p-3 rounded-xl border transition-all duration-300 ${isDarkMode
-                      ? 'bg-slate-900/60 border-green-700/50'
-                      : 'bg-white/80 border-green-200/60'
+                    ? 'bg-slate-900/60 border-green-700/50'
+                    : 'bg-white/80 border-green-200/60'
                     }`}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -345,8 +364,8 @@ export default function AlertPage() {
 
                 <motion.div
                   className={`flex-shrink-0 w-32 p-3 rounded-xl border transition-all duration-300 ${isDarkMode
-                      ? 'bg-slate-900/60 border-orange-700/50'
-                      : 'bg-white/80 border-orange-200/60'
+                    ? 'bg-slate-900/60 border-orange-700/50'
+                    : 'bg-white/80 border-orange-200/60'
                     }`}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -374,16 +393,16 @@ export default function AlertPage() {
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm transition-all placeholder-opacity-60 ${isDarkMode
-                        ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
-                        : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
+                      ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
+                      : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
                       } focus:outline-none focus:ring-2 focus:ring-red-500/20`}
                   />
                 </div>
                 <motion.button
                   onClick={() => handleOpenModal()}
                   className={`px-3 py-2.5 rounded-xl transition-all duration-300 font-bold shadow-md text-sm ${isDarkMode
-                      ? 'bg-red-800 text-white hover:bg-red-700'
-                      : 'bg-neutral-800 text-white hover:bg-neutral-700'
+                    ? 'bg-red-800 text-white hover:bg-red-700'
+                    : 'bg-neutral-800 text-white hover:bg-neutral-700'
                     }`}
                   whileTap={{ scale: 0.95 }}
                 >
@@ -412,8 +431,8 @@ export default function AlertPage() {
               <motion.button
                 onClick={() => handleOpenModal()}
                 className={`flex items-center gap-2 px-4 sm:px-6 py-3 sm:py-4 rounded-2xl transition-all duration-300 font-bold shadow-lg hover:shadow-xl text-sm sm:text-base ${isDarkMode
-                    ? 'bg-red-800 text-white hover:bg-red-700'
-                    : 'bg-neutral-800 text-white hover:bg-neutral-700'
+                  ? 'bg-red-800 text-white hover:bg-red-700'
+                  : 'bg-neutral-800 text-white hover:bg-neutral-700'
                   }`}
                 whileTap={{ scale: 0.97 }}
               >
@@ -428,8 +447,8 @@ export default function AlertPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
               <motion.div
                 className={`p-4 sm:p-6 rounded-2xl border shadow-sm backdrop-blur-xl ${isDarkMode
-                    ? 'bg-slate-900/60 border-neutral-700/50'
-                    : 'bg-white/90 border-neutral-200/60'
+                  ? 'bg-slate-900/60 border-neutral-700/50'
+                  : 'bg-white/90 border-neutral-200/60'
                   }`}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -456,8 +475,8 @@ export default function AlertPage() {
 
               <motion.div
                 className={`p-4 sm:p-6 rounded-2xl border shadow-sm backdrop-blur-xl ${isDarkMode
-                    ? 'bg-slate-900/60 border-green-700/50'
-                    : 'bg-white/90 border-green-200/60'
+                  ? 'bg-slate-900/60 border-green-700/50'
+                  : 'bg-white/90 border-green-200/60'
                   }`}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -482,8 +501,8 @@ export default function AlertPage() {
 
               <motion.div
                 className={`p-4 sm:p-6 rounded-2xl border shadow-sm backdrop-blur-xl ${isDarkMode
-                    ? 'bg-slate-900/60 border-orange-700/50'
-                    : 'bg-white/90 border-orange-200/60'
+                  ? 'bg-slate-900/60 border-orange-700/50'
+                  : 'bg-white/90 border-orange-200/60'
                   }`}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -519,8 +538,8 @@ export default function AlertPage() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className={`w-full pl-12 pr-4 py-3 sm:py-4 rounded-xl border text-sm sm:text-base transition-all placeholder-opacity-60 ${isDarkMode
-                      ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
-                      : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
+                    ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
+                    : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
                     } focus:outline-none focus:ring-2 focus:ring-red-500/20`}
                 />
               </div>
@@ -530,8 +549,8 @@ export default function AlertPage() {
           {/* ALERTS LIST CONTENT */}
           {loading ? (
             <div className={`flex items-center justify-center ${isMobile ? 'flex-1' : 'h-96'} rounded-2xl border backdrop-blur-xl ${isDarkMode
-                ? 'border-neutral-700/50 bg-slate-900/60'
-                : 'border-neutral-200/60 bg-white/95'
+              ? 'border-neutral-700/50 bg-slate-900/60'
+              : 'border-neutral-200/60 bg-white/95'
               }`}>
               <div className="text-center">
                 <motion.div
@@ -545,8 +564,8 @@ export default function AlertPage() {
             </div>
           ) : error ? (
             <div className={`flex items-center justify-center ${isMobile ? 'flex-1' : 'h-96'} rounded-2xl border backdrop-blur-xl ${isDarkMode
-                ? 'border-red-700/50 bg-red-900/20'
-                : 'border-red-200/60 bg-red-50/95'
+              ? 'border-red-700/50 bg-red-900/20'
+              : 'border-red-200/60 bg-red-50/95'
               }`}>
               <div className="text-center">
                 <AlertTriangle className={`w-12 h-12 mx-auto mb-4 ${isDarkMode ? 'text-red-400' : 'text-red-600'
@@ -568,8 +587,8 @@ export default function AlertPage() {
                     <motion.div
                       key={alert.fav_stocks_guid}
                       className={`p-4 rounded-xl border transition-all duration-300 ${isDarkMode
-                          ? 'bg-slate-900/60 border-neutral-700/50'
-                          : 'bg-white/80 border-neutral-200/60'
+                        ? 'bg-slate-900/60 border-neutral-700/50'
+                        : 'bg-white/80 border-neutral-200/60'
                         }`}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -583,8 +602,8 @@ export default function AlertPage() {
                           </h3>
                           <div className="flex items-center gap-2 mt-1">
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${alert.monitored
-                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                : 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300'
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                              : 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300'
                               }`}>
                               {alert.monitored ? (
                                 <Play className="w-3 h-3 mr-1" />
@@ -599,8 +618,8 @@ export default function AlertPage() {
                           <button
                             onClick={() => handleToggleStatus(alert.fav_stocks_guid)}
                             className={`p-1.5 rounded-lg transition-colors ${isDarkMode
-                                ? 'hover:bg-white/10 text-white/70'
-                                : 'hover:bg-neutral-100 text-neutral-500'
+                              ? 'hover:bg-white/10 text-white/70'
+                              : 'hover:bg-neutral-100 text-neutral-500'
                               }`}
                           >
                             {alert.monitored ? (
@@ -612,8 +631,8 @@ export default function AlertPage() {
                           <button
                             onClick={() => handleOpenModal(alert)}
                             className={`p-1.5 rounded-lg transition-colors ${isDarkMode
-                                ? 'hover:bg-white/10 text-white/70'
-                                : 'hover:bg-neutral-100 text-neutral-500'
+                              ? 'hover:bg-white/10 text-white/70'
+                              : 'hover:bg-neutral-100 text-neutral-500'
                               }`}
                           >
                             <Edit className="w-4 h-4" />
@@ -621,8 +640,8 @@ export default function AlertPage() {
                           <button
                             onClick={() => handleDelete(alert.fav_stocks_guid)}
                             className={`p-1.5 rounded-lg transition-colors ${isDarkMode
-                                ? 'hover:bg-red-900/20 text-red-400'
-                                : 'hover:bg-red-50 text-red-600'
+                              ? 'hover:bg-red-900/20 text-red-400'
+                              : 'hover:bg-red-50 text-red-600'
                               }`}
                           >
                             <Trash2 className="w-4 h-4" />
@@ -666,8 +685,8 @@ export default function AlertPage() {
               ) : (
                 /* DESKTOP TABLE LAYOUT */
                 <div className={`rounded-2xl border shadow-lg backdrop-blur-xl overflow-hidden ${isDarkMode
-                    ? 'border-neutral-700/50 bg-slate-900/60'
-                    : 'border-neutral-200/60 bg-white/95'
+                  ? 'border-neutral-700/50 bg-slate-900/60'
+                  : 'border-neutral-200/60 bg-white/95'
                   }`}>
                   <div className="overflow-x-auto">
                     <table className="w-full">
@@ -713,8 +732,8 @@ export default function AlertPage() {
                             </td>
                             <td className="px-6 py-4">
                               <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${alert.monitored
-                                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                  : 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300'
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                : 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300'
                                 }`}>
                                 {alert.monitored ? (
                                   <Play className="w-3 h-3 mr-1" />
@@ -767,8 +786,8 @@ export default function AlertPage() {
                                 <button
                                   onClick={() => handleToggleStatus(alert.fav_stocks_guid)}
                                   className={`p-2 rounded-lg transition-colors ${isDarkMode
-                                      ? 'hover:bg-white/10 text-white/70'
-                                      : 'hover:bg-neutral-100 text-neutral-500'
+                                    ? 'hover:bg-white/10 text-white/70'
+                                    : 'hover:bg-neutral-100 text-neutral-500'
                                     }`}
                                   title={alert.monitored ? 'Pause Alert' : 'Resume Alert'}
                                 >
@@ -781,8 +800,8 @@ export default function AlertPage() {
                                 <button
                                   onClick={() => handleOpenModal(alert)}
                                   className={`p-2 rounded-lg transition-colors ${isDarkMode
-                                      ? 'hover:bg-white/10 text-white/70'
-                                      : 'hover:bg-neutral-100 text-neutral-500'
+                                    ? 'hover:bg-white/10 text-white/70'
+                                    : 'hover:bg-neutral-100 text-neutral-500'
                                     }`}
                                   title="Edit Alert"
                                 >
@@ -791,8 +810,8 @@ export default function AlertPage() {
                                 <button
                                   onClick={() => handleDelete(alert.fav_stocks_guid)}
                                   className={`p-2 rounded-lg transition-colors ${isDarkMode
-                                      ? 'hover:bg-red-900/20 text-red-400'
-                                      : 'hover:bg-red-50 text-red-600'
+                                    ? 'hover:bg-red-900/20 text-red-400'
+                                    : 'hover:bg-red-50 text-red-600'
                                     }`}
                                   title="Delete Alert"
                                 >
@@ -879,7 +898,9 @@ function AlertModal({
   onSave: (data: Partial<Alert>) => void;
 }) {
   const { isDarkMode } = useTheme();
+  const [availableStocks, setAvailableStocks] = useState<{ guid: string, label: string }[]>([]);
   const [formData, setFormData] = useState({
+    stock_guid: alert?.fav_stocks_guid || '',
     stock_name: alert?.stock_name || '',
     upper_threshold: alert?.upper_threshold?.toString() || '',
     lower_threshold: alert?.lower_threshold?.toString() || '',
@@ -889,17 +910,46 @@ function AlertModal({
   });
   const [error, setError] = useState('');
 
+  // Load available stocks from session storage
+  useEffect(() => {
+    try {
+      const favoriteStocks = sessionStorage.getItem("favorite_stocks");
+      if (favoriteStocks) {
+        const stocks = JSON.parse(favoriteStocks);
+        const stockOptions = stocks.map((stock: any) => ({
+          guid: stock.guid,
+          label: stock.label || stock.name || `Stock ${stock.guid.slice(0, 8)}`
+        }));
+        setAvailableStocks(stockOptions);
+      }
+    } catch (error) {
+      console.error('Error loading stocks:', error);
+      setAvailableStocks([]);
+    }
+  }, []);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+
+    if (name === 'stock_guid') {
+      // When stock is selected, also update stock_name for display
+      const selectedStock = availableStocks.find(stock => stock.guid === value);
+      setFormData(prev => ({
+        ...prev,
+        [name]: value,
+        stock_name: selectedStock?.label || ''
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const { stock_name, upper_threshold, lower_threshold, email_alert, sms_alert } = formData;
+    const { stock_guid, upper_threshold, lower_threshold, email_alert, sms_alert } = formData;
 
-    if (!stock_name.trim()) {
-      setError('Stock name is required');
+    if (!stock_guid) {
+      setError('Please select a stock');
       return;
     }
 
@@ -909,7 +959,8 @@ function AlertModal({
     }
 
     const processedData: Partial<Alert> = {
-      stock_name: stock_name.trim(),
+      fav_stocks_guid: stock_guid,
+      stock_name: formData.stock_name,
       upper_threshold: upper_threshold ? parseFloat(upper_threshold) : undefined,
       lower_threshold: lower_threshold ? parseFloat(lower_threshold) : undefined,
       email_alert: email_alert ? email_alert.split(',').map(e => e.trim()).filter(e => e) : [],
@@ -925,8 +976,8 @@ function AlertModal({
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <motion.div
         className={`w-full max-w-md rounded-2xl border shadow-2xl backdrop-blur-xl ${isDarkMode
-            ? 'bg-slate-900/95 border-neutral-700/50'
-            : 'bg-white/95 border-neutral-200/60'
+          ? 'bg-slate-900/95 border-neutral-700/50'
+          : 'bg-white/95 border-neutral-200/60'
           }`}
         initial={{ opacity: 0, scale: 0.9, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -942,8 +993,8 @@ function AlertModal({
             <button
               onClick={onClose}
               className={`p-2 rounded-lg transition-colors ${isDarkMode
-                  ? 'hover:bg-white/10 text-white/70'
-                  : 'hover:bg-neutral-100 text-neutral-500'
+                ? 'hover:bg-white/10 text-white/70'
+                : 'hover:bg-neutral-100 text-neutral-500'
                 }`}
             >
               <X className="w-5 h-5" />
@@ -962,22 +1013,36 @@ function AlertModal({
             </motion.div>
           )}
 
+          {/* Stock Selection Dropdown */}
           <div>
             <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-neutral-900'
               }`}>
               Stock Name
             </label>
-            <input
-              type="text"
-              name="stock_name"
-              value={formData.stock_name}
+            <select
+              name="stock_guid"
+              value={formData.stock_guid}
               onChange={handleChange}
               className={`w-full px-4 py-3 rounded-xl border transition-all ${isDarkMode
-                  ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
-                  : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
+                ? 'bg-white/5 border-white/20 text-white focus:bg-white/10 focus:border-white/30'
+                : 'bg-white/60 border-neutral-200/60 text-neutral-800 focus:bg-white/80 focus:border-neutral-300/80'
                 } focus:outline-none focus:ring-2 focus:ring-red-500/20`}
-              placeholder="Enter stock name..."
-            />
+              required
+            >
+              <option value="" disabled>
+                {availableStocks.length > 0 ? 'Select a stock...' : 'No stocks available'}
+              </option>
+              {availableStocks.map((stock) => (
+                <option key={stock.guid} value={stock.guid}>
+                  {stock.label}
+                </option>
+              ))}
+            </select>
+            {availableStocks.length === 0 && (
+              <p className={`text-xs mt-1 ${isDarkMode ? 'text-white/60' : 'text-neutral-500'}`}>
+                Add stocks to favorites first to create alerts
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -988,12 +1053,13 @@ function AlertModal({
               </label>
               <input
                 type="number"
+                step="0.01"
                 name="upper_threshold"
                 value={formData.upper_threshold}
                 onChange={handleChange}
                 className={`w-full px-4 py-3 rounded-xl border transition-all ${isDarkMode
-                    ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
-                    : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
+                  ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
+                  : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
                   } focus:outline-none focus:ring-2 focus:ring-red-500/20`}
                 placeholder="0.00"
               />
@@ -1005,12 +1071,13 @@ function AlertModal({
               </label>
               <input
                 type="number"
+                step="0.01"
                 name="lower_threshold"
                 value={formData.lower_threshold}
                 onChange={handleChange}
                 className={`w-full px-4 py-3 rounded-xl border transition-all ${isDarkMode
-                    ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
-                    : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
+                  ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
+                  : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
                   } focus:outline-none focus:ring-2 focus:ring-red-500/20`}
                 placeholder="0.00"
               />
@@ -1028,8 +1095,8 @@ function AlertModal({
               value={formData.email_alert}
               onChange={handleChange}
               className={`w-full px-4 py-3 rounded-xl border transition-all ${isDarkMode
-                  ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
-                  : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
+                ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
+                : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
                 } focus:outline-none focus:ring-2 focus:ring-red-500/20`}
               placeholder="email1@example.com, email2@example.com"
             />
@@ -1046,8 +1113,8 @@ function AlertModal({
               value={formData.sms_alert}
               onChange={handleChange}
               className={`w-full px-4 py-3 rounded-xl border transition-all ${isDarkMode
-                  ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
-                  : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
+                ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
+                : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
                 } focus:outline-none focus:ring-2 focus:ring-red-500/20`}
               placeholder="+1234567890, +0987654321"
             />
@@ -1063,8 +1130,8 @@ function AlertModal({
               value={formData.last_alert_frequency}
               onChange={handleChange}
               className={`w-full px-4 py-3 rounded-xl border transition-all ${isDarkMode
-                  ? 'bg-white/5 border-white/20 text-white focus:bg-white/10 focus:border-white/30'
-                  : 'bg-white/60 border-neutral-200/60 text-neutral-800 focus:bg-white/80 focus:border-neutral-300/80'
+                ? 'bg-white/5 border-white/20 text-white focus:bg-white/10 focus:border-white/30'
+                : 'bg-white/60 border-neutral-200/60 text-neutral-800 focus:bg-white/80 focus:border-neutral-300/80'
                 } focus:outline-none focus:ring-2 focus:ring-red-500/20`}
             >
               <option value="immediate">Immediate</option>
@@ -1079,17 +1146,18 @@ function AlertModal({
               type="button"
               onClick={onClose}
               className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all ${isDarkMode
-                  ? 'bg-white/10 text-white hover:bg-white/20'
-                  : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+                ? 'bg-white/10 text-white hover:bg-white/20'
+                : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
                 }`}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className={`flex-1 px-4 py-3 rounded-xl font-bold transition-all shadow-lg hover:shadow-xl ${isDarkMode
-                  ? 'bg-red-800 text-white hover:bg-red-700'
-                  : 'bg-neutral-800 text-white hover:bg-neutral-700'
+              disabled={availableStocks.length === 0}
+              className={`flex-1 px-4 py-3 rounded-xl font-bold transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed ${isDarkMode
+                ? 'bg-red-800 text-white hover:bg-red-700'
+                : 'bg-neutral-800 text-white hover:bg-neutral-700'
                 }`}
             >
               {alert ? 'Update Alert' : 'Create Alert'}

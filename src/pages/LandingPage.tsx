@@ -597,10 +597,26 @@ const LandingPage: React.FC = () => {
                     >
                         <div className={`grid ${isMobile ? 'grid-cols-2 gap-6' : 'grid-cols-2 md:grid-cols-4 gap-8'}`}>
                             {[
-                                { value: "10,000+", label: isMobile ? "Companies" : "Companies Trust Us", icon: <Users className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'}`} /> },
-                                { value: "500TB+", label: isMobile ? "Data Daily" : "Data Processed Daily", icon: <Database className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'}`} /> },
-                                { value: "99.9%", label: isMobile ? "Uptime" : "Uptime Guarantee", icon: <Shield className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'}`} /> },
-                                { value: "24/7", label: isMobile ? "Support" : "Expert Support", icon: <Award className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'}`} /> }
+                                {
+                                    value: "In Dev",
+                                    label: isMobile ? "Development" : "In Development",
+                                    icon: <Rocket className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'}`} />,
+                                  },
+                                  {
+                                    value: "100+",
+                                    label: isMobile ? "Features" : "Planned Features",
+                                    icon: <Database className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'}`} />,
+                                  },
+                                  {
+                                    value: "24/7",
+                                    label: isMobile ? "Building" : "Always Building",
+                                    icon: <Award className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'}`} />,
+                                  },
+                                  {
+                                    value: "2025",
+                                    label: isMobile ? "Launch" : "Coming Soon",
+                                    icon: <Target className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'}`} />,
+                                  }
                             ].map((stat, index) => (
                                 <motion.div
                                     key={stat.label} className="text-center"

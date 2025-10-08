@@ -533,6 +533,35 @@ const addFavoriteStock = async (favStocksGuid: string): Promise<void> => {
   }
 };
 
+const addSavedModel = async (savedModelGuid: string): Promise<void> => {
+  const token = sessionStorage.getItem("access_token");
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/org/models/save`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        saved_model_guid: savedModelGuid
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error("Failed to save model:", errorData);
+      throw new Error(`Failed to save model. Status: ${response.status}`);
+    }
+
+    console.log("Model saved successfully");
+  } catch (error) {
+    console.error("Error saving model:", error);
+    throw error;
+  }
+};
+
+
 export {
   // Existing exports
   addOrgUser,
@@ -549,7 +578,7 @@ export {
   shareSavedModel,
   setStockAlert,
   addFavoriteStock,
-
+  addSavedModel,
   // New exports for AlertPage
   updateAlertStatus,
   deleteAlert,

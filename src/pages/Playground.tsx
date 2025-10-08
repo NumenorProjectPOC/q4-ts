@@ -219,6 +219,20 @@ const Playground: React.FC = () => {
         }
     }, [visualizingModelId]);
 
+    const refreshSavedModels = useCallback(async () => {
+        try {
+          // Fetch fresh saved models from API if you have an endpoint
+          // For now, we'll rely on session storage updates from AISearchComponent
+          const savedModels = sessionStorage.getItem("saved_models");
+          if (savedModels) {
+            const models = JSON.parse(savedModels);
+            // Update your saved models state here if you have one
+            // setSavedModels(models);
+          }
+        } catch (error) {
+          console.error("Error refreshing saved models:", error);
+        }
+      }, []);
     //remove model
     const handleRemoveModel = useCallback(async (modelToRemove: Stock) => {
         try {
@@ -498,8 +512,8 @@ const Playground: React.FC = () => {
                                         </label>
                                         <div className="relative">
                                             <input
-                                                type="text"
-                                                value={editedValue !== null ? editedValue : Math.round(selectedNode?.value.value ?? graphData?.stock.value.value ?? 0)}
+                                                type="number"
+                                                value={editedValue !== null ? editedValue : Number((selectedNode?.value.value ?? graphData?.stock.value.value ?? 0).toFixed(2))}
                                                 onChange={handleValueChange}
                                                 className={`w-full p-3 pr-24 border rounded-lg font-bold transition-all ${isDarkMode
                                                     ? 'bg-slate-900/50 border-neutral-700 text-white focus:ring-red-500/50'
@@ -1203,8 +1217,8 @@ const Playground: React.FC = () => {
                                         </label>
                                         <div className="relative">
                                             <input
-                                                type="text"
-                                                value={editedValue !== null ? editedValue : Math.round(selectedNode?.value.value ?? graphData?.stock.value.value ?? 0)}
+                                                type="number"
+                                                value={editedValue !== null ? editedValue : Number((selectedNode?.value.value ?? graphData?.stock.value.value ?? 0).toFixed(2))}
                                                 onChange={handleValueChange}
                                                 className={`w-full p-2 pr-24 border rounded-lg font-bold transition-all ${isDarkMode
                                                     ? 'bg-slate-900/50 border-neutral-700 text-white focus:ring-red-500/50'
@@ -1390,8 +1404,20 @@ const Playground: React.FC = () => {
             <AISearchComponent
                 isOpen={showAISearch}
                 onClose={() => setShowAISearch(false)}
-                onStockFound={() => { }}
-                onAddToFavorites={() => { }}
+                onStockFound={(stock) => {
+                    // Handle stock found
+                    if (stock.context === 'model') {
+                      // Refresh the saved models list after a short delay
+                      setTimeout(refreshSavedModels, 500);
+                    }
+                  }}
+                  onAddToFavorites={(stock) => {
+                    // Handle add to favorites
+                    if (stock.context === 'model') {
+                      // Refresh the saved models list
+                      setTimeout(refreshSavedModels, 500);
+                    }
+                  }}
                 onRemoveFromFavorites={() => { }}
                 onShowToast={() => { }}
                 onGoToDashboard={() => { }}

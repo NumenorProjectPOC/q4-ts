@@ -9,26 +9,38 @@ export const formatStockName = (name: string | undefined): string => {
         .join(' ');
 };
 
-// utility function to format large numbers
-export const formatLargeNumber = (num: number): string => {
+export const formatLargeNumber = (num: number, decimals = 0): string => {
+    // Values under 1,000: show with specified decimals (trim trailing zeros)
+    if (Math.abs(num) < 1000) {
+      const s = num.toFixed(decimals);
+      // Trim unnecessary zeros
+      return s.includes('.')
+        ? s.replace(/\.?0+$/, '')
+        : s;
+    }
+  
+    // Large numbers with suffixes, always show 2 decimal places for readability
+    const formatWithSuffix = (value: number, suffix: string) =>
+      `${Number(value.toFixed(2))}${suffix}`;
+  
     if (num >= 1e12) {
-        const value = num / 1e12;
-        return Number(value.toFixed(2)).toString() + 'T';
+      return formatWithSuffix(num / 1e12, 'T');
     }
     if (num >= 1e9) {
-        const value = num / 1e9;
-        return Number(value.toFixed(2)).toString() + 'B';
+      return formatWithSuffix(num / 1e9, 'B');
     }
     if (num >= 1e6) {
-        const value = num / 1e6;
-        return Number(value.toFixed(2)).toString() + 'M';
+      return formatWithSuffix(num / 1e6, 'M');
     }
     if (num >= 1e3) {
-        const value = num / 1e3;
-        return Number(value.toFixed(2)).toString() + 'K';
+      return formatWithSuffix(num / 1e3, 'K');
     }
-    return num.toString();
-};
+  
+    // Fallback, though covered by first branch
+    return num.toFixed(decimals).replace(/\.?0+$/, '');
+  };
+  
+  
 
 /** Format large numbers → K / M / B / T  */
 export const formatMagnitude = (n: number): string => {

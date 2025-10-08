@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import * as d3 from 'd3';
 import { GraphData, NodeData, LinkData } from '../services/types';
 import { formatLargeNumber, formatStockName } from '../utils/utility';
@@ -46,6 +46,7 @@ const TWC = {
     '800': '#991b1b', '900': '#7f1d1d', '950': '#450a0a'
   }
 } as const;
+
 // ────────────────────────────────────────────────────────────────────────────────
 // Enhanced Theme system with realistic colors
 // ────────────────────────────────────────────────────────────────────────────────
@@ -200,6 +201,10 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
   const [initialRender, setInitialRender] = useState(true);
   const [zoomTransform, setZoomTransform] = useState<d3.ZoomTransform | null>(null);
 
+  // NEW STATE VARIABLES FOR STABLE POSITIONING
+  const [positionsStable, setPositionsStable] = useState(false);
+  const [isSimulationActive, setIsSimulationActive] = useState(false);
+
   const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const simulationRef = useRef<d3.Simulation<NodeData, any> | null>(null);
 
@@ -214,6 +219,30 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
     [resolvedNodeTheme]
   );
 
+  // NEW: Helper function for stable positioning
+  const calculateStablePositions = useCallback((nodes: NodeData[], width: number, height: number) => {
+    const positions: Record<string, { x: number; y: number }> = {};
+
+    nodes.forEach((node) => {
+      if (node.isCenter) {
+        positions[node.id] = { x: width / 2, y: height / 2 };
+      } else {
+        const nonCenterNodes = nodes.filter(n => !n.isCenter);
+        const index = nonCenterNodes.indexOf(node);
+        const angleStep = (2 * Math.PI) / Math.max(nonCenterNodes.length, 1);
+        const angle = index * angleStep;
+        const radius = Math.min(width, height) * 0.3; // Better initial spacing
+
+        positions[node.id] = {
+          x: (width / 2) + Math.cos(angle) * radius,
+          y: (height / 2) + Math.sin(angle) * radius
+        };
+      }
+    });
+
+    return positions;
+  }, []);
+
   // Resize observer
   useEffect(() => {
     if (!containerRef.current) return;
@@ -225,7 +254,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
     updateDimensions();
     const ro = new ResizeObserver(updateDimensions);
     ro.observe(containerRef.current);
-    return () => { try { ro.disconnect(); } catch {} };
+    return () => { try { ro.disconnect(); } catch { } };
   }, []);
 
   // Nodes with center flag
@@ -262,6 +291,31 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
   // Label color aligned to brand tokens
   const labelColor = isDarkMode ? TWC.brand.secondary['50'] : TWC.brand.primary['900'];
 
+  // NEW: Initialize stable positions on first load
+  useEffect(() => {
+    if (!graphData || !containerDimensions.width) return;
+
+    const storedPositions = sessionStorage.getItem('nodePositions');
+    if (!storedPositions && nodes.length > 0) {
+      // Calculate and save initial stable positions
+      const positions = calculateStablePositions(nodes, containerDimensions.width, containerDimensions.height);
+      sessionStorage.setItem('nodePositions', JSON.stringify(positions));
+      setPositionsStable(true);
+    } else if (storedPositions) {
+      try {
+        const positions = JSON.parse(storedPositions);
+        const hasAllPositions = nodes.every(node => positions[node.id]);
+        setPositionsStable(hasAllPositions);
+      } catch (e) {
+        console.error('Error parsing stored positions:', e);
+        // Reset with stable positions if corrupted
+        const positions = calculateStablePositions(nodes, containerDimensions.width, containerDimensions.height);
+        sessionStorage.setItem('nodePositions', JSON.stringify(positions));
+        setPositionsStable(true);
+      }
+    }
+  }, [graphData, nodes, containerDimensions, calculateStablePositions]);
+
   // Build node color map (gradient URLs or solid fills)
   useEffect(() => {
     if (!graphData || !nodes.length) return;
@@ -279,15 +333,36 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
     sessionStorage.setItem('nodeColors', JSON.stringify(map));
   }, [nodes, graphData, activeTheme]);
 
-  // Main render
+  // MAIN RENDER EFFECT - IMPROVED VERSION WITH STABLE POSITIONING
   useEffect(() => {
     if (!graphData || !svgRef.current || containerDimensions.width === 0 || links.length === 0) return;
 
+    // Check if we have stable positions
+    const storedNodePositions = sessionStorage.getItem('nodePositions');
+    let hasStablePositions = false;
+
+    if (storedNodePositions) {
+      try {
+        const positions = JSON.parse(storedNodePositions);
+        hasStablePositions = nodes.every(node => positions[node.id]);
+      } catch (e) {
+        console.error('Error parsing stored positions:', e);
+      }
+    }
+
     // Preserve previous positions when re-rendering
-    if (simulationRef.current) {
+    if (simulationRef.current && !isSimulationActive) {
       const prev = simulationRef.current.nodes();
-      const pos = new Map(prev.map((n: any) => [n.id, { x: n.x, y: n.y, vx: n?.vx, vy: n?.vy, fx: n.fx, fy: n.fy }]));
-      nodes.forEach((n) => { const p = pos.get(n.id); if (p) Object.assign(n, p); });
+      const pos = new Map(prev.map((n: any) => [n.id, {
+        x: n.x, y: n.y, vx: n?.vx || 0, vy: n?.vy || 0, fx: n.fx, fy: n.fy
+      }]));
+
+      nodes.forEach(n => {
+        const p = pos.get(n.id);
+        if (p) {
+          Object.assign(n, p);
+        }
+      });
     }
 
     const svg = d3.select(svgRef.current);
@@ -299,15 +374,31 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
     const centerNodeRadius = 45;
 
     const g = svg.append('g');
+
+    // Create zoom behavior
     const zoom = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.1, 4])
       .on('zoom', (event) => {
         const transform = event.transform;
         setZoomTransform(transform);
         g.attr('transform', transform);
+        // Save zoom state
+        sessionStorage.setItem('zoomTransform', JSON.stringify({ x: transform.x, y: transform.y, k: transform.k }));
       });
+
     zoomBehaviorRef.current = zoom;
     svg.call(zoom);
+
+    // Apply saved zoom transform
+    const storedZoomTransform = sessionStorage.getItem('zoomTransform');
+    if (storedZoomTransform && !zoomTransform) {
+      try {
+        const t = JSON.parse(storedZoomTransform);
+        svg.call(zoom.transform, d3.zoomIdentity.translate(t.x, t.y).scale(t.k));
+      } catch (e) {
+        console.error('Error applying zoom transform:', e);
+      }
+    }
 
     // Edge colors aligned to tokens
     const edgeColor = d3.scaleOrdinal<string>()
@@ -379,47 +470,95 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
     glowMerge.append('feMergeNode').attr('in', 'coloredBlur');
     glowMerge.append('feMergeNode').attr('in', 'SourceGraphic');
 
-    // Load saved positions and zoom
-    const storedNodePositions = sessionStorage.getItem('nodePositions');
-    let initialPositions: Record<string, { x: number; y: number }> = {};
-    if (storedNodePositions) { try { initialPositions = JSON.parse(storedNodePositions); } catch {} }
-    const storedZoomTransform = sessionStorage.getItem('zoomTransform');
-    if (storedZoomTransform && !zoomTransform) {
-      try {
-        const t = JSON.parse(storedZoomTransform);
-        svg.call(zoom.transform, d3.zoomIdentity.translate(t.x, t.y).scale(t.k));
-      } catch {}
-    }
-
-    // Initial positions
+    // IMPROVED: Load or set initial positions with immediate fixing
     nodes.forEach((node) => {
-      if (initialPositions[node.id]) {
-        node.x = initialPositions[node.id].x; node.y = initialPositions[node.id].y;
-        node.fx = initialPositions[node.id].x; node.fy = initialPositions[node.id].y;
-      } else {
-        if (node.isCenter) {
-          node.x = width / 2; node.y = height / 2;
-        } else {
-          const angleStep = (2 * Math.PI) / (Math.max(nodes.length - 1, 1));
-          const idx = nodes.filter((n) => !n.isCenter).indexOf(node);
-          const angle = idx * angleStep;
-          const radius = Math.min(width, height) * 0.3;
-          node.x = width / 2 + Math.cos(angle) * radius;
-          node.y = height / 2 + Math.sin(angle) * radius;
+      if (storedNodePositions) {
+        try {
+          const positions = JSON.parse(storedNodePositions);
+          if (positions[node.id]) {
+            node.x = positions[node.id].x;
+            node.y = positions[node.id].y;
+            node.fx = positions[node.id].x; // Fix position immediately
+            node.fy = positions[node.id].y;
+            return; // Skip default positioning
+          }
+        } catch (e) {
+          console.error('Error loading node position:', e);
         }
+      }
+
+      // Default positioning for new nodes only
+      if (node.isCenter) {
+        node.x = width / 2;
+        node.y = height / 2;
+        node.fx = width / 2;  // Fix center node position
+        node.fy = height / 2;
+      } else {
+        const nonCenterNodes = nodes.filter(n => !n.isCenter);
+        const index = nonCenterNodes.indexOf(node);
+        const angleStep = (2 * Math.PI) / Math.max(nonCenterNodes.length, 1);
+        const angle = index * angleStep;
+        const radius = Math.min(width, height) * 0.3;
+
+        node.x = (width / 2) + Math.cos(angle) * radius;
+        node.y = (height / 2) + Math.sin(angle) * radius;
+        node.fx = node.x;  // Fix position immediately
+        node.fy = node.y;
       }
     });
 
-    // Simulation
+    // Create simulation with better configuration for stability
     const simulation = d3.forceSimulation(nodes)
-      .force('link', d3.forceLink(links).id((d: any) => d.id).distance(180).strength(0.2))
-      .force('charge', d3.forceManyBody().strength(-600))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide((d: any) => (d.isCenter ? centerNodeRadius : nodeRadius) + 10))
-      .alphaDecay(0.02)
-      .velocityDecay(0.4);
+      .force('link', d3.forceLink(links).id((d: any) => d.id).distance(120).strength(0.1)) // Reduced strength
+      .force('charge', d3.forceManyBody().strength(-300)) // Reduced repulsion  
+      .force('center', d3.forceCenter(width / 2, height / 2).strength(0.1)) // Weak centering
+      .force('collision', d3.forceCollide((d: any) => (d.isCenter ? centerNodeRadius : nodeRadius) + 15))
+      .alphaDecay(0.1) // Faster settling
+      .velocityDecay(0.8); // High damping
 
     simulationRef.current = simulation;
+
+    // CRITICAL: Stop simulation immediately if positions are stable
+    if (hasStablePositions) {
+      simulation.alpha(0);
+      setTimeout(() => simulation.stop(), 50);
+      setIsSimulationActive(false);
+    } else {
+      setIsSimulationActive(true);
+
+      // Auto-save positions when simulation settles
+      simulation.on('end', () => {
+        const positions: Record<string, { x: number; y: number }> = {};
+        nodes.forEach(node => {
+          if (node.x !== undefined && node.y !== undefined) {
+            positions[node.id] = { x: node.x, y: node.y };
+            node.fx = node.x; // Fix all positions
+            node.fy = node.y;
+          }
+        });
+        sessionStorage.setItem('nodePositions', JSON.stringify(positions));
+        setPositionsStable(true);
+        setIsSimulationActive(false);
+      });
+
+      // Force stop after 2 seconds and save positions
+      setTimeout(() => {
+        if (simulation.alpha() > 0) {
+          const positions: Record<string, { x: number; y: number }> = {};
+          nodes.forEach(node => {
+            if (node.x !== undefined && node.y !== undefined) {
+              positions[node.id] = { x: node.x, y: node.y };
+              node.fx = node.x;
+              node.fy = node.y;
+            }
+          });
+          sessionStorage.setItem('nodePositions', JSON.stringify(positions));
+          simulation.stop();
+          setPositionsStable(true);
+          setIsSimulationActive(false);
+        }
+      }, 2000);
+    }
 
     // Links
     const link = g.append('g')
@@ -527,7 +666,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
     centerGroup.each(function (d: any) {
       const group = d3.select(this);
       const name = formatStockName(d.name);
-      const valueText = formatLargeNumber((animatedValues[d.id] ?? d.value.value) | 0);
+      const valueText = formatLargeNumber(animatedValues[d.id] ?? d.value.value, 2) // Changed from 0 to 2 decimal places
 
       group.append('text')
         .attr('text-anchor', 'middle')
@@ -558,7 +697,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
     nodeGroups.each(function (d: any) {
       const group = d3.select(this);
       const name = formatStockName(d.name);
-      const valueText = formatLargeNumber((animatedValues[d.id] ?? d.value.value) | 0);
+      const valueText = formatLargeNumber(animatedValues[d.id] ?? d.value.value, 2) // Changed from 0 to 2 decimal places
 
       group.append('text')
         .attr('text-anchor', 'middle')
@@ -614,18 +753,23 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
         .style('filter', nodeFilterStyle);
     });
 
-    // Dragging
+    // IMPROVED: Drag behavior with immediate position saving
     const drag = d3.drag<any, any>()
       .on('start', (event: any, d: any) => {
-        if (!event.active) simulation.alphaTarget(0.3).restart();
-        d.fx = d.x; d.fy = d.y;
+        if (!event.active) simulation.alphaTarget(0.1).restart();
+        d.fx = d.x;
+        d.fy = d.y;
       })
       .on('drag', (event: any, d: any) => {
-        d.fx = event.x; d.fy = event.y;
+        d.fx = event.x;
+        d.fy = event.y;
       })
       .on('end', (event: any, d: any) => {
         if (!event.active) simulation.alphaTarget(0);
-        const saved: Record<string, { x: number; y: number }> = JSON.parse(sessionStorage.getItem('nodePositions') || '{}');
+
+        // IMMEDIATE SAVE: Save position right after drag
+        const saved: Record<string, { x: number; y: number }> =
+          JSON.parse(sessionStorage.getItem('nodePositions') || '{}');
         saved[d.id] = { x: d.fx, y: d.fy };
         sessionStorage.setItem('nodePositions', JSON.stringify(saved));
       });
@@ -665,31 +809,45 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
       centerGroup.attr('transform', (d: any) => `translate(${d.x},${d.y})`);
     });
 
-    // Persist zoom
-    zoom.on('zoom', (event) => {
-      const t = event.transform;
-      setZoomTransform(t);
-      g.attr('transform', t);
-      sessionStorage.setItem('zoomTransform', JSON.stringify({ x: t.x, y: t.y, k: t.k }));
-    });
+    return () => {
+      if (simulation) {
+        simulation.stop();
+        setIsSimulationActive(false);
+      }
+    };
+  }, [graphData, nodeColors, links, setSelectedElement, nodes, containerDimensions, animatedValues, isDarkMode, activeTheme, positionsStable]);
 
-    setTimeout(() => simulation.stop(), 3000);
-    return () => { simulation.stop(); };
-  }, [graphData, nodeColors, links, setSelectedElement, nodes, containerDimensions, animatedValues, isDarkMode, activeTheme]);
-
-  // Simulation animation (unchanged)
+  // IMPROVED: Separate animation effect that doesn't trigger re-renders
   useEffect(() => {
-    if (initialRender) { setInitialRender(false); return; }
+    if (initialRender) {
+      setInitialRender(false);
+      return;
+    }
+
     if (!graphData || !runSimulation) return;
 
-    const startValues = nodes.reduce((acc, node) => { acc[node.id] = node.value.value; return acc; }, {} as Record<string, number>);
+    // DON'T restart position simulation - only animate values
+    const startValues = nodes.reduce((acc, node) => {
+      acc[node.id] = node.value.value;
+      return acc;
+    }, {} as Record<string, number>);
+
     let yearEquivalent = 0;
     switch (simulationSettings.timeUnit) {
-      case 'days': yearEquivalent = simulationValue / 365; break;
-      case 'weeks': yearEquivalent = simulationValue / 52; break;
-      case 'months': yearEquivalent = simulationValue / 12; break;
-      case 'years': yearEquivalent = simulationValue; break;
+      case 'days':
+        yearEquivalent = simulationValue / 365;
+        break;
+      case 'weeks':
+        yearEquivalent = simulationValue / 52;
+        break;
+      case 'months':
+        yearEquivalent = simulationValue / 12;
+        break;
+      case 'years':
+        yearEquivalent = simulationValue;
+        break;
     }
+
     const targetValues = nodes.reduce((acc, node) => {
       const growth = 0.02;
       acc[node.id] = node.value.value * Math.pow(1 + growth, yearEquivalent);
@@ -698,69 +856,76 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
 
     const startTime = performance.now();
     const duration = 2000;
+
     const animate = (now: number) => {
       const elapsed = now - startTime;
       const progress = Math.min(elapsed / duration, 1);
+
       const newValues = nodes.reduce((acc, node) => {
         acc[node.id] = startValues[node.id] + (targetValues[node.id] - startValues[node.id]) * progress;
         return acc;
       }, {} as Record<string, number>);
+
       setAnimatedValues(newValues);
-      if (progress < 1) requestAnimationFrame(animate);
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
     };
+
     requestAnimationFrame(animate);
-  }, [runSimulation, graphData, nodes, simulationValue, simulationSettings, initialRender]);
+  }, [runSimulation, simulationValue, simulationSettings]); // Removed problematic dependencies
 
   // Update text with animated values
   useEffect(() => {
     if (!svgRef.current) return;
+
     const svg = d3.select(svgRef.current);
     svg.selectAll('.node-value')
       .text((d: any) => {
         const v = animatedValues[d.id];
-        const rounded = v !== undefined ? Math.round(v) : Math.round(d.value.value);
-        return formatLargeNumber(rounded);
-      })
-      .select('title')
-      .text((d: any) => {
-        const v = animatedValues[d.id];
-        const rounded = v !== undefined ? Math.round(v) : Math.round(d.value.value);
-        return `${rounded} ${d.value.unit}`;
+        const rounded = v !== undefined ? Number(v.toFixed(2)) : Number(d.value.value.toFixed(2));
+        return formatLargeNumber(rounded, 2);
       });
   }, [animatedValues]);
 
-  // Reset zoom
-  const resetZoom = () => {
-    if (svgRef.current && zoomBehaviorRef.current) {
-      const svg = d3.select(svgRef.current);
-      svg.transition().duration(750).call(zoomBehaviorRef.current.transform, d3.zoomIdentity);
-      sessionStorage.removeItem('zoomTransform');
-    }
-  };
+  // Optional: Add reset function for testing
+  const resetNodePositions = useCallback(() => {
+    sessionStorage.removeItem('nodePositions');
+    sessionStorage.removeItem('zoomTransform');
+    setPositionsStable(false);
+    setZoomTransform(null);
+    setInitialRender(true);
+  }, []);
 
   return (
-    <div
-      ref={containerRef}
-      style={{
-        width: '100%',
-        height: '100%',
-        position: 'relative',
-      }}
-      className={`${isDarkMode
+    <div ref={containerRef} className={`absolute inset-0 overflow-hidden ${isDarkMode
         ? 'bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white'
         : 'bg-gradient-to-br from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
-    }`}
-    >
+      }`}>
+      {/* ORIGINAL LOADING EFFECT PRESERVED */}
       {isLoading && (
         <div className="flex flex-col items-center justify-center h-full p-6">
           <Loader className={`w-10 h-10 animate-spin ${isDarkMode ? 'text-red-400' : 'text-red-600'}`} />
-          <p className={`font-bold animate-pulse ${isDarkMode ? 'text-white/80' : 'text-neutral-600'}`}>
+          <p className={`font-bold animate-pulse ${isDarkMode ? 'text-white80' : 'text-neutral-600'}`}>
             Loading Visualization...
           </p>
         </div>
       )}
+
+      {/* MAIN CONTENT - Only show when not loading */}
       {!isLoading && (
         <>
+          {/* Optional: Reset positions button for testing - hidden by default */}
+          <button
+            onClick={resetNodePositions}
+            className="absolute top-4 right-4 z-10 px-3 py-1 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700"
+            style={{ display: 'none' }} // Hidden by default
+          >
+            Reset Layout
+          </button>
+
+          {/* SVG Container */}
           <div className="absolute inset-0">
             <svg
               ref={svgRef}
@@ -769,14 +934,26 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
               style={{ cursor: 'grab' }}
             />
           </div>
+
+          {/* Reset Zoom Button */}
           <div className="absolute top-6 right-6 z-10">
             <button
-              onClick={() => {/* reset zoom logic */}}
-              className={`w-12 h-12 rounded-lg flex items-center justify-center shadow-md transition-all duration-200 hover:shadow-lg group border backdrop-blur-sm ${
-                isDarkMode
+              onClick={() => {
+                // Reset zoom logic
+                if (zoomBehaviorRef.current && svgRef.current) {
+                  d3.select(svgRef.current)
+                    .transition()
+                    .duration(500)
+                    .call(zoomBehaviorRef.current.transform, d3.zoomIdentity);
+
+                  sessionStorage.removeItem('zoomTransform');
+                  setZoomTransform(null);
+                }
+              }}
+              className={`w-12 h-12 rounded-lg flex items-center justify-center shadow-md transition-all duration-200 hover:shadow-lg group border backdrop-blur-sm ${isDarkMode
                   ? 'bg-slate-800/90 border-slate-700/50 text-white/80 hover:bg-slate-700/90 hover:text-white'
                   : 'bg-white/90 border-neutral-200/60 text-neutral-600 hover:bg-white hover:text-neutral-900'
-              }`}
+                }`}
               title="Reset Zoom"
             >
               <RotateCcw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-300" />
