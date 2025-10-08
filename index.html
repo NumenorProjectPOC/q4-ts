@@ -1,28 +1,75 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  
+  <!-- Favicon and app icons -->
   <link rel="icon" type="image/svg+xml" href="/Q-logo.svg" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="apple-touch-icon" href="/Q-logo.svg" />
+  
+  <!-- CSS Reset for consistent rendering across browsers -->
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    html {
+      line-height: 1.15;
+      -webkit-text-size-adjust: 100%;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+        sans-serif;
+      background-color: #ffffff;
+    }
+    
+    /* Prevent layout shifts */
+    #root {
+      min-height: 100vh;
+      min-height: 100dvh; /* Dynamic viewport height for mobile */
+    }
+    
+    /* Fix for iOS Safari viewport issues */
+    @supports (-webkit-touch-callout: none) {
+      #root {
+        min-height: -webkit-fill-available;
+      }
+    }
+  </style>
+  
   <title>Quantifore</title>
+  
   <!-- Preconnect to Google Fonts for performance -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
-  <!-- Google Fonts - Optimized font loading -->
+  
+  <!-- Google Fonts with font-display for better loading -->
   <link
     href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Roboto+Mono:ital,wght@0,100..700;1,100..700&family=Roboto:ital,wght@0,100..900;1,100..900&family=Saira+Stencil+One&display=swap"
     rel="stylesheet">
-
+  
   <!-- Security and performance meta tags -->
   <meta name="theme-color" content="#dc2626" />
   <meta name="description" content="Quantifore Data Monitor - Real-time monitoring and predictions" />
+  
+  <!-- Disable automatic telephone number detection on iOS -->
+  <meta name="format-detection" content="telephone=no" />
+  
+  <!-- Prevent zoom on input focus (iOS) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 </head>
 
 <body>
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
-
 </html>

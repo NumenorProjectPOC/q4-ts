@@ -33,7 +33,7 @@ interface AIWebSocketProviderProps {
 
 export const AIWebSocketProvider: React.FC<AIWebSocketProviderProps> = ({
     children,
-    wsUrl = "ws://10.200.200.1:8000/ws/ai-query"
+    wsUrl = import.meta.env.VITE_WEBSOCKET_URL
 }) => {
     const socketRef = useRef<WebSocket | null>(null);
     const reconnectTimeoutRef = useRef<number | null>(null);

@@ -25,6 +25,15 @@ export interface FavoriteStockFull {
   latest_value: number | null;
 }
 
+export interface ComprehensiveAlertPayload {
+  stock_guid: string;
+  upper_threshold?: number | null;
+  lower_threshold?: number | null;
+  alert_frequency?: 'realtime' | 'daily' | 'weekly' | 'monthly';
+  email_notifications?: string[];
+  phone_notifications?: string[];
+}
+
 const removeOrgUser = async (userId: string): Promise<void> => {
   const token = sessionStorage.getItem("access_token");
   const response = await fetch(`${API_BASE_URL}/org/org/remove-user`, {
@@ -61,7 +70,7 @@ const addOrgUser = async (name: string, email: string): Promise<any> => {
 
 const fetchGraphData = async (stockName: string): Promise<any> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/check/stocks/${stockName}/relationsplus/deep?depth=6`);
+    const response = await fetch(`${API_BASE_URL}/check/stocks/${stockName}/relationsplus/deep?depth=3`);
     if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
     const data = await response.json();
     const nodeMap = new Map();
@@ -288,7 +297,7 @@ const fetchMonitoredStockData = async (guids: string[], days: number = 6000): Pr
   try {
     const responses = await Promise.all(
       guids.map(async (guid) => {
-        const url = `${API_BASE_URL}/org/stocks/check/with-relations/?root_guid=${guid}&days=${days}`;
+        const url = `${API_BASE_URL}/org/stocks/check/with-relations/?root_guid=${guid}&days=6000`;
         const res = await fetch(url, {
           method: "GET",
           headers: {
@@ -381,17 +390,29 @@ const removeFavoriteStock = async (favStocksGuid: string): Promise<void> => {
 
 const removeSavedModel = async (guid: string): Promise<void> => {
   const token = sessionStorage.getItem("access_token");
-  const res = await fetch(`${API_BASE_URL}/org/retire-model`, {
-    method: "POST",
+
+  if (!token) {
+    throw new Error("No access token found");
+  }
+
+  const res = await fetch(`${API_BASE_URL}/org/user/retire-model`, {
+    method: "PUT", // Changed to PUT based on Swagger UI image
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ model_guid: guid }),
+    body: JSON.stringify({
+      saved_model_guid: guid,
+      retired: true
+    }),
   });
 
-  if (!res.ok) throw new Error("Failed to remove model");
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.message || "Failed to remove model");
+  }
 };
+
 
 const shareSavedModel = async (userId: string, modelGuid: string): Promise<void> => {
   const token = sessionStorage.getItem("access_token");
@@ -413,11 +434,16 @@ const shareSavedModel = async (userId: string, modelGuid: string): Promise<void>
 const setStockAlert = async (
   stock_guid: string,
   upper_threshold: number,
-  lower_threshold: number
+  lower_threshold: number,
+  // Optional enhanced parameters that will be ignored for now
+  alert_frequency?: string,
+  email_notifications?: string[],
+  phone_notifications?: string[]
 ): Promise<void> => {
   const token = sessionStorage.getItem("access_token");
 
   try {
+    // For now, only send the original 3 parameters to match your existing API
     const response = await fetch(`${API_BASE_URL}/org/user/monitoring/thresholds`, {
       method: "PUT",
       headers: {
@@ -428,12 +454,25 @@ const setStockAlert = async (
         stock_guid,
         upper_threshold,
         lower_threshold
+        // Note: alert_frequency, email_notifications, phone_notifications are not sent
+        // until your backend supports them
       })
     });
 
     if (!response.ok) {
       throw new Error(`Failed to set alert: ${response.statusText}`);
     }
+
+    // TODO: When your backend supports enhanced features, you can add additional API calls here:
+
+    // if (alert_frequency || email_notifications || phone_notifications) {
+    //   await setEnhancedAlertPreferences(stock_guid, {
+    //     alert_frequency,
+    //     email_notifications,
+    //     phone_notifications
+    //   });
+    // }
+
   } catch (error) {
     console.error("Error setting alert:", error);
     throw error;
@@ -510,7 +549,7 @@ export {
   shareSavedModel,
   setStockAlert,
   addFavoriteStock,
-  
+
   // New exports for AlertPage
   updateAlertStatus,
   deleteAlert,

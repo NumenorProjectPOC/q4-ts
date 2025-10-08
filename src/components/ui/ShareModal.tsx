@@ -2,7 +2,8 @@ import React, { useEffect, useState } from "react";
 import { fetchOrgUsers, shareStockWithUser, shareSavedModel } from "../../services/quantiforeApi";
 import Toast from "../ui/Toast";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Share2, Users, Check, Loader } from "lucide-react";
+import { X, Share2, Users, Check, Loader, Mail, UserPlus, Send } from "lucide-react";
+import { useTheme } from "../../context/ThemeContext";
 
 interface User {
   name: string;
@@ -18,7 +19,15 @@ interface ShareModalProps {
   onClose: () => void;
 }
 
-const ShareModal: React.FC<ShareModalProps> = ({ isStock, title = "Share", itemLabel, itemGuid, onClose }) => {
+const ShareModal: React.FC<ShareModalProps> = ({ 
+  isStock, 
+  title = "Share", 
+  itemLabel, 
+  itemGuid, 
+  onClose 
+}) => {
+  const { isDarkMode } = useTheme();
+  
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [sharingEmail, setSharingEmail] = useState<string | null>(null);
@@ -114,85 +123,133 @@ const ShareModal: React.FC<ShareModalProps> = ({ isStock, title = "Share", itemL
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4"
           onClick={onClose}
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            initial={{ opacity: 0, scale: 0.9, y: 30 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            exit={{ opacity: 0, scale: 0.9, y: 30 }}
             transition={{ duration: 0.3, type: "spring", damping: 25, stiffness: 300 }}
-            className="bg-white/95 backdrop-blur-xl border border-gray-200/50 rounded-2xl shadow-2xl p-0 max-w-md w-full max-h-[80vh] overflow-hidden relative"
+            className={`relative rounded-3xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-hidden border backdrop-blur-xl ${
+              isDarkMode
+                ? 'bg-slate-900/95 border-neutral-800/50'
+                : 'bg-white/95 border-neutral-200/50'
+            }`}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header Section */}
-            <div className="relative p-6 pb-4">
-              {/* Background gradient overlay */}
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-50/80 via-purple-50/40 to-pink-50/30 rounded-t-2xl" />
-
-              {/* Close Button */}
-              <button
-                onClick={onClose}
-                className="absolute top-4 right-4 p-2 rounded-xl hover:bg-white/60 text-gray-500 hover:text-gray-700 transition-all duration-200 z-10"
-              >
-                <X className="w-5 h-5" />
-              </button>
-
-              {/* Header Content */}
-              <div className="relative flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
-                  <Share2 className="w-6 h-6 text-white" />
+            {/* Modern Minimal Header */}
+            <div className={`relative px-6 py-5 border-b ${
+              isDarkMode ? 'border-neutral-800/50' : 'border-neutral-200/50'
+            }`}>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                  <div className={`p-2.5 rounded-2xl ${
+                    isDarkMode ? 'bg-blue-500/10' : 'bg-blue-50'
+                  }`}>
+                    <Share2 className={`w-6 h-6 ${
+                      isDarkMode ? 'text-blue-400' : 'text-blue-600'
+                    }`} />
+                  </div>
+                  <div>
+                    <h2 className={`text-xl font-bold ${
+                      isDarkMode ? 'text-white' : 'text-gray-900'
+                    }`}>
+                      {title} {isStock ? 'Stock' : 'Model'}
+                    </h2>
+                    <p className={`text-sm ${
+                      isDarkMode ? 'text-white/60' : 'text-gray-500'
+                    }`}>
+                      Share <span className={`font-semibold ${
+                        isDarkMode ? 'text-white' : 'text-gray-700'
+                      }`}>{itemLabel}</span> with your team
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-900 mb-1">
-                    {title} Model
-                  </h2>
-                  <p className="text-sm text-gray-600">
-                    Share <span className="font-semibold text-blue-600">{itemLabel}</span> with your team
-                  </p>
-                </div>
+
+                <motion.button
+                  onClick={onClose}
+                  className={`p-2 rounded-xl transition-all duration-200 ${
+                    isDarkMode 
+                      ? 'hover:bg-white/10 text-white/60 hover:text-white' 
+                      : 'hover:bg-gray-100 text-gray-400 hover:text-gray-600'
+                  }`}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                >
+                  <X className="w-5 h-5" />
+                </motion.button>
               </div>
 
-              {/* Stats Bar */}
-              <div className="relative flex items-center gap-4 text-sm">
-                <div className="flex items-center gap-2 text-gray-600">
+              {/* Stats Bar - Clean Design */}
+              <div className="flex items-center gap-4 text-sm mt-4">
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${
+                  isDarkMode 
+                    ? 'bg-slate-800/50 text-white/80' 
+                    : 'bg-gray-100/80 text-gray-600'
+                }`}>
                   <Users className="w-4 h-4" />
-                  <span>{users.length} team members</span>
+                  <span className="font-medium">{users.length} members</span>
                 </div>
                 {sharedEmails.length > 0 && (
-                  <div className="flex items-center gap-2 text-green-600">
+                  <motion.div 
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${
+                      isDarkMode 
+                        ? 'bg-green-500/10 text-green-400 border border-green-500/20' 
+                        : 'bg-green-50 text-green-700 border border-green-200/60'
+                    }`}
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: "spring", stiffness: 400 }}
+                  >
                     <Check className="w-4 h-4" />
-                    <span>{sharedEmails.length} shared</span>
-                  </div>
+                    <span className="font-medium">{sharedEmails.length} shared</span>
+                  </motion.div>
                 )}
               </div>
             </div>
 
-            {/* User List Section */}
-            <div className="px-6 pb-6 max-h-96 overflow-y-auto">
+            {/* User List Section - Clean Design */}
+            <div className="p-6 max-h-[60vh] overflow-y-auto custom-scrollbar">
               <div className="space-y-3">
                 {loading ? (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="flex items-center justify-center py-8"
+                    className="flex items-center justify-center py-12"
                   >
-                    <div className="flex items-center gap-3">
-                      <Loader className="w-5 h-5 text-blue-500 animate-spin" />
-                      <span className="text-gray-600">Loading team members...</span>
+                    <div className="text-center">
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4 ${
+                        isDarkMode ? 'bg-slate-800/50' : 'bg-gray-100/80'
+                      }`}>
+                        <Loader className={`w-6 h-6 animate-spin ${
+                          isDarkMode ? 'text-blue-400' : 'text-blue-600'
+                        }`} />
+                      </div>
+                      <span className={`text-sm font-medium ${
+                        isDarkMode ? 'text-white/70' : 'text-gray-600'
+                      }`}>Loading team members...</span>
                     </div>
                   </motion.div>
                 ) : users.length === 0 ? (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="text-center py-8"
+                    className="text-center py-12"
                   >
-                    <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                      <Users className="w-8 h-8 text-gray-400" />
+                    <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-6 ${
+                      isDarkMode ? 'bg-slate-800/50' : 'bg-gray-100/80'
+                    }`}>
+                      <UserPlus className={`w-8 h-8 ${
+                        isDarkMode ? 'text-white/40' : 'text-gray-400'
+                      }`} />
                     </div>
-                    <p className="text-gray-500 mb-2">No team members found</p>
-                    <p className="text-sm text-gray-400">
+                    <h3 className={`text-lg font-bold mb-2 ${
+                      isDarkMode ? 'text-white' : 'text-gray-900'
+                    }`}>No team members found</h3>
+                    <p className={`text-sm leading-relaxed ${
+                      isDarkMode ? 'text-white/60' : 'text-gray-500'
+                    }`}>
                       Invite colleagues to your organization to start sharing
                     </p>
                   </motion.div>
@@ -203,62 +260,84 @@ const ShareModal: React.FC<ShareModalProps> = ({ isStock, title = "Share", itemL
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.05, duration: 0.3 }}
-                      className={`group relative p-4 rounded-xl transition-all duration-200 ${sharedEmails.includes(user.userId)
-                          ? "bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200/60"
-                          : "bg-white/80 hover:bg-white border border-gray-200/60 hover:border-blue-200/80 hover:shadow-md"
-                        }`}
+                      className={`group relative p-4 rounded-2xl transition-all duration-300 border ${
+                        sharedEmails.includes(user.userId)
+                          ? isDarkMode
+                            ? "bg-green-500/10 border-green-500/20"
+                            : "bg-green-50 border-green-200/60"
+                          : isDarkMode
+                            ? "bg-slate-800/40 hover:bg-slate-800/60 border-neutral-700/50 hover:border-neutral-600/70"
+                            : "bg-white/80 hover:bg-white border-neutral-200/60 hover:border-blue-300/60 hover:shadow-md"
+                      }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                          {/* Avatar */}
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-semibold ${sharedEmails.includes(user.userId)
-                              ? "bg-green-100 text-green-700"
-                              : "bg-gradient-to-br from-gray-100 to-gray-200 text-gray-600"
-                            }`}>
+                          {/* Clean Avatar */}
+                          <div className={`relative w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-bold ${
+                            sharedEmails.includes(user.userId)
+                              ? isDarkMode
+                                ? "bg-green-500/20 text-green-300"
+                                : "bg-green-100 text-green-700"
+                              : isDarkMode
+                                ? "bg-slate-700/50 text-white/80"
+                                : "bg-gray-100 text-gray-700"
+                          }`}>
                             {user.name.substring(0, 2).toUpperCase()}
                           </div>
 
-                          {/* User Info */}
+                          {/* User Info - Clean Design */}
                           <div className="flex-1 min-w-0">
-                            <div className="font-semibold text-gray-900 truncate">
+                            <div className={`font-bold truncate ${
+                              isDarkMode ? 'text-white' : 'text-gray-900'
+                            }`}>
                               {user.name}
                             </div>
-                            <div className="text-sm text-gray-500 truncate">
-                              {user.email}
+                            <div className={`text-sm truncate flex items-center gap-1 ${
+                              isDarkMode ? 'text-white/60' : 'text-gray-500'
+                            }`}>
+                              <Mail className="w-3 h-3 flex-shrink-0" />
+                              <span>{user.email}</span>
                             </div>
                           </div>
                         </div>
 
-                        {/* Action Button */}
+                        {/* Action Button - Clean Design */}
                         <div className="flex-shrink-0">
                           {sharedEmails.includes(user.userId) ? (
                             <motion.div
                               initial={{ scale: 0 }}
                               animate={{ scale: 1 }}
-                              className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg font-medium"
+                              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm ${
+                                isDarkMode
+                                  ? 'bg-green-500/20 text-green-300'
+                                  : 'bg-green-100 text-green-700'
+                              }`}
                             >
                               <Check className="w-4 h-4" />
-                              <span className="text-sm">Shared</span>
+                              <span>Shared</span>
                             </motion.div>
                           ) : (
                             <motion.button
                               onClick={() => handleShare(user.userId, user.name)}
                               disabled={sharingEmail === user.userId}
-                              className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 ${sharingEmail === user.userId
-                                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                                  : "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105"
-                                }`}
+                              className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all duration-300 ${
+                                sharingEmail === user.userId
+                                  ? isDarkMode
+                                    ? "bg-slate-700/50 text-white/50 cursor-not-allowed"
+                                    : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                  : "bg-red-600 hover:bg-red-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105"
+                              }`}
                               whileHover={sharingEmail !== user.userId ? { scale: 1.05 } : {}}
                               whileTap={sharingEmail !== user.userId ? { scale: 0.95 } : {}}
                             >
                               {sharingEmail === user.userId ? (
                                 <div className="flex items-center gap-2">
-                                  <Loader className="w-3 h-3 animate-spin" />
+                                  <Loader className="w-4 h-4 animate-spin" />
                                   <span>Sharing...</span>
                                 </div>
                               ) : (
                                 <div className="flex items-center gap-2">
-                                  <Share2 className="w-3 h-3" />
+                                  <Send className="w-4 h-4" />
                                   <span>Share</span>
                                 </div>
                               )}
@@ -283,6 +362,32 @@ const ShareModal: React.FC<ShareModalProps> = ({ isStock, title = "Share", itemL
           onClose={() => setToastMessage(null)}
         />
       )}
+
+      {/* Custom Scrollbar Styles */}
+      <style>{`
+        .custom-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: ${isDarkMode ? '#475569 #1e293b' : '#cbd5e1 #f1f5f9'};
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: ${isDarkMode ? '#1e293b' : '#f1f5f9'};
+          border-radius: 3px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: ${isDarkMode ? '#475569' : '#cbd5e1'};
+          border-radius: 3px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: ${isDarkMode ? '#64748b' : '#94a3b8'};
+        }
+      `}</style>
     </>
   );
 };

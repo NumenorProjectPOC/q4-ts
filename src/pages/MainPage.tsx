@@ -7,11 +7,14 @@ import {
   Share2,
   Bell,
   Search,
-  BarChart3,
   ChevronLeft,
   ChevronRight,
   Menu,
   TrendingUp,
+  Activity,
+  Layers,
+  Signal,
+  MoreVertical
 } from "lucide-react";
 
 import Toast from "../components/ui/Toast";
@@ -22,15 +25,17 @@ import AISearchComponent from "../components/AISearchComponent";
 import QuickStockPreviewModal from "../components/ui/QuickStockPreviewModal";
 import GraphMonitorComponent from "../components/MonitoringGraph";
 import Dock from "../components/ui/Dock";
+import AlertModal from "../components/ui/AlertModal";
+import ThemeToggle from "../components/ui/ThemeToggle";
 
 import {
   fetchFavoriteStocks,
   fetchMonitoredStockData,
   removeFavoriteStock,
-  setStockAlert,
   toggleStockMonitoring,
 } from "../services/quantiforeApi";
 import { formatStockName } from "../utils/utility";
+import { useTheme } from '../context/ThemeContext';
 
 // Types
 interface DataOption {
@@ -46,12 +51,25 @@ type DataAPIResponse = {
   lower_threshold: number;
 };
 
-const COLLAPSED_W = 64;   // 16 (w-16) * 4
-const EXPANDED_W = 384;   // 96 (w-96) * 4
-const SIDE_GAP = 24;      // left-6 * 4
-const RIGHT_GAP = 24;     // mirror right padding for symmetry
+interface AlertFormData {
+  upperThreshold: number | null;
+  lowerThreshold: number | null;
+  alertFrequency: string;
+  emailNotifications: string[];
+  phoneNotifications: string[];
+}
+
+const STORAGE_KEYS = {
+  FAVORITE_STOCKS: 'favorite_stocks',
+  MONITORING_DATA: 'monitoring_data',
+  SELECTED_DATA: 'selected_monitoring_data',
+  LAST_UPDATED: 'monitoring_last_updated'
+} as const;
 
 const MainPage: React.FC = () => {
+  // Theme state using context
+  const { isDarkMode } = useTheme();
+
   // Data state
   const [dataOptions, setDataOptions] = useState<DataOption[]>([]);
   const [selectedData, setSelectedData] = useState<string[]>([]);
@@ -66,6 +84,12 @@ const MainPage: React.FC = () => {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isAiSearchOpen, setIsAiSearchOpen] = useState(false);
 
+  // Mobile-specific states
+  const [isMobile, setIsMobile] = useState(false);
+  const [isTablet, setIsTablet] = useState(false);
+  const [mobileStocksPanelOpen, setMobileStocksPanelOpen] = useState(false);
+  const [activeDropdownStock, setActiveDropdownStock] = useState<DataOption | null>(null);
+
   // Modals and toasts
   const [showShareModal, setShowShareModal] = useState(false);
   const [dataToShare, setDataToShare] = useState<DataOption | null>(null);
@@ -79,13 +103,66 @@ const MainPage: React.FC = () => {
 
   const navigate = useNavigate();
 
-  // Track the effective sidebar width so layout can react without jank
-  const sidebarWidth = isLeftSidebarCollapsed ? COLLAPSED_W : EXPANDED_W;
-  const contentLeftOffset = sidebarWidth + SIDE_GAP; // left margin for content
-  const contentRightOffset = RIGHT_GAP;
+  const saveToStorage = (key: string, data: any) => {
+    try {
+      sessionStorage.setItem(key, JSON.stringify(data));
+      // Also save to localStorage for persistence across sessions
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch (error) {
+      console.warn(`Failed to save to storage:`, error);
+    }
+  };
 
-  // Bump a key to force GraphMonitorComponent to re-measure when sidebar width changes
-  const graphLayoutKey = useMemo(() => (isLeftSidebarCollapsed ? "collapsed" : "expanded"), [isLeftSidebarCollapsed]);
+  const loadFromStorage = (key: string) => {
+    try {
+      // Try sessionStorage first, then localStorage as fallback
+      const sessionData = sessionStorage.getItem(key);
+      if (sessionData) {
+        return JSON.parse(sessionData);
+      }
+      
+      const localData = localStorage.getItem(key);
+      if (localData) {
+        const parsed = JSON.parse(localData);
+        // Copy to sessionStorage for faster access
+        sessionStorage.setItem(key, localData);
+        return parsed;
+      }
+    } catch (error) {
+      console.warn(`Failed to load from storage:`, error);
+    }
+    return null;
+  };
+
+  const clearOldData = () => {
+    const lastUpdated = loadFromStorage(STORAGE_KEYS.LAST_UPDATED);
+    const now = Date.now();
+    const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
+    
+    if (!lastUpdated || (now - lastUpdated) > CACHE_DURATION) {
+      // Clear old monitoring data
+      sessionStorage.removeItem(STORAGE_KEYS.MONITORING_DATA);
+      localStorage.removeItem(STORAGE_KEYS.MONITORING_DATA);
+      saveToStorage(STORAGE_KEYS.LAST_UPDATED, now);
+    }
+  };
+  // Responsive detection
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      setIsMobile(width < 768);
+      setIsTablet(width >= 768 && width < 1024);
+
+      // Auto-collapse sidebar on mobile
+      if (width < 768) {
+        setIsLeftSidebarCollapsed(true);
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Utils
   const handleGoToDashboard = (targetTab?: "monitoring" | "visualization") => {
@@ -93,14 +170,9 @@ const MainPage: React.FC = () => {
   };
 
   const refreshFavoritesFromStorage = () => {
-    const cached = sessionStorage.getItem("favorite_stocks");
+    const cached = loadFromStorage(STORAGE_KEYS.FAVORITE_STOCKS);
     if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        setDataOptions(parsed);
-      } catch {
-        // ignore
-      }
+      setDataOptions(cached);
     }
   };
 
@@ -109,33 +181,50 @@ const MainPage: React.FC = () => {
     const loadFavorites = async () => {
       try {
         setIsFavoritesLoading(true);
-        const cached = sessionStorage.getItem("favorite_stocks");
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          setDataOptions(parsed);
-          const monitoredGuids = parsed.filter((d: any) => d.monitored).map((d: any) => d.guid);
-          const monitoredValues = parsed.filter((d: any) => d.monitored).map((d: any) => d.value);
-          if (monitoredGuids.length > 0) {
-            await fetchInitialMonitoredData(monitoredGuids, monitoredValues);
-          }
+        clearOldData();
+        
+        // Try to load from storage first
+        const cachedFavorites = loadFromStorage(STORAGE_KEYS.FAVORITE_STOCKS);
+        const cachedMonitoringData = loadFromStorage(STORAGE_KEYS.MONITORING_DATA);
+        const cachedSelectedData = loadFromStorage(STORAGE_KEYS.SELECTED_DATA);
+        
+        if (cachedFavorites && cachedMonitoringData && cachedSelectedData) {
+          console.log('Loading from cache...');
+          setDataOptions(cachedFavorites);
+          setData(cachedMonitoringData);
+          setSelectedData(cachedSelectedData);
+          
+          // Set active index to first monitored item
+          const firstMonitoredIndex = cachedSelectedData.findIndex((value: string) => 
+            cachedFavorites.find((fav: DataOption) => fav.value === value)?.monitored
+          );
+          setActiveDataIndex(Math.max(0, firstMonitoredIndex));
+          
+          setIsFavoritesLoading(false);
           return;
         }
 
+        // Fallback to API
+        console.log('Loading from API...');
         const favorites = await fetchFavoriteStocks();
         const formatted = favorites.map((stock: any) => ({
           ...stock,
           label: formatStockName(stock.label),
           guid: stock.guid,
         }));
-        sessionStorage.setItem("favorite_stocks", JSON.stringify(formatted));
+        
+        saveToStorage(STORAGE_KEYS.FAVORITE_STOCKS, formatted);
         setDataOptions(formatted);
 
-        const monitoredGuids = formatted.filter((d: any) => d.monitored).map((d: any) => d.guid);
-        const monitoredValues = formatted.filter((d: any) => d.monitored).map((d: any) => d.value);
-        if (monitoredGuids.length > 0) {
+        const monitoredItems = formatted.filter((d: DataOption) => d.monitored);
+        if (monitoredItems.length > 0) {
+          const monitoredGuids = monitoredItems.map((d: DataOption) => d.guid);
+          const monitoredValues = monitoredItems.map((d: DataOption) => d.value);
           await fetchInitialMonitoredData(monitoredGuids, monitoredValues);
         }
-      } catch {
+        
+      } catch (error) {
+        console.error('Error loading favorites:', error);
         setToast({ type: "error", message: "Could not load favorites. Please try again." });
       } finally {
         setIsFavoritesLoading(false);
@@ -147,6 +236,7 @@ const MainPage: React.FC = () => {
 
   const fetchInitialMonitoredData = async (guids: string[], values: string[]) => {
     try {
+      console.log('Fetching monitoring data for:', values);
       const dataList = await fetchMonitoredStockData(guids);
       const resultData = guids.map((guid) => {
         const match = dataList.find((d: any) => d.guid === guid);
@@ -160,9 +250,18 @@ const MainPage: React.FC = () => {
 
       setSelectedData(values);
       setData(resultData);
+      
+      // Save to storage
+      saveToStorage(STORAGE_KEYS.MONITORING_DATA, resultData);
+      saveToStorage(STORAGE_KEYS.SELECTED_DATA, values);
+      saveToStorage(STORAGE_KEYS.LAST_UPDATED, Date.now());
+      
       const loadingMap = Object.fromEntries(guids.map((g) => [g, false]));
       setMonitoredDataLoading(loadingMap);
-    } catch {
+      
+      console.log('Monitoring data cached successfully');
+    } catch (error) {
+      console.error('Error fetching monitoring data:', error);
       setToast({ type: "error", message: "Failed to load monitored data." });
     }
   };
@@ -184,6 +283,7 @@ const MainPage: React.FC = () => {
       setMonitoredDataLoading((prev) => ({ ...prev, [value]: true }));
 
       if (!isMonitored) {
+        // Add to monitoring
         const result = await fetchMonitoredStockData([dataItem.guid]);
         if (result && result.length > 0) {
           const formatted: DataAPIResponse = {
@@ -191,19 +291,38 @@ const MainPage: React.FC = () => {
             upper_threshold: (result[0] as { upper_threshold?: number }).upper_threshold || 0,
             lower_threshold: (result[0] as { lower_threshold?: number }).lower_threshold || 0,
           };
-          setSelectedData((prev) => [...prev, value]);
-          setData((prev) => [...prev, formatted]);
+          
+          const newSelectedData = [...selectedData, value];
+          const newData = [...data, formatted];
+          
+          setSelectedData(newSelectedData);
+          setData(newData);
           setActiveDataIndex(selectedData.length);
+          
+          // Update storage
+          saveToStorage(STORAGE_KEYS.MONITORING_DATA, newData);
+          saveToStorage(STORAGE_KEYS.SELECTED_DATA, newSelectedData);
+          saveToStorage(STORAGE_KEYS.LAST_UPDATED, Date.now());
         }
       } else {
+        // Remove from monitoring
         const indexToRemove = selectedData.findIndex((d) => d === value);
-        setSelectedData((prev) => prev.filter((d) => d !== value));
-        setData((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+        const newSelectedData = selectedData.filter((d) => d !== value);
+        const newData = data.filter((_, idx) => idx !== indexToRemove);
+        
+        setSelectedData(newSelectedData);
+        setData(newData);
+        
         if (activeDataIndex === indexToRemove) {
           setActiveDataIndex(0);
         } else if (activeDataIndex > indexToRemove) {
           setActiveDataIndex((prev) => prev - 1);
         }
+        
+        // Update storage
+        saveToStorage(STORAGE_KEYS.MONITORING_DATA, newData);
+        saveToStorage(STORAGE_KEYS.SELECTED_DATA, newSelectedData);
+        saveToStorage(STORAGE_KEYS.LAST_UPDATED, Date.now());
       }
 
       await toggleStockMonitoring(dataItem.guid, newMonitorState);
@@ -213,15 +332,19 @@ const MainPage: React.FC = () => {
         message: newMonitorState ? `${label} is now being monitored.` : `${label} removed from monitoring.`,
       });
 
+      // Refresh favorites and update storage
       const favorites = await fetchFavoriteStocks();
       const formattedFavorites = favorites.map((fav: any) => ({
         ...fav,
         label: formatStockName(fav.label),
         guid: fav.guid,
       }));
-      sessionStorage.setItem("favorite_stocks", JSON.stringify(formattedFavorites));
+      
+      saveToStorage(STORAGE_KEYS.FAVORITE_STOCKS, formattedFavorites);
       setDataOptions(formattedFavorites);
-    } catch {
+      
+    } catch (error) {
+      console.error('Error toggling monitoring:', error);
       setToast({ type: "error", message: `Could not ${newMonitorState ? "monitor" : "unmonitor"} ${label}` });
     } finally {
       setMonitoredDataLoading((prev) => ({ ...prev, [value]: false }));
@@ -233,356 +356,772 @@ const MainPage: React.FC = () => {
       await removeFavoriteStock(dataItem.guid);
       const updated = dataOptions.filter((d) => d.guid !== dataItem.guid);
       setDataOptions(updated);
-      sessionStorage.setItem("favorite_stocks", JSON.stringify(updated));
+      
+      // Update storage
+      saveToStorage(STORAGE_KEYS.FAVORITE_STOCKS, updated);
+      
+      // Also remove from monitoring if it was being monitored
+      if (selectedData.includes(dataItem.value)) {
+        const indexToRemove = selectedData.findIndex((d) => d === dataItem.value);
+        const newSelectedData = selectedData.filter((d) => d !== dataItem.value);
+        const newData = data.filter((_, idx) => idx !== indexToRemove);
+        
+        setSelectedData(newSelectedData);
+        setData(newData);
+        
+        saveToStorage(STORAGE_KEYS.MONITORING_DATA, newData);
+        saveToStorage(STORAGE_KEYS.SELECTED_DATA, newSelectedData);
+      }
+      
       setToast({ type: "error", message: `${dataItem.label} removed from favorites.` });
-    } catch {
+    } catch (error) {
+      console.error('Error removing favorite:', error);
       setToast({ type: "error", message: `Failed to remove ${dataItem.label} from favorites.` });
     }
   };
 
-  const handleSetAlert = async () => {
+  const handleSetAlert = async (alertData: AlertFormData) => {
     if (!alertModalData) return;
 
-    const hasUpper = upperThreshold.trim() !== "";
-    const hasLower = lowerThreshold.trim() !== "";
-    const upper = hasUpper ? parseFloat(upperThreshold) : null;
-    const lower = hasLower ? parseFloat(lowerThreshold) : null;
-
-    if ((hasUpper && isNaN(upper!)) || (hasLower && isNaN(lower!))) {
-      setToast({ type: "error", message: "Please enter valid threshold values." });
-      return;
-    }
-    if (!hasUpper && !hasLower) {
-      setToast({ type: "error", message: "Please enter at least one threshold." });
-      return;
-    }
-
     try {
-      await setStockAlert(alertModalData.guid, upper ?? 0, lower ?? 0);
-      setToast({ type: "success", message: `Alert set for ${alertModalData.label}.` });
-    } catch {
-      setToast({ type: "error", message: `Failed to set alert for ${alertModalData.label}.` });
-    } finally {
-      setAlertModalData(null);
-      setUpperThreshold("");
-      setLowerThreshold("");
+      if (alertData.alertFrequency || alertData.emailNotifications.length || alertData.phoneNotifications.length) {
+        const alertPreferences = {
+          stockGuid: alertModalData.guid,
+          stockName: alertModalData.label,
+          alertFrequency: alertData.alertFrequency,
+          emailNotifications: alertData.emailNotifications,
+          phoneNotifications: alertData.phoneNotifications,
+          createdAt: new Date().toISOString()
+        };
+
+        const existingPrefs = JSON.parse(localStorage.getItem('alertPreferences') || '{}');
+        existingPrefs[alertModalData.guid] = alertPreferences;
+        localStorage.setItem('alertPreferences', JSON.stringify(existingPrefs));
+      }
+
+      setToast({
+        type: "success",
+        message: `Alert thresholds successfully configured for ${alertModalData.label}!`
+      });
+
+      return Promise.resolve();
+
+    } catch (error) {
+      console.error("Error setting alert:", error);
+      setToast({
+        type: "error",
+        message: `Failed to configure alert for ${alertModalData.label}.`
+      });
+      throw new Error(`Failed to configure alert for ${alertModalData.label}.`);
     }
   };
 
-  // Derived
-  const filteredData = dataOptions.filter((d) => d.label.toLowerCase().includes(search.toLowerCase()));
-
-  // A ref that forces reflow of the graph container on layout changes (no heavy listeners)
-  const contentRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    // Defer a resize to allow transition to finish so charts measure the final box
-    const t = setTimeout(() => {
-      if (!contentRef.current) return;
-      // Force a reflow-safe style read; Graph component uses ResizeObserver internally
-      void contentRef.current.offsetWidth; // eslint-disable-line @typescript-eslint/no-unused-expressions
-      // Trigger a window resize event for any listeners inside chart libs
-      window.dispatchEvent(new Event("resize"));
-    }, 320); // matches transition duration
-    return () => clearTimeout(t);
-  }, [graphLayoutKey]);
+    if (selectedData.length === 0) return;
+    
+    const interval = setInterval(async () => {
+      try {
+        console.log('Refreshing monitoring data...');
+        const monitoredItems = dataOptions.filter((d) => selectedData.includes(d.value));
+        const monitoredGuids = monitoredItems.map((d) => d.guid);
+        
+        if (monitoredGuids.length > 0) {
+          const dataList = await fetchMonitoredStockData(monitoredGuids);
+          const resultData = monitoredGuids.map((guid) => {
+            const match = dataList.find((d: any) => d.guid === guid);
+            if (!match) return null;
+            return {
+              stock_data: match,
+              upper_threshold: (match as { upper_threshold?: number }).upper_threshold || 0,
+              lower_threshold: (match as { lower_threshold?: number }).lower_threshold || 0,
+            } as DataAPIResponse;
+          });
 
-  return (
-    <div className="h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 text-gray-900 antialiased relative overflow-hidden flex flex-col">
-      {/* Background decoration */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full opacity-5 bg-gradient-to-br from-red-400 to-orange-400 blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full opacity-5 bg-gradient-to-tr from-blue-400 to-purple-400 blur-3xl" />
-      </div>
+          setData(resultData);
+          saveToStorage(STORAGE_KEYS.MONITORING_DATA, resultData);
+          saveToStorage(STORAGE_KEYS.LAST_UPDATED, Date.now());
+          console.log('Monitoring data refreshed');
+        }
+      } catch (error) {
+        console.error('Failed to refresh monitoring data:', error);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
 
-      {/* Header */}
-      <header className="flex items-center justify-between px-8 h-20 bg-white shadow-sm border-b border-gray-200/60 sticky top-0 z-30 flex-shrink-0">
+    return () => clearInterval(interval);
+  }, [selectedData, dataOptions]);
+  // Mobile Action Menu Component
+  const MobileActionMenu: React.FC<{
+    stock: DataOption;
+    onClose: () => void;
+    position: { x: number; y: number };
+  }> = ({ stock, onClose, position }) => {
+    const isMonitored = selectedData.includes(stock.value);
+    const isLoading = monitoredDataLoading[stock.value];
+
+    return (
+      <>
+        {/* Backdrop */}
         <motion.div
-          className="flex items-center space-x-4"
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-40"
+          onClick={onClose}
+        />
+
+        {/* Menu */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9, y: -10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.9, y: -10 }}
+          className={`absolute z-50 min-w-[200px] rounded-xl border shadow-lg backdrop-blur-xl ${isDarkMode
+              ? 'bg-slate-900/95 border-neutral-700/50'
+              : 'bg-white/95 border-neutral-200/60'
+            }`}
+          style={{
+            left: Math.min(position.x, window.innerWidth - 220),
+            top: position.y + 10
+          }}
         >
-          <img src="/qf-logo0.1.svg" alt="Quantifore logo" className="h-8 select-none" />
-          <div className="flex items-center space-x-2">
-            <BarChart3 className="w-5 h-5 text-red-600" />
-            <span className="text-lg font-semibold text-gray-900">Data Monitor</span>
+          <div className="p-2">
+            <div className={`px-3 py-2 text-xs font-bold ${isDarkMode ? 'text-white/70' : 'text-neutral-600'
+              }`}>
+              {formatStockName(stock.label)}
+            </div>
+
+            <button
+              onClick={() => {
+                handleDataToggle(stock.value, stock.label);
+                onClose();
+              }}
+              disabled={isLoading}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isMonitored
+                  ? isDarkMode
+                    ? 'text-red-400 hover:bg-red-900/20'
+                    : 'text-red-600 hover:bg-red-50'
+                  : isDarkMode
+                    ? 'text-white hover:bg-white/10'
+                    : 'text-neutral-700 hover:bg-neutral-100'
+                }`}
+            >
+              {isLoading ? (
+                <div className="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full" />
+              ) : (
+                <Monitor className="w-4 h-4" />
+              )}
+              {isMonitored ? 'Stop Monitoring' : 'Start Monitoring'}
+            </button>
+
+            <button
+              onClick={() => {
+                setDataToShare(stock);
+                setShowShareModal(true);
+                onClose();
+              }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isDarkMode
+                  ? 'text-white hover:bg-white/10'
+                  : 'text-neutral-700 hover:bg-neutral-100'
+                }`}
+            >
+              <Share2 className="w-4 h-4" />
+              Share
+            </button>
+
+            <button
+              onClick={() => {
+                setAlertModalData(stock);
+                const matched = data.find((d, idx) => selectedData[idx] === stock.value);
+                setUpperThreshold(matched ? matched?.upper_threshold?.toString() : "");
+                setLowerThreshold(matched ? matched?.lower_threshold?.toString() : "");
+                onClose();
+              }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isDarkMode
+                  ? 'text-white hover:bg-white/10'
+                  : 'text-neutral-700 hover:bg-neutral-100'
+                }`}
+            >
+              <Bell className="w-4 h-4" />
+              Set Alert
+            </button>
+
+            <div className="h-px bg-neutral-200 dark:bg-neutral-700 my-1" />
+
+            <button
+              onClick={() => {
+                setConfirmPopup({ data: stock });
+                onClose();
+              }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isDarkMode
+                  ? 'text-red-400 hover:bg-red-900/20'
+                  : 'text-red-600 hover:bg-red-50'
+                }`}
+            >
+              <Trash2 className="w-4 h-4" />
+              Remove
+            </button>
           </div>
         </motion.div>
+      </>
+    );
+  };
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            Live Data
-          </div>
-          <motion.button
-            onClick={() => setIsPanelOpen(!isPanelOpen)}
-            className="rounded-lg p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-all duration-200 shadow-sm border border-gray-200/50"
-            aria-label="Open menu"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+  const filteredData = dataOptions.filter((d) => d.label.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div className={`h-screen flex flex-col transition-all duration-500 font-inter antialiased relative overflow-hidden ${isDarkMode
+        ? 'bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white'
+        : 'bg-gradient-to-br from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
+      }`}>
+
+      {/* Enhanced Professional Background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className={`absolute -top-40 -right-40 w-96 h-96 rounded-full opacity-5 blur-3xl ${isDarkMode
+            ? 'bg-gradient-to-br from-red-500 to-neutral-600'
+            : 'bg-gradient-to-br from-red-400 to-neutral-400'
+          }`} />
+        <div className={`absolute -bottom-40 -left-40 w-96 h-96 rounded-full opacity-5 blur-3xl ${isDarkMode
+            ? 'bg-gradient-to-tr from-neutral-600 to-red-500'
+            : 'bg-gradient-to-tr from-neutral-400 to-red-400'
+          }`} />
+      </div>
+
+      {/* MOBILE MINIMAL HEADER */}
+      {isMobile ? (
+        <header className={`flex items-center justify-between px-4 h-16 backdrop-blur-xl shadow-sm border-b flex-shrink-0 z-30 transition-all duration-500 ${isDarkMode
+            ? 'bg-slate-900/90 border-neutral-700/30'
+            : 'bg-white/90 border-neutral-200/60'
+          }`}>
+          {/* Q Logo */}
+          <motion.div
+            className="flex items-center"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5 }}
           >
-            <Menu className="h-5 w-5" />
-          </motion.button>
-        </div>
-      </header>
+            <img
+              src="/Q-logo.svg"
+              alt="Quantifore logo"
+              className="h-8 select-none drop-shadow-sm"
+            />
+          </motion.div>
 
-      {/* Main Content */}
-      <main className="relative flex-1 min-h-0">
-        {/* Sidebar - absolute like Signal */}
-        <motion.aside
-          className={`${isLeftSidebarCollapsed ? "w-16" : "w-96"
-            } absolute left-6 top-6 bottom-6 z-20 bg-white/90 backdrop-blur-xl border border-gray-200 rounded-2xl shadow-2xl flex flex-col transition-all duration-300`}
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.6 }}
-          aria-label="Monitoring sidebar"
-        >
-          {/* Header */}
-          <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-red-50 rounded-t-2xl flex-shrink-0">
-            <div className="flex items-center justify-between">
-              {!isLeftSidebarCollapsed && (
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-gradient-to-r from-red-600 to-red-700 rounded-lg">
-                    <BarChart3 className="w-4 h-4 text-white" />
-                  </div>
-                  <h2 className="font-bold text-gray-900">Stock Monitor</h2>
+          {/* Right Icons */}
+          <div className="flex items-center space-x-3">
+            {/* Theme Toggle */}
+            <ThemeToggle />
+
+            {/* Menu Button */}
+            <motion.button
+              onClick={() => setIsPanelOpen(!isPanelOpen)}
+              className={`rounded-lg p-2.5 transition-all duration-200 shadow-sm border backdrop-blur-sm ${isDarkMode
+                  ? 'text-white/80 hover:text-white hover:bg-white/10 bg-white/5 border-white/20'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80 bg-white/60 border-neutral-200/60'
+                }`}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <Menu className="h-5 w-5" />
+            </motion.button>
+          </div>
+        </header>
+      ) : (
+        /* DESKTOP HEADER - Same as original */
+        <header className={`flex items-center justify-between px-4 sm:px-8 lg:px-12 h-20 sm:h-24 backdrop-blur-xl shadow-sm border-b flex-shrink-0 z-30 transition-all duration-500 ${isDarkMode
+            ? 'bg-slate-900/90 border-neutral-700/30'
+            : 'bg-white/90 border-neutral-200/60'
+          }`}>
+          <motion.div
+            className="flex items-center space-x-3 sm:space-x-5"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <img
+              src={isDarkMode ? "/qf-logo-light.svg" : "/qf-logo-dark.svg"}
+              alt="Quantifore logo"
+              className="h-8 sm:h-10 select-none drop-shadow-sm"
+            />
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <div className={`p-2 sm:p-3 rounded-xl shadow-lg ${isDarkMode ? 'bg-red-500/20' : 'bg-gradient-to-r from-neutral-300 to-neutral-400'
+                }`}>
+                <Activity className={`w-5 h-5 sm:w-6 sm:h-6 ${isDarkMode ? 'text-red-400' : 'text-neutral-900'
+                  }`} />
+              </div>
+              <div>
+                <div className={`text-lg sm:text-xl font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-neutral-900'
+                  }`}>
+                  Monitor
                 </div>
+                <div className={`text-xs sm:text-sm font-medium ${isDarkMode ? 'text-white/70' : 'text-neutral-600'
+                  }`}>Real-time Analytics</div>
+              </div>
+            </div>
+          </motion.div>
+
+          <div className="flex items-center space-x-3">
+            {/* Live Connection Status */}
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${isDarkMode
+                ? 'bg-white/5 text-emerald-400 border border-white/20'
+                : 'bg-white/60 text-emerald-700 border border-neutral-200/60'
+              }`}>
+              <motion.div
+                className="w-1.5 h-1.5 bg-emerald-500 rounded-full"
+                animate={{
+                  opacity: [1, 0.5, 1],
+                  scale: [1, 1.2, 1]
+                }}
+                transition={{ duration: 2, repeat: Infinity }}
+              />
+              <span className="hidden sm:inline">Live Data</span>
+            </div>
+
+            {/* Theme Toggle */}
+            <ThemeToggle />
+
+            {/* Settings Button */}
+            <motion.button
+              onClick={() => setIsPanelOpen(!isPanelOpen)}
+              className={`rounded-lg sm:rounded-xl p-2 sm:p-3 transition-all duration-200 shadow-sm border backdrop-blur-sm ${isDarkMode
+                  ? 'text-white/80 hover:text-white hover:bg-white/10 bg-white/5 border-white/20'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80 bg-white/60 border-neutral-200/60'
+                }`}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <Menu className="h-5 w-5 sm:h-6 sm:w-6" />
+            </motion.button>
+          </div>
+        </header>
+      )}
+
+      {/* MAIN CONTENT LAYOUT */}
+      <main className={`flex-1 min-h-0 ${isMobile ? 'flex flex-col pb-20' : 'flex px-4 sm:px-8 lg:px-12 py-6 sm:py-8 gap-6'}`}>
+
+        {/* MOBILE HORIZONTAL STOCKS BAR */}
+        {isMobile && (
+          <div className={`border-b backdrop-blur-xl flex-shrink-0 ${isDarkMode ? 'border-neutral-700/50 bg-slate-900/60' : 'border-neutral-200/60 bg-white/80'
+            }`}>
+            {/* AI Search Button */}
+            <div className="px-4 py-3">
+              <motion.button
+                onClick={() => setIsAiSearchOpen(true)}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-300 shadow-md ${isDarkMode
+                    ? 'bg-red-800 text-white hover:bg-red-700'
+                    : 'bg-neutral-800 text-white hover:bg-neutral-700'
+                  }`}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Search className="w-4 h-4" />
+                <span className="font-bold text-sm">AI Stock Search</span>
+              </motion.button>
+            </div>
+
+            {/* Horizontal Stocks List */}
+            <div className="px-4 pb-3">
+              <div className={`flex items-center gap-2 mb-3`}>
+                <Signal className={`w-4 h-4 ${isDarkMode ? 'text-white' : 'text-neutral-900'}`} />
+                <span className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>
+                  Stocks ({dataOptions.length})
+                </span>
+              </div>
+
+              {isFavoritesLoading ? (
+                <div className="flex gap-3 overflow-x-auto pb-2">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className={`flex-shrink-0 w-48 h-16 rounded-xl animate-pulse ${isDarkMode ? 'bg-white/5' : 'bg-neutral-100/80'
+                      }`} />
+                  ))}
+                </div>
+              ) : dataOptions.length > 0 ? (
+                <div className="flex gap-3 overflow-x-auto pb-2">
+                  {filteredData.map((dataItem, index) => {
+                    const isSelected = selectedData.includes(dataItem.value);
+                    const dataIndex = selectedData.findIndex((d) => d === dataItem.value);
+                    const isActive = isSelected && dataIndex === activeDataIndex;
+                    const isLoading = monitoredDataLoading[dataItem.value];
+
+                    return (
+                      <motion.div
+                        key={dataItem.value}
+                        onClick={() => {
+                          if (isSelected) setActiveDataIndex(dataIndex);
+                        }}
+                        className={`flex-shrink-0 w-48 p-3 rounded-xl border transition-all duration-300 cursor-pointer relative ${isActive
+                            ? isDarkMode
+                              ? "bg-slate-900/80 border-red-500/50 shadow-lg shadow-red-500/10"
+                              : "bg-white border-red-500/50 shadow-lg shadow-red-500/10"
+                            : isDarkMode
+                              ? "bg-slate-900/60 border-neutral-700/50 hover:border-neutral-600/70"
+                              : "bg-white/80 border-neutral-200/60 hover:border-neutral-300/80"
+                          }`}
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                      >
+                        {isActive && (
+                          <div className="absolute inset-0 bg-gradient-to-r from-red-500/5 to-transparent pointer-events-none rounded-xl" />
+                        )}
+
+                        <div className="flex items-center justify-between relative z-10">
+                          <div className="flex-1 min-w-0 mr-2">
+                            <div className={`text-sm font-bold mb-1 truncate ${isDarkMode ? 'text-white' : 'text-neutral-900'
+                              }`}>
+                              {formatStockName(dataItem.label)}
+                            </div>
+                            {isSelected ? (
+                              <span className={`inline-flex items-center text-xs font-bold ${isDarkMode ? 'text-red-400' : 'text-red-600'
+                                }`}>
+                                <motion.div
+                                  className="w-1.5 h-1.5 bg-red-500 rounded-full mr-1.5"
+                                  animate={{ opacity: [1, 0.5, 1] }}
+                                  transition={{ duration: 2, repeat: Infinity }}
+                                />
+                                Monitoring
+                              </span>
+                            ) : (
+                              <div className={`text-xs font-medium ${isDarkMode ? 'text-white/70' : 'text-neutral-600'
+                                }`}>Available</div>
+                            )}
+                          </div>
+
+                          {/* 3-dot menu button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              setActiveDropdownStock(dataItem);
+                            }}
+                            className={`p-1.5 rounded-lg transition-colors ${isDarkMode
+                                ? 'hover:bg-white/10 text-white/70'
+                                : 'hover:bg-neutral-100 text-neutral-500'
+                              }`}
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className={`text-center py-8 border-2 border-dashed rounded-xl ${isDarkMode ? 'border-neutral-700/50' : 'border-neutral-200/50'
+                  }`}>
+                  <Layers className={`w-6 h-6 mx-auto mb-2 ${isDarkMode ? 'text-white/40' : 'text-neutral-400'
+                    }`} />
+                  <p className={`text-sm font-bold ${isDarkMode ? 'text-white/60' : 'text-neutral-500'
+                    }`}>No saved stocks</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* DESKTOP SIDEBAR - Same as original but hidden on mobile */}
+        {!isMobile && (
+          <motion.aside
+            className={`${isLeftSidebarCollapsed ? "w-16" : "w-80 lg:w-96"
+              } flex-shrink-0 border rounded-2xl sm:rounded-3xl flex flex-col transition-all duration-300 shadow-lg hover:shadow-2xl overflow-hidden backdrop-blur-xl ${isDarkMode
+                ? 'border-neutral-700/50 bg-slate-900/60'
+                : 'border-neutral-200/60 bg-white/95'
+              }`}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+            style={{ height: 'calc(100vh - 200px)' }}
+          >
+            {/* Sidebar Header - Fixed */}
+            <div className={`p-4 sm:p-6 border-b flex-shrink-0 flex items-center justify-between ${isDarkMode ? 'border-neutral-700/50' : 'border-neutral-200/60'
+              }`}>
+              {!isLeftSidebarCollapsed && (
+                <h2 className={`text-lg sm:text-xl font-bold tracking-tight flex items-center gap-2 sm:gap-3 ${isDarkMode ? 'text-white' : 'text-neutral-900'
+                  }`}>
+                  <Signal className="w-5 h-5 sm:w-6 sm:h-6" />
+                  Stocks
+                </h2>
               )}
               <button
                 onClick={() => setIsLeftSidebarCollapsed((v) => !v)}
-                className="ms-[-10px] p-2 rounded-xl hover:bg-red-50 text-gray-600 transition-colors border border-red-200 shadow-sm"
-                aria-label={isLeftSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                className={`ms-[-16px] p-2 sm:p-3 rounded-xl transition-all backdrop-blur-sm shadow-sm border ${isDarkMode
+                    ? 'hover:bg-white/10 text-white/80 hover:text-white border-white/20'
+                    : 'hover:bg-neutral-100/80 text-neutral-600 hover:text-neutral-900 border-neutral-200/60'
+                  }`}
               >
-                {isLeftSidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+                {isLeftSidebarCollapsed ? (
+                  <ChevronRight className="w-5 h-5" />
+                ) : (
+                  <ChevronLeft className="w-5 h-5" />
+                )}
               </button>
             </div>
-          </div>
 
-          {/* Expanded content with internal scroll */}
-          {!isLeftSidebarCollapsed ? (
-            <div className="flex-1 flex flex-col min-h-0">
-              {/* AI Search */}
-              <div className="p-6 border-b border-gray-200 flex-shrink-0">
-                <motion.button
-                  onClick={() => setIsAiSearchOpen(true)}
-                  className="w-full flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-700 hover:to-red-800 transition-all duration-300 group shadow-lg hover:shadow-xl"
-                  whileHover={{ scale: 1.02, y: -1 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <div className="p-2 bg-white/20 rounded-lg">
-                    <Search className="w-4 h-4" />
+            {/* Sidebar Content - Same as original */}
+            {!isLeftSidebarCollapsed ? (
+              <div className="flex-1 flex flex-col min-h-0">
+                {/* AI Search - Fixed */}
+                <div className="p-4 sm:p-6 flex-shrink-0">
+                  <motion.button
+                    onClick={() => setIsAiSearchOpen(true)}
+                    className={`w-full flex items-center gap-3 p-3 sm:p-4 rounded-2xl transition-all duration-300 group shadow-lg hover:shadow-xl ${isDarkMode
+                        ? 'bg-red-800 text-white hover:bg-red-700'
+                        : 'bg-neutral-800 text-white hover:bg-neutral-700'
+                      }`}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <span className="font-bold text-sm sm:text-base">AI Stock Search</span>
+                    <div className="ml-auto opacity-60 group-hover:opacity-100 transition-opacity">
+                      <Search className="w-4 h-4 sm:w-5 sm:h-5" />
+                    </div>
+                  </motion.button>
+                </div>
+
+                {/* Search Input */}
+                <div className="px-4 sm:px-6 mb-4 sm:mb-6 flex-shrink-0">
+                  <div className={`relative ${isDarkMode ? 'text-white/80' : 'text-neutral-600'}`}>
+                    <Search className="w-4 h-4 sm:w-5 sm:h-5 absolute left-3 sm:left-4 top-3 sm:top-4 opacity-40" />
+                    <input
+                      type="text"
+                      placeholder="Filter sources..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className={`w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-4 rounded-xl border text-sm sm:text-base transition-all placeholder-opacity-60 ${isDarkMode
+                          ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
+                          : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
+                        } focus:outline-none focus:ring-2 focus:ring-red-500/20`}
+                    />
                   </div>
-                  <span className="font-semibold">AI Data Search</span>
-                  <div className="ml-auto">
-                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </div>
-                </motion.button>
-              </div>
+                </div>
 
-              {/* Scrollable favorites */}
-              <div className="flex-1 overflow-y-auto">
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
-                      <div className="w-2 h-2 bg-red-600 rounded-full" />
-                      Favourite Stocks
-                    </h3>
-                    <span className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded-full font-semibold">
-                      {dataOptions.length}
-                    </span>
-                  </div>
+                {/* Desktop Scrollable Favorites List - Same as original */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                  <div className="px-4 sm:px-6 pb-4 sm:pb-6">
+                    <div className="flex items-center justify-between mb-4 sm:mb-6">
+                      <h3 className={`text-sm sm:text-base font-bold tracking-tight ${isDarkMode ? 'text-white/80' : 'text-neutral-600'
+                        }`}>
+                        Favorites
+                      </h3>
+                      <span className={`text-xs sm:text-sm px-3 py-1.5 rounded-full font-bold ${isDarkMode
+                          ? 'bg-white/10 text-white/70 border border-white/20'
+                          : 'bg-neutral-100/80 text-neutral-600 border border-neutral-200/60'
+                        }`}>
+                        {dataOptions.length}
+                      </span>
+                    </div>
 
-                  <div className="space-y-3">
-                    {isFavoritesLoading ? (
-                      Array.from({ length: 6 }).map((_, i) => (
-                        <div key={i} className="h-24 rounded-2xl bg-gray-100 animate-pulse" />
-                      ))
-                    ) : dataOptions.length ? (
-                      filteredData.map((dataItem, index) => {
-                        const isSelected = selectedData.includes(dataItem.value);
-                        const dataIndex = selectedData.findIndex((d) => d === dataItem.value);
-                        const isActive = isSelected && dataIndex === activeDataIndex;
+                    <div className="space-y-3 sm:space-y-4">
+                      {isFavoritesLoading ? (
+                        Array.from({ length: 4 }).map((_, i) => (
+                          <div key={i} className={`h-20 sm:h-24 rounded-2xl animate-pulse ${isDarkMode ? 'bg-white/5' : 'bg-neutral-100/80'
+                            }`} />
+                        ))
+                      ) : dataOptions.length ? (
+                        filteredData.map((dataItem, index) => {
+                          const isSelected = selectedData.includes(dataItem.value);
+                          const dataIndex = selectedData.findIndex((d) => d === dataItem.value);
+                          const isActive = isSelected && dataIndex === activeDataIndex;
+                          const isLoading = monitoredDataLoading[dataItem.value];
 
-                        return (
-                          <motion.div
-                            key={dataItem.value}
-                            layout
-                            onClick={() => {
-                              if (isSelected) setActiveDataIndex(dataIndex);
-                            }}
-                            className={`p-4 rounded-2xl border transition-all group cursor-pointer overflow-hidden relative ${isActive
-                                ? "bg-gradient-to-r from-red-50 to-red-100 border-red-300 shadow-lg"
-                                : "bg-white/90 border-gray-200/60 hover:border-red-300 hover:shadow-lg"
-                              }`}
-                            whileHover={{ scale: 1.02, y: -2 }}
-                            whileTap={{ scale: 0.98 }}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.06 }}
-                          >
-                            {isActive && (
-                              <div className="absolute -top-10 -right-10 w-20 h-20 rounded-full bg-gradient-to-br from-red-400 to-red-600 opacity-10" />
-                            )}
+                          return (
+                            <motion.div
+                              key={dataItem.value}
+                              layout
+                              onClick={() => {
+                                if (isSelected) setActiveDataIndex(dataIndex);
+                              }}
+                              className={`p-4 sm:p-5 rounded-2xl border transition-all duration-300 group cursor-pointer relative overflow-hidden ${isActive
+                                  ? isDarkMode
+                                    ? "bg-slate-900/80 border-red-500/50 shadow-lg shadow-red-500/10"
+                                    : "bg-white border-red-500/50 shadow-lg shadow-red-500/10"
+                                  : isDarkMode
+                                    ? "bg-slate-900/60 border-neutral-700/50 hover:border-neutral-600/70 hover:bg-slate-900/80"
+                                    : "bg-white/80 border-neutral-200/60 hover:border-neutral-300/80 hover:bg-white hover:shadow-md"
+                                }`}
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: index * 0.04 }}
+                              whileHover={{ y: -2 }}
+                            >
+                              {isActive && (
+                                <div className="absolute inset-0 bg-gradient-to-r from-red-500/5 to-transparent pointer-events-none" />
+                              )}
 
-                            <div className="flex items-start justify-between relative z-10">
-                              <div className="flex-1 min-w-0">
-                                <div className="text-base font-bold text-gray-900 mb-1 whitespace-normal">
-                                  {formatStockName(dataItem.label)}
-                                </div>
-                                {isSelected ? (
-                                  <span className="inline-block px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full mb-1">
-                                    Monitoring
-                                  </span>
-                                ) : (
-                                  <div className="text-sm text-gray-500 font-medium">Available</div>
-                                )}
-                                {isActive && (
-                                  <div className="text-xs text-red-600 flex items-center gap-1 font-medium">
-                                    <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
-                                    Currently viewing
+                              <div className="flex items-start justify-between relative z-10">
+                                <div className="flex-1 min-w-0">
+                                  <div className={`text-sm sm:text-base font-bold mb-2 truncate leading-tight tracking-tight ${isDarkMode ? 'text-white' : 'text-neutral-900'
+                                    }`}>
+                                    {formatStockName(dataItem.label)}
                                   </div>
-                                )}
+                                  {isSelected ? (
+                                    <span className={`inline-flex items-center text-xs sm:text-sm font-bold ${isDarkMode ? 'text-red-400' : 'text-red-600'
+                                      }`}>
+                                      <motion.div
+                                        className="w-2 h-2 bg-red-500 rounded-full mr-2"
+                                        animate={{ opacity: [1, 0.5, 1] }}
+                                        transition={{ duration: 2, repeat: Infinity }}
+                                      />
+                                      Monitoring
+                                    </span>
+                                  ) : (
+                                    <div className={`text-xs sm:text-sm font-medium ${isDarkMode ? 'text-white/70' : 'text-neutral-600'
+                                      }`}>Available</div>
+                                  )}
+                                </div>
+
+                                {/* Desktop action buttons */}
+                                <div className={`flex items-center gap-1.5 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                  }`}>
+                                  <motion.button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDataToggle(dataItem.value, dataItem.label);
+                                    }}
+                                    disabled={isLoading}
+                                    className={`p-2 sm:p-3 rounded-xl transition-all ${isSelected
+                                        ? "text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                        : isDarkMode
+                                          ? "text-white/60 hover:text-white hover:bg-white/10"
+                                          : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100/80"
+                                      }`}
+                                    title={isSelected ? "Stop Monitoring" : "Start Monitoring"}
+                                    whileTap={{ scale: 0.9 }}
+                                  >
+                                    {isLoading ? (
+                                      <div className="animate-spin w-4 h-4 sm:w-5 sm:h-5 border-2 border-current border-t-transparent rounded-full" />
+                                    ) : (
+                                      <Monitor className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    )}
+                                  </motion.button>
+
+                                  <motion.button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setAlertModalData(dataItem);
+                                      const matched = data.find((d, idx) => selectedData[idx] === dataItem.value);
+                                      setUpperThreshold(matched ? matched?.upper_threshold?.toString() : "");
+                                      setLowerThreshold(matched ? matched?.lower_threshold?.toString() : "");
+                                    }}
+                                    className={`p-2 sm:p-3 rounded-xl transition-all ${isDarkMode
+                                        ? "text-white/60 hover:text-white hover:bg-white/10"
+                                        : "text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100/80"
+                                      }`}
+                                    title="Set Alert"
+                                    whileTap={{ scale: 0.9 }}
+                                  >
+                                    <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
+                                  </motion.button>
+
+                                  <motion.button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setConfirmPopup({ data: dataItem });
+                                    }}
+                                    className={`p-2 sm:p-3 rounded-xl transition-all ${isDarkMode
+                                        ? "text-white/60 hover:text-red-400 hover:bg-white/10"
+                                        : "text-neutral-500 hover:text-red-600 hover:bg-neutral-100/80"
+                                      }`}
+                                    title="Remove"
+                                    whileTap={{ scale: 0.9 }}
+                                  >
+                                    <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                                  </motion.button>
+                                </div>
                               </div>
-
-                              <div className="flex items-center gap-1 ml-3 opacity-70 group-hover:opacity-100 transition-opacity">
-                                <motion.button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDataToggle(dataItem.value, dataItem.label);
-                                  }}
-                                  className={`p-2 rounded-lg transition-all ${isSelected
-                                      ? "text-red-600 hover:bg-red-200 bg-red-100"
-                                      : "text-gray-400 hover:text-red-600 hover:bg-red-50"
-                                    }`}
-                                  title={isSelected ? "Stop Monitoring" : "Start Monitoring"}
-                                  whileHover={{ scale: 1.1 }}
-                                  whileTap={{ scale: 0.9 }}
-                                >
-                                  <Monitor className="w-4 h-4" />
-                                </motion.button>
-
-                                <motion.button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setDataToShare(dataItem);
-                                    setShowShareModal(true);
-                                  }}
-                                  className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-all"
-                                  title="Share"
-                                  whileHover={{ scale: 1.1 }}
-                                  whileTap={{ scale: 0.9 }}
-                                >
-                                  <Share2 className="w-4 h-4" />
-                                </motion.button>
-
-                                <motion.button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setAlertModalData(dataItem);
-                                    const matched = data.find((d, idx) => selectedData[idx] === dataItem.value);
-                                    setUpperThreshold(matched ? matched?.upper_threshold?.toString() : "");
-                                    setLowerThreshold(matched ? matched?.lower_threshold?.toString() : "");
-                                  }}
-                                  className="p-2 rounded-lg text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 transition-all"
-                                  title="Set Alert"
-                                  whileHover={{ scale: 1.1 }}
-                                  whileTap={{ scale: 0.9 }}
-                                >
-                                  <Bell className="w-4 h-4" />
-                                </motion.button>
-
-                                <motion.button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setConfirmPopup({ data: dataItem });
-                                  }}
-                                  className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all"
-                                  title="Remove"
-                                  whileHover={{ scale: 1.1 }}
-                                  whileTap={{ scale: 0.9 }}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </motion.button>
-                              </div>
-                            </div>
-                          </motion.div>
-                        );
-                      })
-                    ) : (
-                      <div className="text-center py-12">
-                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <BarChart3 className="w-8 h-8 text-gray-400" />
+                            </motion.div>
+                          );
+                        })
+                      ) : (
+                        <div className="text-center py-12 sm:py-16 border-2 border-dashed rounded-2xl border-neutral-200/50 dark:border-neutral-700/50">
+                          <Layers className={`w-8 h-8 sm:w-10 sm:h-10 mx-auto mb-3 sm:mb-4 ${isDarkMode ? 'text-white/40' : 'text-neutral-400'
+                            }`} />
+                          <p className={`text-sm sm:text-base font-bold ${isDarkMode ? 'text-white/60' : 'text-neutral-500'
+                            }`}>No saved sources</p>
                         </div>
-                        <p className="text-sm text-gray-500 mb-1 font-medium">No saved sources</p>
-                        <p className="text-xs text-gray-400">Use AI search to find data sources</p>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            // Collapsed: quick AI button at bottom
-            <div className="p-3">
-              <button
-                onClick={() => setIsAiSearchOpen(true)}
-                className="w-full flex items-center justify-center bg-gradient-to-r from-red-600 to-red-700 text-white p-3 rounded-xl hover:from-red-700 hover:to-red-800 transition-all duration-200 shadow-lg"
-                title="AI Data Search"
-              >
-                <Search className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-        </motion.aside>
+            ) : (
+              // Collapsed: enhanced quick AI button
+              <div className="p-4 flex flex-col items-center gap-4 flex-1">
+                <motion.button
+                  onClick={() => setIsAiSearchOpen(true)}
+                  className={`w-12 h-12 flex items-center justify-center rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl ${isDarkMode
+                      ? 'bg-red-800 text-white hover:bg-red-700'
+                      : 'bg-neutral-800 text-white hover:bg-neutral-700'
+                    }`}
+                  title="AI Stock Search"
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Search className="w-5 h-5" />
+                </motion.button>
+              </div>
+            )}
+          </motion.aside>
+        )}
 
+        {/* MAIN CONTENT SECTION - RESPONSIVE GRAPH HEIGHT */}
         <section
-          // Use inline style for precise calc and smooth transitions without Tailwind plugin
-          style={{
-            marginLeft: contentLeftOffset,
-            marginRight: contentRightOffset,
-            transition: "margin 0.3s ease, width 0.3s ease",
-            width: `calc(100% - ${contentLeftOffset + contentRightOffset}px)`,
-          }}
-          className="h-full flex flex-col bg-white/50 backdrop-blur-sm relative min-h-0"
-          ref={contentRef}
+          className={`${isMobile
+              ? 'flex-1 p-4 min-h-0'
+              : 'flex-1 min-h-0'
+            }`}
+          style={!isMobile ? { height: 'calc(100vh - 200px)' } : undefined}
         >
           {selectedData.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-600">
+            <div className={`flex flex-col items-center justify-center h-full rounded-2xl sm:rounded-3xl border shadow-lg backdrop-blur-xl ${isDarkMode
+                ? 'border-neutral-700/50 bg-slate-900/60'
+                : 'border-neutral-200/60 bg-white/95'
+              }`}>
               <motion.div
-                className="text-center space-y-6"
+                className="text-center space-y-6 sm:space-y-8 p-8 sm:p-12"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6 }}
               >
-                <div className="w-20 h-20 bg-gradient-to-br from-red-100 to-red-200 rounded-full flex items-center justify-center mx-auto shadow-lg">
-                  <TrendingUp className="w-10 h-10 text-red-600" />
+                <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl flex items-center justify-center mx-auto relative ${isDarkMode
+                    ? 'bg-white/5'
+                    : 'bg-gradient-to-tr from-neutral-200/80 to-neutral-300/80'
+                  }`}>
+                  <TrendingUp className={`w-10 h-10 sm:w-12 sm:h-12 ${isDarkMode ? 'text-red-500' : 'text-neutral-600'
+                    }`} />
+                  <motion.div
+                    className={`absolute inset-0 rounded-2xl border-2 ${isDarkMode ? 'border-red-500/30' : 'border-neutral-400/30'}`}
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                  />
                 </div>
                 <div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Start Monitoring</h3>
-                  <p className="text-gray-600 max-w-md leading-relaxed">
-                    Select data sources from the sidebar to monitor their performance and analyze trends.
+                  <h3 className={`text-xl sm:text-2xl font-bold mb-3 sm:mb-4 leading-tight tracking-tight ${isDarkMode ? 'text-white' : 'text-neutral-900'
+                    }`}>Select Data to Monitor</h3>
+                  <p className={`max-w-md text-sm sm:text-base font-medium leading-relaxed ${isDarkMode ? 'text-white/70' : 'text-neutral-600'
+                    }`}>
+                    {isMobile
+                      ? "Choose stocks from the list above or use AI search to find new metrics."
+                      : "Choose data sources from the sidebar or use AI search to find new metrics to analyze."
+                    }
                   </p>
                 </div>
                 <motion.button
                   onClick={() => setIsAiSearchOpen(true)}
-                  className="bg-gradient-to-r from-red-600 to-red-700 text-white px-6 py-3 rounded-2xl hover:from-red-700 hover:to-red-800 transition-all font-semibold shadow-lg hover:shadow-xl"
-                  whileHover={{ scale: 1.05, y: -2 }}
-                  whileTap={{ scale: 0.95 }}
+                  className={`px-6 sm:px-8 py-3 sm:py-4 rounded-2xl transition-all duration-300 font-bold shadow-lg hover:shadow-xl text-sm sm:text-base ${isDarkMode
+                      ? 'bg-red-800 text-white hover:bg-red-700'
+                      : 'bg-neutral-800 text-white hover:bg-neutral-700'
+                    }`}
+                  whileTap={{ scale: 0.97 }}
                 >
                   Find Data with AI
                 </motion.button>
               </motion.div>
             </div>
           ) : (
-            <>
-              {/* Main Graph */}
-              <div className="flex-1 p-6 pb-24 min-h-0">
+            <div className="h-full flex flex-col">
+              {/* Main Graph - RESPONSIVE HEIGHT FOR MOBILE */}
+              <div className={`${isMobile ? 'flex-1' : 'flex-1 mb-6 sm:mb-8'}`}>
                 <motion.div
-                  key={graphLayoutKey}
-                  className="h-full bg-white/90 rounded-2xl shadow-2xl relative overflow-hidden"
-                  initial={{ opacity: 0, scale: 0.98 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.25 }}
+                  className="h-full relative"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3 }}
                 >
                   {data[activeDataIndex] ? (
                     <GraphMonitorComponent
@@ -594,166 +1133,179 @@ const MainPage: React.FC = () => {
                       defaultRange="1M"
                       sidebarCollapsed={isLeftSidebarCollapsed}
                       stockName={dataOptions.find((d) => d.value === selectedData[activeDataIndex])?.label}
+                      isDarkMode={isDarkMode}
                     />
                   ) : (
-                    <div className="flex items-center justify-center h-full">
+                    <div className={`h-full rounded-2xl border flex items-center justify-center backdrop-blur-xl ${isDarkMode ? 'border-neutral-700/50 bg-slate-900/60' : 'border-neutral-200/60 bg-white/95'
+                      }`}>
                       <div className="text-center">
-                        <div className="animate-spin rounded-full h-8 w-8 border-4 border-red-600 border-t-transparent mx-auto mb-3" />
-                        <p className="text-gray-600 text-sm">Loading data...</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Other monitored sources mini charts */}
-                  {selectedData.length > 1 && (
-                    <div className="p-6 border-t border-gray-200/60 bg-gray-50/50 backdrop-blur-sm mb-16">
-                      <div className="mb-6">
-                        <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
-                          <div className="w-2 h-2 bg-blue-600 rounded-full" />
-                          Other Sources
-                        </h3>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {selectedData.map((dataValue, index) => {
-                          if (index === activeDataIndex) return null;
-
-                          const dataItem = dataOptions.find((d) => d.value === dataValue);
-                          const dataSet: any = data[index];
-                          const chartPoints = dataSet?.stock_data?.stock_data || [];
-
-                          const parsePointValue = (point: any): number | null => {
-                            const valStr = point.value_unit || point.predicted_value_unit_1 || point.predicted_value_unit_2;
-                            if (!valStr) return null;
-                            const parsed = parseFloat(valStr);
-                            return isNaN(parsed) ? null : parsed;
-                          };
-
-                          return (
-                            <motion.div
-                              key={dataValue}
-                              layout
-                              className="bg-white/90 backdrop-blur-sm rounded-2xl border border-gray-200/60 p-4 cursor-pointer hover:shadow-lg transition-all duration-300 hover:border-red-300"
-                              onClick={() => setActiveDataIndex(index)}
-                              whileHover={{ scale: 1.02, y: -2 }}
-                              whileTap={{ scale: 0.98 }}
-                              initial={{ opacity: 0, y: 20 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ delay: index * 0.1 }}
-                            >
-                              <div className="flex items-center justify-between mb-3">
-                                <h4 className="text-sm font-semibold text-gray-900 truncate">
-                                  {formatStockName(dataItem?.label || "")}
-                                </h4>
-                                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                              </div>
-                              <div className="h-16 bg-gray-50 rounded-xl flex items-center justify-center border border-gray-200/50">
-                                {chartPoints.length > 0 ? (
-                                  <div className="w-full h-full p-2">
-                                    <svg className="w-full h-full" viewBox="0 0 200 40">
-                                      {(() => {
-                                        const values = chartPoints
-                                          .map(parsePointValue)
-                                          .filter((v: any): v is number => v !== null)
-                                          .slice(-30);
-
-                                        if (values.length < 2) return null;
-
-                                        const minValue = Math.min(...values);
-                                        const maxValue = Math.max(...values);
-                                        const valueRange = maxValue - minValue || 1;
-
-                                        const points = values
-                                          .map((value: any, i: any) => {
-                                            const x = (i / (values.length - 1)) * 180 + 10;
-                                            const y = 35 - ((value - minValue) / valueRange) * 30;
-                                            return `${x},${y}`;
-                                          })
-                                          .join(" ");
-
-                                        return (
-                                          <polyline
-                                            points={points}
-                                            fill="none"
-                                            stroke="#dc2626"
-                                            strokeWidth="2"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                          />
-                                        );
-                                      })()}
-                                    </svg>
-                                  </div>
-                                ) : (
-                                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-red-600 border-t-transparent" />
-                                )}
-                              </div>
-                              <p className="text-xs text-gray-500 mt-2 text-center font-medium">Click to expand</p>
-                            </motion.div>
-                          );
-                        })}
+                        <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-2 sm:border-4 border-red-600 border-t-transparent mx-auto mb-3 sm:mb-4" />
+                        <p className={`text-sm sm:text-base font-medium ${isDarkMode ? 'text-white/70' : 'text-neutral-600'
+                          }`}>Loading data...</p>
                       </div>
                     </div>
                   )}
                 </motion.div>
               </div>
 
+              {/* Mini Charts - HIDE ON MOBILE */}
+              {!isMobile && selectedData.length > 1 && (
+                <div className="flex-shrink-0">
+                  <div className="mb-4 sm:mb-6">
+                    <h3 className={`text-sm sm:text-base font-bold tracking-tight flex items-center gap-2 sm:gap-3 ${isDarkMode ? 'text-white/80' : 'text-neutral-600'
+                      }`}>
+                      <Activity className="w-4 h-4 sm:w-5 sm:h-5" />
+                      Also Monitoring
+                    </h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                    {selectedData.map((dataValue, index) => {
+                      if (index === activeDataIndex) return null;
 
-            </>
+                      const dataItem = dataOptions.find((d) => d.value === dataValue);
+                      const dataSet = data[index];
+
+                      // Safe extraction of chart points
+                      let chartPoints: any[] = [];
+                      if (dataSet?.stock_data) {
+                        if (Array.isArray(dataSet.stock_data)) {
+                          chartPoints = dataSet.stock_data;
+                        } else if (dataSet.stock_data.stock_data && Array.isArray(dataSet.stock_data.stock_data)) {
+                          chartPoints = dataSet.stock_data.stock_data;
+                        } else if (dataSet.stock_data.data && Array.isArray(dataSet.stock_data.data)) {
+                          chartPoints = dataSet.stock_data.data;
+                        }
+                      }
+
+                      const parsePointValue = (point: any): number | null => {
+                        if (!point) return null;
+                        const valStr = point.value_unit || point.predicted_value_unit_1 || point.predicted_value_unit_2 || point.value || point.y;
+                        if (!valStr) return null;
+                        const parsed = parseFloat(valStr);
+                        return isNaN(parsed) ? null : parsed;
+                      };
+
+                      return (
+                        <motion.div
+                          key={dataValue}
+                          layout
+                          className={`rounded-2xl border p-4 sm:p-6 cursor-pointer transition-all duration-300 backdrop-blur-xl hover:shadow-lg ${isDarkMode
+                              ? 'border-neutral-700/50 bg-slate-900/60 hover:border-neutral-600/70 hover:bg-slate-900/80'
+                              : 'border-neutral-200/60 bg-white/80 hover:border-neutral-300/80 hover:bg-white hover:shadow-md'
+                            }`}
+                          onClick={() => setActiveDataIndex(index)}
+                          whileHover={{ y: -2 }}
+                          whileTap={{ scale: 0.98 }}
+                        >
+                          <div className="flex items-center justify-between mb-3 sm:mb-4">
+                            <h4 className={`text-sm sm:text-base font-bold truncate leading-tight tracking-tight ${isDarkMode ? 'text-white' : 'text-neutral-900'
+                              }`}>
+                              {formatStockName(dataItem?.label || "")}
+                            </h4>
+                            <motion.div
+                              className="w-2 h-2 bg-red-500 rounded-full"
+                              animate={{ opacity: [1, 0.5, 1] }}
+                              transition={{ duration: 2, repeat: Infinity }}
+                            />
+                          </div>
+                          <div className={`h-16 sm:h-20 rounded-xl flex items-center justify-center relative overflow-hidden ${isDarkMode
+                              ? 'bg-white/5'
+                              : 'bg-neutral-100/70'
+                            }`}>
+                            {chartPoints && chartPoints.length > 0 ? (
+                              <div className="w-full h-full p-2 opacity-80">
+                                <svg className="w-full h-full" viewBox="0 0 200 40" preserveAspectRatio="none">
+                                  {(() => {
+                                    const values = chartPoints
+                                      .map(parsePointValue)
+                                      .filter((v: any): v is number => v !== null && v !== undefined && !isNaN(v))
+                                      .slice(-30);
+
+                                    if (values.length < 2) {
+                                      return (
+                                        <text x="100" y="20" textAnchor="middle" fill={isDarkMode ? "#64748b" : "#94a3b8"} fontSize="8">
+                                          Insufficient data
+                                        </text>
+                                      );
+                                    }
+
+                                    const minValue = Math.min(...values);
+                                    const maxValue = Math.max(...values);
+                                    const valueRange = maxValue - minValue || 1;
+
+                                    const points = values
+                                      .map((value: any, i: any) => {
+                                        const x = (i / (values.length - 1)) * 200;
+                                        const y = 40 - ((value - minValue) / valueRange) * 35;
+                                        return `${x},${y}`;
+                                      })
+                                      .join(" ");
+
+                                    return (
+                                      <polyline
+                                        points={points}
+                                        fill="none"
+                                        stroke="#dc2626"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        vectorEffect="non-scaling-stroke"
+                                      />
+                                    );
+                                  })()}
+                                </svg>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center justify-center">
+                                <div className="animate-spin rounded-full h-4 w-4 border-2 border-red-600 border-t-transparent mb-1" />
+                                <span className={`text-xs ${isDarkMode ? 'text-white/60' : 'text-neutral-500'}`}>Loading...</span>
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-gradient-to-t from-transparent to-white/5 pointer-events-none" />
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </section>
       </main>
 
-      {/* Modals and overlays */}
-      {alertModalData && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center">
-          <motion.div
-            className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full mx-4 border border-gray-200/60"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-gray-900">Set Alert</h2>
-              <button
-                onClick={() => setAlertModalData(null)}
-                className="text-gray-500 hover:text-gray-700 p-1 rounded-lg hover:bg-gray-100"
-              >
-                ✕
-              </button>
-            </div>
-            <p className="text-gray-600 mb-4">
-              Set alerts for <strong>{alertModalData.label}</strong>
-            </p>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-1">Upper Threshold</label>
-                <input
-                  type="number"
-                  value={upperThreshold}
-                  onChange={(e) => setUpperThreshold(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  placeholder="e.g., 120"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-1">Lower Threshold</label>
-                <input
-                  type="number"
-                  value={lowerThreshold}
-                  onChange={(e) => setLowerThreshold(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  placeholder="e.g., 80"
-                />
-              </div>
-              <button
-                onClick={handleSetAlert}
-                className="w-full bg-gradient-to-r from-red-600 to-red-700 text-white py-2 rounded-lg hover:from-red-700 hover:to-red-800 transition-colors font-medium"
-              >
-                Save Alert
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
+      {/* Mobile Action Dropdown */}
+      <AnimatePresence>
+        {activeDropdownStock && (
+          <MobileActionMenu
+            stock={activeDropdownStock}
+            onClose={() => setActiveDropdownStock(null)}
+            position={{
+              x: window.innerWidth - 220,
+              y: 200
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Modals and overlays - Same as original */}
+      <AlertModal
+        isOpen={!!alertModalData}
+        onClose={() => {
+          setAlertModalData(null);
+          setUpperThreshold("");
+          setLowerThreshold("");
+        }}
+        onSave={handleSetAlert}
+        stockName={alertModalData?.label || ""}
+        initialData={{
+          upperThreshold: upperThreshold ? parseFloat(upperThreshold) : undefined,
+          lowerThreshold: lowerThreshold ? parseFloat(lowerThreshold) : undefined,
+          alertFrequency: "daily",
+          emailNotifications: [],
+          phoneNotifications: []
+        }}
+      />
 
       {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
 
@@ -803,20 +1355,37 @@ const MainPage: React.FC = () => {
 
       <AnimatePresence>
         {isPanelOpen && (
-          <>
-            <motion.div
-              className="fixed inset-0 z-40 bg-black bg-opacity-30 backdrop-blur-sm"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsPanelOpen(false)}
-            />
-            <RightSidebar isOpen={isPanelOpen} onClose={() => setIsPanelOpen(false)} />
-          </>
+          <RightSidebar isOpen={isPanelOpen} onClose={() => setIsPanelOpen(false)} />
         )}
       </AnimatePresence>
 
       <Dock />
+
+      {/* Custom Scrollbar Styles */}
+      <style>{`
+        .custom-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: ${isDarkMode ? '#475569 #1e293b' : '#cbd5e1 #f1f5f9'};
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: ${isDarkMode ? '#1e293b' : '#f1f5f9'};
+          border-radius: 3px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: ${isDarkMode ? '#475569' : '#cbd5e1'};
+          border-radius: 3px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: ${isDarkMode ? '#64748b' : '#94a3b8'};
+        }
+      `}</style>
     </div>
   );
 };

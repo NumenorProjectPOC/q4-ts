@@ -1,5 +1,5 @@
-import React from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
+import { ThemeProvider } from './context/ThemeContext'; // Add this import
 import Login from './pages/LoginPage';
 import LandingPage from './pages/LandingPage';
 import RegionSelectionPage from './pages/RegionSelectionPage';
@@ -16,8 +16,9 @@ import Toast from './components/ui/Toast';
 import DashboardHome from './pages/Dashboard';
 import { AIWebSocketProvider } from './context/AIWebSocketContext';
 import WebSocketNotifications from './components/ui/WebSocketNotification';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import LoginSuccessAnimation from './components/ui/LoginSuccessAnimation';
 
 const stepRoutes = ['/regions', '/frameworks', '/domains', '/stocks'];
 
@@ -44,13 +45,13 @@ class ErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="error-boundary-fallback p-4 bg-red-50 border border-red-200 rounded-md">
-          <h2 className="text-red-800 font-semibold mb-2">Something went wrong</h2>
-          <p className="text-red-600 text-sm">
+        <div className="error-boundary-fallback p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+          <h2 className="text-red-800 dark:text-red-200 font-semibold mb-2">Something went wrong</h2>
+          <p className="text-red-600 dark:text-red-300 text-sm">
             {this.state.error?.message || 'An unexpected error occurred'}
           </p>
           <button 
-            className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+            className="mt-2 px-4 py-2 bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600 text-white rounded transition-colors"
             onClick={() => this.setState({ hasError: false, error: undefined })}
           >
             Try Again
@@ -114,13 +115,16 @@ const AuthenticatedApp: React.FC<{ showStepProgress: boolean }> = ({ showStepPro
     return () => clearInterval(interval);
   }, [navigate]);
 
+  const wsUrl = import.meta.env.VITE_WEBSOCKET_URL
+
   return (
-    <AIWebSocketProvider wsUrl="ws://10.200.200.1:8000/ws/ai-query">
+    <AIWebSocketProvider wsUrl={wsUrl}>
       <ErrorBoundary>
         {showStepProgress && <StepProgress />}
         
         {/* Protected Routes with WebSocket connection available */}
         <Routes>
+        <Route path="/login-success" element={<ProtectedRoute element={<LoginSuccessAnimation />} />} />
           <Route path="/regions" element={<ProtectedRoute element={<RegionSelectionPage />} />} />
           <Route path="/frameworks" element={<ProtectedRoute element={<FrameworkSelectionPage />} />} />
           <Route path="/domains" element={<ProtectedRoute element={<DomainSelectionPage />} />} />
@@ -144,8 +148,8 @@ const AuthenticatedApp: React.FC<{ showStepProgress: boolean }> = ({ showStepPro
  * Loading Component - Shows while checking authentication status
  */
 const LoadingScreen: React.FC = () => (
-  <div className="min-h-screen flex items-center justify-center bg-gray-50">
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+  <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400"></div>
   </div>
 );
 
@@ -226,7 +230,6 @@ const App: React.FC = () => {
         <Route path="/landing" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
         {/* Redirect all other routes to landing if not authenticated */}
-        <Route path="*" element={<LandingPage />} />
       </Routes>
       
       {toast && (
@@ -240,4 +243,17 @@ const App: React.FC = () => {
   );
 };
 
-export default App;
+/**
+ * Root App Component with Theme Provider
+ */
+const RootApp: React.FC = () => {
+  return (
+    <ThemeProvider>
+      <div className="theme-transition">
+        <App />
+      </div>
+    </ThemeProvider>
+  );
+};
+
+export default RootApp;

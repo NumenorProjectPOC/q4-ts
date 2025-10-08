@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, X, TrendingUp, Plus, Minus, RefreshCw, Home, AlertCircle, CheckCircle, Clock, Eye, ChevronRight, Trash2, Sparkles, Zap, Check, ExternalLink, WifiOff } from 'lucide-react';
+import { Search, X, Plus, RefreshCw, AlertCircle, CheckCircle, Clock, Eye, ChevronRight, Trash2, Check, ExternalLink, WifiOff, Sparkles, Bot, Activity } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { StockData, useAIWebSocket, AISearchResponse } from '../context/AIWebSocketContext';
 import { addFavoriteStock, removeFavoriteStock } from '../services/quantiforeApi';
 import { formatStockName } from '../utils/utility';
+import { useTheme } from '../context/ThemeContext';
 
 interface AISearchComponentProps {
     isOpen: boolean;
@@ -39,6 +40,7 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
     savedStocks = [],
     currentTab = 'dashboard'
 }) => {
+    const { isDarkMode } = useTheme();
     const [query, setQuery] = useState("");
     const [recentQueries, setRecentQueries] = useState<CachedQuery[]>([]);
     const [isInputFocused, setIsInputFocused] = useState(false);
@@ -54,12 +56,12 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
     const inputRef = useRef<HTMLInputElement>(null);
     const cooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastSearchAttemptRef = useRef<number>(0);
+    const modalRef = useRef<HTMLDivElement>(null);
 
     // Monitor connection status and handle cooldowns
     useEffect(() => {
         if (!isConnected) {
             setServerStatus('offline');
-            // Start cooldown after consecutive failures
             if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
                 setIsInCooldown(true);
                 if (cooldownTimerRef.current) {
@@ -126,6 +128,31 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
             return () => clearTimeout(timer);
         }
     }, [isOpen]);
+
+    // Handle outside click and escape key
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
+                onClose();
+            }
+        };
+
+        const handleEsc = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') onClose();
+        };
+
+        if (isOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+            document.addEventListener('keydown', handleEsc);
+            document.body.style.overflow = 'hidden';
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleEsc);
+            document.body.style.overflow = 'unset';
+        };
+    }, [isOpen, onClose]);
 
     // Effect to cache a search result when it completes or errors
     useEffect(() => {
@@ -233,7 +260,6 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
         try {
             await addFavoriteStock(stock.guid);
             
-            // Update session storage
             const cached = sessionStorage.getItem("favorite_stocks");
             let favorites = cached ? JSON.parse(cached) : [];
             
@@ -245,7 +271,6 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                 monitored: false
             };
             
-            // Check if already exists
             const exists = favorites.some((fav: any) => fav.guid === stock.guid);
             if (!exists) {
                 favorites.unshift(newFavorite);
@@ -264,7 +289,6 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
         try {
             await removeFavoriteStock(stock.guid);
             
-            // Update session storage
             const cached = sessionStorage.getItem("favorite_stocks");
             if (cached) {
                 const favorites = JSON.parse(cached);
@@ -285,21 +309,10 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
         onClose();
     };
 
-    // Enhanced function to check if stock is saved
     const isStockSaved = (stock: StockData) => {
         const currentFavorites = getCurrentFavorites();
         return currentFavorites.some((fav: any) => fav.guid === stock.guid || fav.name === stock.name);
     };
-
-    useEffect(() => {
-        const handleEsc = (event: KeyboardEvent) => { 
-            if (event.key === 'Escape') onClose(); 
-        };
-        if (isOpen) {
-            window.addEventListener('keydown', handleEsc);
-            return () => window.removeEventListener('keydown', handleEsc);
-        }
-    }, [isOpen, onClose]);
 
     useEffect(() => {
         if (status === "completed" && stockResults.length > 0) {
@@ -309,7 +322,6 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
 
     useEffect(() => {
         if (status === "error" && errorMessage) {
-            // Only show toast for new errors, not repeated ones
             if (consecutiveFailures <= 1) {
                 onShowToast?.('error', errorMessage);
             }
@@ -323,7 +335,11 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                 <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="mt-3 text-sm text-red-700 bg-red-50 px-4 py-3 rounded-lg border border-red-200 flex items-center gap-2"
+                    className={`mt-4 text-sm px-4 py-3 rounded-xl border flex items-center gap-3 ${
+                        isDarkMode
+                            ? 'text-red-400 bg-red-500/10 border-red-500/20'
+                            : 'text-red-700 bg-red-50 border-red-200'
+                    }`}
                 >
                     <WifiOff className="w-4 h-4" />
                     <div className="flex-1">
@@ -337,7 +353,11 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                     {!isInCooldown && (
                         <button
                             onClick={() => reconnect()}
-                            className="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-xs rounded transition-colors"
+                            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
+                                isDarkMode
+                                    ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400'
+                                    : 'bg-red-100 hover:bg-red-200 text-red-700'
+                            }`}
                         >
                             Retry
                         </button>
@@ -351,7 +371,11 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                 <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="mt-3 text-sm text-amber-700 bg-amber-50 px-4 py-3 rounded-lg border border-amber-200 flex items-center gap-2"
+                    className={`mt-4 text-sm px-4 py-3 rounded-xl border flex items-center gap-3 ${
+                        isDarkMode
+                            ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                            : 'text-amber-700 bg-amber-50 border-amber-200'
+                    }`}
                 >
                     <AlertCircle className="w-4 h-4" />
                     Connection unstable. Some features may not work properly.
@@ -362,74 +386,127 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
         return null;
     };
 
-    // Check if search should be disabled
     const isSearchDisabled = status === "processing" || !query.trim() || !isConnected || isInCooldown;
 
     return (
         <AnimatePresence>
             {isOpen && (
-                <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    {/* Theme-aware Backdrop */}
+                    <motion.div 
+                        className={`absolute inset-0 backdrop ${
+                            isDarkMode ? 'bg-black/70' : 'bg-black/60'
+                        }`}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={onClose}
+                    />
+
+                    {/* Improved Modal */}
                     <motion.div
+                        ref={modalRef}
                         onClick={(e) => e.stopPropagation()}
-                        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                        initial={{ opacity: 0, scale: 0.95, y: 50 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                        transition={{ duration: 0.2 }}
-                        className="w-full max-w-4xl max-h-[90vh] bg-white rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
+                        exit={{ opacity: 0, scale: 0.95, y: 50 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                        className={`relative w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-2xl border flex flex-col overflow-hidden ${
+                            isDarkMode
+                                ? 'bg-slate-900/95 border-neutral-700/50 backdrop-blur-xl'
+                                : 'bg-white/95 border-gray-100/50 backdrop-blur-xl'
+                        }`}
                     >
-                        {/* Clean Header */}
-                        <div className="relative p-6 bg-gradient-to-r from-gray-50 via-white to-gray-50 border-b border-gray-200">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center">
-                                        <TrendingUp className="h-6 w-6 text-red-600" />
+                        {/* Improved Header */}
+                        <div className={`border-b ${
+                            isDarkMode
+                                ? 'bg-slate-800/50 border-neutral-700/50'
+                                : 'bg-gray-50/50 border-gray-200/50'
+                        }`}>
+                            <div className={`relative flex justify-between items-center px-8 py-6`}>
+                                <div className="flex items-center gap-4">
+                                    <div className={`p-3 rounded-2xl ${
+                                        isDarkMode
+                                            ? 'bg-gradient-to-br from-red-500/20 to-orange-500/20 text-red-400'
+                                            : 'bg-gradient-to-br from-neutral-500/10 to-neutral-500/10 text-neutral-600'
+                                    }`}>
+                                        <Bot className="w-6 h-6" />
                                     </div>
                                     <div>
-                                        <h3 className="text-xl font-semibold text-gray-900">AI Stock Discovery</h3>
-                                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                                            <span>Discover and analyze with AI-powered search</span>
-                                            <span className={`ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${
+                                        <h3 className={`text-xl font-bold ${
+                                            isDarkMode ? 'text-white' : 'text-gray-900'
+                                        }`}>AI Stock Discovery</h3>
+                                        <div className="flex items-center gap-3 text-sm">
+                                            <span className={isDarkMode ? 'text-neutral-300' : 'text-gray-500'}>
+                                                Discover and analyze with AI-powered search
+                                            </span>
+                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium ${
                                                 isConnected 
-                                                    ? "text-green-700 bg-green-50 border-green-200" 
-                                                    : "text-red-700 bg-red-50 border-red-200"
+                                                    ? isDarkMode
+                                                        ? 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30'
+                                                        : 'text-emerald-700 bg-emerald-100 border-emerald-200'
+                                                    : isDarkMode
+                                                        ? 'text-red-400 bg-red-500/20 border-red-500/30'
+                                                        : 'text-red-700 bg-red-100 border-red-200'
                                             }`}>
-                                                <span className={`w-1.5 h-1.5 rounded-full ${
-                                                    isConnected ? "bg-green-500" : "bg-red-500"
-                                                }`} />
+                                                <motion.span 
+                                                    className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-red-500'}`}
+                                                    animate={isConnected ? { opacity: [1, 0.5, 1], scale: [1, 1.2, 1] } : {}}
+                                                    transition={isConnected ? { duration: 2, repeat: Infinity } : {}}
+                                                />
                                                 {serverStatus === "online" ? "Online" : 
                                                  serverStatus === "offline" ? "Offline" : "Connecting"}
                                             </span>
                                         </div>
                                     </div>
                                 </div>
-                                <button 
-                                    onClick={onClose} 
-                                    className="w-10 h-10 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-600 transition-colors"
+                                <motion.button 
+                                    onClick={onClose}
+                                    className={`p-2.5 rounded-xl transition-all duration-200 ${
+                                        isDarkMode
+                                            ? 'text-neutral-400 hover:bg-neutral-700/50 hover:text-white'
+                                            : 'text-gray-500 hover:bg-gray-200 hover:text-gray-900'
+                                    }`}
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
                                 >
-                                    <X className="h-5 w-5" />
-                                </button>
+                                    <X className="w-6 h-6" />
+                                </motion.button>
                             </div>
                         </div>
 
                         {/* Content Area */}
-                        <div className="flex-1 p-6 overflow-y-auto bg-white">
-                            <div className="mb-6">
-                                <div className="flex gap-3">
+                        <div className={`flex-1 p-8 overflow-y-auto ${
+                            isDarkMode ? 'bg-slate-900/95' : 'bg-white/95'
+                        }`}>
+                            {/* Improved Search Bar */}
+                            <div className="mb-8">
+                                <div className="flex gap-4">
                                     <div className="flex-1">
                                         <motion.div
-                                            className={`relative rounded-lg border-2 bg-white transition-all ${
+                                            className={`relative rounded-2xl border-2 transition-all ${
                                                 isInputFocused 
-                                                    ? "border-cyan-400 shadow-[0_0_0_4px_rgba(6,182,212,0.1)]" 
-                                                    : "border-gray-200 hover:border-gray-300"
+                                                    ? isDarkMode
+                                                        ? 'border-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.15)] bg-slate-800'
+                                                        : 'border-neutral-500 shadow-[0_0_0_4px_rgba(100,100,100,0.15)] bg-white'
+                                                    : isDarkMode
+                                                        ? 'border-neutral-600 hover:border-neutral-500 bg-slate-800/50'
+                                                        : 'border-gray-200 hover:border-gray-300 bg-gray-50'
                                             } ${status === "processing" ? "opacity-70" : ""} ${
                                                 !isConnected ? "opacity-50" : ""
                                             }`}
                                         >
-                                            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                            <div className={`absolute left-4 top-1/2 -translate-y-1/2 ${
+                                                isDarkMode ? 'text-neutral-400' : 'text-gray-400'
+                                            }`}>
                                                 {status === "processing" ? (
-                                                    <div className="w-5 h-5 border-2 border-cyan-300 border-t-cyan-500 rounded-full animate-spin" />
+                                                    <div className={`w-5 h-5 border-2 rounded-full animate-spin ${
+                                                        isDarkMode
+                                                            ? 'border-red-300 border-t-red-500'
+                                                            : 'border-neutral-300 border-t-neutral-500'
+                                                    }`} />
                                                 ) : !isConnected ? (
-                                                    <WifiOff className="w-5 h-5 text-red-400" />
+                                                    <WifiOff className="w-5 h-5" />
                                                 ) : (
                                                     <Search className="w-5 h-5" />
                                                 )}
@@ -448,19 +525,24 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                                         : "Search for stocks using company names or market descriptions..."
                                                 }
                                                 disabled={!isConnected || status === "processing"}
-                                                className="w-full pl-11 pr-10 py-3 text-base bg-transparent focus:outline-none placeholder-gray-400"
+                                                className={`w-full pl-12 pr-12 py-4 text-base bg-transparent focus:outline-none font-medium ${
+                                                    isDarkMode
+                                                        ? 'text-white placeholder-neutral-500'
+                                                        : 'text-gray-900 placeholder-gray-400'
+                                                }`}
                                             />
                                             <AnimatePresence>
                                                 {query && (
-                                                    <motion.button
-                                                        initial={{ opacity: 0, scale: 0.8 }}
-                                                        animate={{ opacity: 1, scale: 1 }}
-                                                        exit={{ opacity: 0, scale: 0.8 }}
+                                                    <button
                                                         onClick={() => setQuery("")}
-                                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+                                                        className={`absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full transition-colors ${
+                                                            isDarkMode
+                                                                ? 'hover:bg-neutral-700 text-neutral-400 hover:text-neutral-300'
+                                                                : 'hover:bg-gray-100 text-gray-400 hover:text-gray-600'
+                                                        }`}
                                                     >
                                                         <X className="w-4 h-4" />
-                                                    </motion.button>
+                                                    </button>
                                                 )}
                                             </AnimatePresence>
                                         </motion.div>
@@ -468,8 +550,11 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                     <motion.button
                                         onClick={handleSearch}
                                         disabled={isSearchDisabled}
-                                        className="px-6 py-3 rounded-lg font-semibold text-white shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                        style={{ background: "linear-gradient(135deg, #06b6d4 0%, #0ea5e9 100%)" }}
+                                        className={`px-8 py-4 rounded-2xl font-semibold text-white shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                                            isDarkMode
+                                                ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800'
+                                                : 'bg-gradient-to-r from-neutral-700 to-neutral-800 hover:from-neutral-800 hover:to-neutral-900'
+                                        }`}
                                         whileHover={{ scale: isSearchDisabled ? 1 : 1.02 }}
                                         whileTap={{ scale: isSearchDisabled ? 1 : 0.98 }}
                                     >
@@ -480,7 +565,7 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                             </span>
                                         ) : (
                                             <span className="inline-flex items-center gap-2">
-                                                <Zap className="h-5 w-5" />
+                                                <Sparkles className="h-5 w-5" />
                                                 <span>Search</span>
                                             </span>
                                         )}
@@ -490,25 +575,55 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                 {renderConnectionStatus()}
                             </div>
                             
+                            {/* Content States */}
                             <div className="min-h-[400px] flex flex-col">
                                 {status === "idle" && (
                                     <div className="flex-1 flex flex-col items-center justify-center text-center">
-                                        <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6">
-                                            <Search className="h-10 w-10 text-cyan-500" />
-                                        </div>
-                                        <h4 className="text-xl font-semibold text-gray-900 mb-3">Smart Stock Discovery</h4>
-                                        <p className="text-gray-500 max-w-md mb-6">
-                                            Use natural language to find stocks that match your investment criteria and market interests.
+                                        <motion.div 
+                                            className={`w-32 h-32 rounded-full flex items-center justify-center mb-8 shadow-lg ${
+                                                isDarkMode
+                                                    ? 'bg-gradient-to-br from-red-500/20 to-neutral-500/20'
+                                                    : 'bg-gradient-to-br from-neutral-100 to-neutral-200'
+                                            }`}
+                                            initial={{ scale: 0.8, opacity: 0 }}
+                                            animate={{ scale: 1, opacity: 1 }}
+                                            transition={{ type: "spring", stiffness: 300 }}
+                                        >
+                                            <Search className={`h-16 w-16 ${
+                                                isDarkMode ? 'text-red-400' : 'text-neutral-600'
+                                            }`} />
+                                        </motion.div>
+                                        <h4 className={`text-2xl font-bold mb-4 ${
+                                            isDarkMode ? 'text-white' : 'text-gray-900'
+                                        }`}>Stock Discovery</h4>
+                                        <p className={`max-w-lg mb-8 text-lg leading-relaxed ${
+                                            isDarkMode ? 'text-neutral-300' : 'text-gray-500'
+                                        }`}>
+                                            Use natural language to find stocks that match your area of interests.
                                         </p>
                                         
                                         {recentQueries.length > 0 && (
-                                            <div className="w-full max-w-2xl">
-                                                <div className="flex items-center gap-2 mb-4">
-                                                    <Clock className="h-5 w-5 text-gray-400" />
-                                                    <h5 className="text-sm font-medium text-gray-600">Recent Searches</h5>
+                                            <div className="w-full max-w-3xl">
+                                                <div className="flex items-center gap-3 mb-6">
+                                                    <div className={`p-2 rounded-lg ${
+                                                        isDarkMode
+                                                            ? 'bg-red-500/20 text-red-400'
+                                                            : 'bg-neutral-100 text-neutral-600'
+                                                    }`}>
+                                                        <Clock className="h-5 w-5" />
+                                                    </div>
+                                                    <h5 className={`text-lg font-semibold ${
+                                                        isDarkMode ? 'text-white' : 'text-gray-800'
+                                                    }`}>Recent Searches</h5>
                                                 </div>
-                                                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-                                                    <ul className="divide-y divide-gray-200">
+                                                <div className={`border rounded-2xl overflow-hidden shadow-sm ${
+                                                    isDarkMode
+                                                        ? 'bg-slate-800/50 border-neutral-600'
+                                                        : 'bg-white border-gray-200'
+                                                }`}>
+                                                    <ul className={`divide-y ${
+                                                        isDarkMode ? 'divide-neutral-700' : 'divide-gray-100'
+                                                    }`}>
                                                         {recentQueries.map((cachedQuery, index) => (
                                                             <motion.li
                                                                 key={index}
@@ -520,31 +635,55 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                                                 <div className="flex items-center">
                                                                     <button
                                                                         onClick={() => handleRecentQueryClick(cachedQuery)}
-                                                                        className="flex-1 flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors duration-150"
+                                                                        className={`flex-1 flex items-center justify-between px-6 py-4 text-left transition-colors duration-150 ${
+                                                                            isDarkMode
+                                                                                ? 'hover:bg-slate-700/30'
+                                                                                : 'hover:bg-gray-50'
+                                                                        }`}
                                                                     >
-                                                                        <span className="text-sm text-gray-800 truncate mr-3">{cachedQuery.query}</span>
-                                                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                                                        <span className={`text-base truncate mr-4 font-medium ${
+                                                                            isDarkMode ? 'text-white' : 'text-gray-800'
+                                                                        }`}>{cachedQuery.query}</span>
+                                                                        <div className="flex items-center gap-3 flex-shrink-0">
                                                                             {cachedQuery.response.status === 'completed' && cachedQuery.response.stockResults.length > 0 && (
-                                                                                <span className="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full">
+                                                                                <span className={`text-sm px-3 py-1 rounded-full font-medium ${
+                                                                                    isDarkMode
+                                                                                        ? 'text-red-400 bg-red-500/20'
+                                                                                        : 'text-neutral-700 bg-neutral-100'
+                                                                                }`}>
                                                                                     {cachedQuery.response.stockResults.length} found
                                                                                 </span>
                                                                             )}
                                                                             {cachedQuery.response.status === 'completed' && cachedQuery.response.stockResults.length === 0 && (
-                                                                                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                                                                                <span className={`text-sm px-3 py-1 rounded-full font-medium ${
+                                                                                    isDarkMode
+                                                                                        ? 'text-neutral-400 bg-neutral-600/20'
+                                                                                        : 'text-gray-600 bg-gray-100'
+                                                                                }`}>
                                                                                     0 found
                                                                                 </span>
                                                                             )}
                                                                             {cachedQuery.response.status === 'error' && (
-                                                                                <span className="text-xs text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
+                                                                                <span className={`text-sm px-3 py-1 rounded-full font-medium ${
+                                                                                    isDarkMode
+                                                                                        ? 'text-red-400 bg-red-500/20'
+                                                                                        : 'text-red-700 bg-red-100'
+                                                                                }`}>
                                                                                     Error
                                                                                 </span>
                                                                             )}
-                                                                            <ChevronRight className="h-4 w-4 text-gray-400" />
+                                                                            <ChevronRight className={`h-5 w-5 ${
+                                                                                isDarkMode ? 'text-neutral-500' : 'text-gray-400'
+                                                                            }`} />
                                                                         </div>
                                                                     </button>
                                                                     <motion.button
                                                                         onClick={() => removeRecentQuery(index)}
-                                                                        className="p-2 mx-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-150 opacity-0 group-hover:opacity-100"
+                                                                        className={`p-3 mx-2 rounded-xl transition-all duration-150 opacity-0 group-hover:opacity-100 ${
+                                                                            isDarkMode
+                                                                                ? 'text-neutral-500 hover:text-red-400 hover:bg-red-500/10'
+                                                                                : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+                                                                        }`}
                                                                         whileHover={{ scale: 1.1 }}
                                                                         whileTap={{ scale: 0.9 }}
                                                                         title="Remove from recent searches"
@@ -563,57 +702,107 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
 
                                 {status === "processing" && (
                                     <div className="flex-1 flex flex-col items-center justify-center text-center">
-                                        <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6">
-                                            <div className="w-10 h-10 border-4 border-gray-300 border-t-cyan-500 rounded-full animate-spin"></div>
-                                        </div>
-                                        <h4 className="text-xl font-semibold text-gray-900 mb-3">Analyzing Market Data</h4>
-                                        <p className="text-gray-500 max-w-md">
-                                            Our AI is processing your search across thousands of stocks and market data points to find the best matches.
+                                        <motion.div 
+                                            className={`w-32 h-32 rounded-full flex items-center justify-center mb-8 shadow-lg ${
+                                                isDarkMode
+                                                    ? 'bg-gradient-to-br from-red-500/20 to-neutral-500/20'
+                                                    : 'bg-gradient-to-br from-neutral-100 to-neutral-200'
+                                            }`}
+                                            animate={{ rotate: 360 }}
+                                            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                                        >
+                                            <div className={`w-16 h-16 border-4 rounded-full animate-spin ${
+                                                isDarkMode
+                                                    ? 'border-red-300/30 border-t-red-500'
+                                                    : 'border-neutral-300 border-t-neutral-600'
+                                            }`}></div>
+                                        </motion.div>
+                                        <h4 className={`text-2xl font-bold mb-4 ${
+                                            isDarkMode ? 'text-white' : 'text-gray-900'
+                                        }`}>Analyzing Data</h4>
+                                        <p className={`max-w-lg text-lg ${
+                                            isDarkMode ? 'text-neutral-300' : 'text-gray-500'
+                                        }`}>
+                                            Our AI is processing your search across thousands of data points to find the best result.
                                         </p>
                                     </div>
                                 )}
 
                                 {status === "error" && (
                                     <div className="flex-1 flex flex-col items-center justify-center text-center">
-                                        <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mb-6">
-                                            <AlertCircle className="h-10 w-10 text-red-500" />
-                                        </div>
-                                        <h4 className="text-xl font-semibold text-gray-900 mb-3">Search Unavailable</h4>
-                                        <p className="text-gray-500 max-w-md mb-6">
+                                        <motion.div 
+                                            className={`w-32 h-32 rounded-full flex items-center justify-center mb-8 shadow-lg ${
+                                                isDarkMode
+                                                    ? 'bg-red-500/20'
+                                                    : 'bg-red-100'
+                                            }`}
+                                            initial={{ scale: 0.8, opacity: 0 }}
+                                            animate={{ scale: 1, opacity: 1 }}
+                                        >
+                                            <AlertCircle className={`h-16 w-16 ${
+                                                isDarkMode ? 'text-red-400' : 'text-red-600'
+                                            }`} />
+                                        </motion.div>
+                                        <h4 className={`text-2xl font-bold mb-4 ${
+                                            isDarkMode ? 'text-white' : 'text-gray-900'
+                                        }`}>Search Unavailable</h4>
+                                        <p className={`max-w-lg mb-8 text-lg ${
+                                            isDarkMode ? 'text-neutral-300' : 'text-gray-500'
+                                        }`}>
                                             {errorMessage || (!isConnected ? "Server is offline. Please check your connection and try again." : "Unable to process your search request.")}
                                         </p>
                                         {!isInCooldown && (
-                                            <button
+                                            <motion.button
                                                 onClick={handleRetry}
-                                                className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-all duration-300 shadow-md hover:shadow-lg flex items-center gap-2"
+                                                className={`px-8 py-4 text-white rounded-2xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-3 ${
+                                                    isDarkMode
+                                                        ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800'
+                                                        : 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800'
+                                                }`}
+                                                whileHover={{ scale: 1.02 }}
+                                                whileTap={{ scale: 0.98 }}
                                             >
-                                                <RefreshCw className="h-4 w-4" />
+                                                <RefreshCw className="h-5 w-5" />
                                                 {!isConnected ? 'Retry Connection' : 'Retry Search'}
-                                            </button>
+                                            </motion.button>
                                         )}
                                     </div>
                                 )}
 
                                 {status === "completed" && (
-                                    <div className="space-y-6">
+                                    <div className="space-y-8">
                                         <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <CheckCircle className="h-6 w-6 text-green-500" />
-                                                <h4 className="text-lg font-semibold text-gray-900">
+                                            <div className="flex items-center gap-4">
+                                                <div className={`p-3 rounded-2xl ${
+                                                    isDarkMode
+                                                        ? 'bg-red-500/20 text-red-400'
+                                                        : 'bg-neutral-100 text-neutral-600'
+                                                }`}>
+                                                    <CheckCircle className="h-6 w-6" />
+                                                </div>
+                                                <h4 className={`text-xl font-bold ${
+                                                    isDarkMode ? 'text-white' : 'text-gray-900'
+                                                }`}>
                                                     Discovery Complete - {stockResults.length} Item{stockResults.length !== 1 ? 's' : ''} Found
                                                 </h4>
                                             </div>
-                                            <button
+                                            <motion.button
                                                 onClick={handleDiscard}
-                                                className="px-4 py-2 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-all duration-300 flex items-center gap-2 text-sm"
+                                                className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 ${
+                                                    isDarkMode
+                                                        ? 'bg-neutral-600/20 text-neutral-300 hover:bg-neutral-600/30'
+                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                                }`}
                                                 title="Clear search results"
+                                                whileHover={{ scale: 1.02 }}
+                                                whileTap={{ scale: 0.98 }}
                                             >
                                                 <X className="h-4 w-4" /> Discard
-                                            </button>
+                                            </motion.button>
                                         </div>
 
                                         {stockResults.length > 0 ? (
-                                            <div className="grid gap-4">
+                                            <div className="grid gap-6">
                                                 {stockResults.map((stock, index) => {
                                                     const isSaved = isStockSaved(stock);
                                                     
@@ -623,15 +812,23 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                                             
                                                             if (isSaved) {
                                                                 return (
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 text-green-700 rounded-lg">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className={`flex items-center gap-2 px-4 py-2 border rounded-xl ${
+                                                                            isDarkMode
+                                                                                ? 'bg-red-500/10 border-red-500/20 text-red-400'
+                                                                                : 'bg-neutral-100 border-neutral-200 text-neutral-700'
+                                                                        }`}>
                                                                             <Check className="h-4 w-4" />
-                                                                            <span className="text-sm font-medium">In {buttonText}</span>
+                                                                            <span className="font-medium">In {buttonText}</span>
                                                                         </div>
                                                                         
                                                                         <button 
                                                                             onClick={() => handleGoToDashboard(currentTab as 'monitoring' | 'visualization')} 
-                                                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all duration-300 shadow-sm hover:shadow-md flex items-center gap-2"
+                                                                            className={`px-6 py-3 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2 ${
+                                                                                isDarkMode
+                                                                                    ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800'
+                                                                                    : 'bg-gradient-to-r from-neutral-700 to-neutral-800 hover:from-neutral-800 hover:to-neutral-900'
+                                                                            }`}
                                                                         >
                                                                             <ExternalLink className="h-4 w-4" />
                                                                             View in {currentTab === 'monitoring' ? 'Monitoring' : 'Visualization'}
@@ -642,7 +839,11 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                                                 return (
                                                                     <button 
                                                                         onClick={() => handleAddToFavorites(stock)} 
-                                                                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-all duration-300 shadow-sm hover:shadow-md flex items-center gap-2"
+                                                                        className={`px-6 py-3 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2 ${
+                                                                            isDarkMode
+                                                                                ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800'
+                                                                                : 'bg-gradient-to-r from-neutral-700 to-neutral-800 hover:from-neutral-800 hover:to-neutral-900'
+                                                                        }`}
                                                                     >
                                                                         <Plus className="h-4 w-4" /> Add to {buttonText}
                                                                     </button>
@@ -655,17 +856,31 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                                     const renderNavigationMessage = () => {
                                                         if (stock.context === 'stock' && currentTab === 'visualization') {
                                                             return (
-                                                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
-                                                                    <div className="flex-shrink-0 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white">
-                                                                        <TrendingUp className="h-4 w-4" />
+                                                                <div className={`border rounded-2xl p-6 flex items-start gap-4 ${
+                                                                    isDarkMode
+                                                                        ? 'bg-gradient-to-r from-red-500/10 to-neutral-500/10 border-red-500/20'
+                                                                        : 'bg-gradient-to-r from-neutral-50 to-neutral-100 border-neutral-200'
+                                                                }`}>
+                                                                    <div className={`flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${
+                                                                        isDarkMode
+                                                                            ? 'bg-gradient-to-br from-red-600 to-red-700'
+                                                                            : 'bg-gradient-to-br from-neutral-700 to-neutral-800'
+                                                                    }`}>
+                                                                        <Activity className="h-6 w-6" />
                                                                     </div>
                                                                     <div className="flex-1">
-                                                                        <p className="text-sm text-gray-700 mb-3">This is a stock. Go to the Monitoring Dashboard to track its performance.</p>
+                                                                        <p className={`text-base mb-4 font-medium ${
+                                                                            isDarkMode ? 'text-neutral-200' : 'text-gray-700'
+                                                                        }`}>This is a stock. Go to the Monitoring Dashboard to track its performance.</p>
                                                                         <button 
                                                                             onClick={() => handleGoToDashboard('monitoring')} 
-                                                                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md font-medium"
+                                                                            className={`inline-flex items-center gap-2 px-6 py-3 text-white rounded-xl font-semibold transition-all ${
+                                                                                isDarkMode
+                                                                                    ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800'
+                                                                                    : 'bg-gradient-to-r from-neutral-700 to-neutral-800 hover:from-neutral-800 hover:to-neutral-900'
+                                                                            }`}
                                                                         >
-                                                                            <TrendingUp className="h-4 w-4" /> Go to Monitoring
+                                                                            <Activity className="h-4 w-4" /> Go to Monitoring
                                                                         </button>
                                                                     </div>
                                                                 </div>
@@ -673,15 +888,25 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                                         }
                                                         if (stock.context === 'model' && currentTab !== 'visualization') {
                                                             return (
-                                                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
-                                                                    <div className="flex-shrink-0 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white">
-                                                                        <Eye className="h-4 w-4" />
+                                                                <div className={`border rounded-2xl p-6 flex items-start gap-4 ${
+                                                                    isDarkMode
+                                                                        ? 'bg-gradient-to-r from-red-500/10 to-red-500/10 border-red-500/20'
+                                                                        : 'bg-gradient-to-r from-neutral-50 to-neutral-100 border-neutral-200'
+                                                                }`}>
+                                                                    <div className={`flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${
+                                                                        isDarkMode
+                                                                            ? 'bg-gradient-to-br from-red-600 to-red-700'
+                                                                            : 'bg-gradient-to-br from-neutral-700 to-neutral-800'
+                                                                    }`}>
+                                                                        <Eye className="h-6 w-6" />
                                                                     </div>
                                                                     <div className="flex-1">
-                                                                        <p className="text-sm text-gray-700 mb-3">This is a model. Go to the Visualization tab to explore its structure.</p>
+                                                                        <p className={`text-base mb-4 font-medium ${
+                                                                            isDarkMode ? 'text-neutral-200' : 'text-gray-700'
+                                                                        }`}>This is a model. Go to the Visualization tab to explore its structure.</p>
                                                                         <button 
                                                                             onClick={() => handleGoToDashboard('visualization')} 
-                                                                            className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md font-medium"
+                                                                            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-neutral-700 to-red-700 hover:from-neutral-800 hover:to-red-800 text-white rounded-xl font-semibold transition-all"
                                                                         >
                                                                             <Eye className="h-4 w-4" /> Go to Visualization
                                                                         </button>
@@ -695,28 +920,38 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                                     return (
                                                         <motion.div
                                                             key={stock.guid}
-                                                            initial={{ opacity: 0, y: 10 }}
+                                                            initial={{ opacity: 0, y: 20 }}
                                                             animate={{ opacity: 1, y: 0 }}
-                                                            transition={{ delay: index * 0.1 }}
-                                                            className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300 p-6"
+                                                            transition={{ delay: index * 0.1, type: "spring", stiffness: 300 }}
+                                                            className={`rounded-2xl border shadow-lg hover:shadow-xl transition-all duration-300 p-8 ${
+                                                                isDarkMode
+                                                                    ? 'bg-slate-800/50 border-neutral-600'
+                                                                    : 'bg-white border-gray-200'
+                                                            }`}
                                                         >
-                                                            <div className="flex items-center justify-between mb-4">
-                                                                <div className="flex items-center gap-3">
-                                                                    <h5 className="text-lg font-semibold text-gray-900">{stock.name}</h5>
+                                                            <div className="flex items-center justify-between mb-6">
+                                                                <div className="flex items-center gap-4">
+                                                                    <h5 className={`text-xl font-bold ${
+                                                                        isDarkMode ? 'text-white' : 'text-gray-900'
+                                                                    }`}>{stock.name}</h5>
                                                                     {stock.context && (
-                                                                        <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-full capitalize">
+                                                                        <span className={`px-3 py-1 text-sm font-semibold rounded-full capitalize ${
+                                                                            isDarkMode
+                                                                                ? 'bg-neutral-600/20 text-neutral-300'
+                                                                                : 'bg-gray-100 text-gray-700'
+                                                                        }`}>
                                                                             {stock.context}
                                                                         </span>
                                                                     )}
                                                                 </div>
                                                             </div>
                                                             
-                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                            <div className="flex items-center gap-3 flex-wrap mb-6">
                                                                 {renderActionButtons()}
                                                             </div>
                                                             
                                                             {renderNavigationMessage() && (
-                                                                <div className="mt-4">
+                                                                <div>
                                                                     {renderNavigationMessage()}
                                                                 </div>
                                                             )}
@@ -725,8 +960,20 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                                 })}
                                             </div>
                                         ) : (
-                                            <div className="text-center py-10">
-                                                <p className="text-gray-500">No matching stocks or models were found for your query.</p>
+                                            <div className="text-center py-16">
+                                                <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 ${
+                                                    isDarkMode ? 'bg-neutral-600/20' : 'bg-gray-100'
+                                                }`}>
+                                                    <Search className={`h-12 w-12 ${
+                                                        isDarkMode ? 'text-neutral-500' : 'text-gray-400'
+                                                    }`} />
+                                                </div>
+                                                <h4 className={`text-xl font-semibold mb-2 ${
+                                                    isDarkMode ? 'text-white' : 'text-gray-900'
+                                                }`}>No Results Found</h4>
+                                                <p className={`text-lg ${
+                                                    isDarkMode ? 'text-neutral-300' : 'text-gray-500'
+                                                }`}>No matching stocks or models were found for your query.</p>
                                             </div>
                                         )}
                                     </div>

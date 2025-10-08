@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { Search, BellPlus, Trash2, Edit, Pause, Play, Mail, Phone, X, AlertTriangle, Loader, Bell } from "lucide-react";
+import { Search, BellPlus, Trash2, Edit, Pause, Play, Mail, Phone, X, AlertTriangle, Loader, Bell, Menu } from "lucide-react";
 import RightSidebar from "../components/RightSidebar";
 import { AnimatePresence, motion } from "framer-motion";
 import Dock from "../components/ui/Dock";
+import ThemeToggle from "../components/ui/ThemeToggle";
+import { useTheme } from '../context/ThemeContext';
 import {
   fetchFavoriteStocks,
   updateAlertStatus,
@@ -12,13 +14,10 @@ import {
   type FavoriteStockFull
 } from "../services/quantiforeApi";
 
-
-// --- Type definition (now using the full API response structure) ---
 type Alert = FavoriteStockFull;
 
-
-// --- Main Component ---
 export default function AlertPage() {
+  const { isDarkMode } = useTheme();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,14 +26,29 @@ export default function AlertPage() {
   const [editingAlert, setEditingAlert] = useState<Alert | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
+  // Mobile responsive states
+  const [isMobile, setIsMobile] = useState(false);
+  const [isTablet, setIsTablet] = useState(false);
 
-  // --- Fetch data on component mount ---
+  // Responsive detection
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      setIsMobile(width < 768);
+      setIsTablet(width >= 768 && width < 1024);
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   useEffect(() => {
     const loadAlerts = async () => {
       try {
         setLoading(true);
         setError(null);
-        // Use the full data version of fetchFavoriteStocks
+
         const data = await fetchFavoriteStocks(true);
         setAlerts(data);
       } catch (err) {
@@ -45,28 +59,22 @@ export default function AlertPage() {
       }
     };
 
-
     loadAlerts();
   }, []);
-
 
   const handleOpenModal = (alert: Alert | null = null) => {
     setEditingAlert(alert);
     setIsModalOpen(true);
   };
 
-
   const handleSaveAlert = async (alertData: Partial<Alert>) => {
     try {
       if (editingAlert) {
-        // Update existing alert
         await updateAlert(editingAlert.fav_stocks_guid, alertData);
       } else {
-        // Create new alert
         await createAlert(alertData);
       }
 
-      // Refresh the data
       const data = await fetchFavoriteStocks(true);
       setAlerts(data);
     } catch (err) {
@@ -75,7 +83,6 @@ export default function AlertPage() {
     }
     setIsModalOpen(false);
   };
-
 
   const handleDelete = async (guid: string) => {
     try {
@@ -87,11 +94,9 @@ export default function AlertPage() {
     }
   };
 
-
   const handleToggleStatus = async (guid: string) => {
     const alert = alerts.find(a => a.fav_stocks_guid === guid);
     if (!alert) return;
-
 
     try {
       const newStatus = !alert.monitored;
@@ -105,374 +110,707 @@ export default function AlertPage() {
     }
   };
 
-
   // Safe filtering with null checks
   const filteredAlerts = alerts.filter(a => {
     if (!a || !a.stock_name) return false;
     return a.stock_name.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
-
   // Calculate stats with null checks
   const totalAlerts = alerts.length;
   const activeAlerts = alerts.filter(a => a && a.monitored).length;
   const pausedAlerts = alerts.filter(a => a && !a.monitored).length;
 
+  const renderEmptyState = () => (
+    <div className={`flex flex-col items-center justify-center h-full rounded-2xl sm:rounded-3xl border shadow-lg backdrop-blur-xl ${isDarkMode
+        ? 'border-neutral-700/50 bg-slate-900/60'
+        : 'border-neutral-200/60 bg-white/95'
+      }`}>
+      <motion.div
+        className="text-center space-y-6 sm:space-y-8 p-8 sm:p-12"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+      >
+        <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl flex items-center justify-center mx-auto relative ${isDarkMode
+            ? 'bg-white/5'
+            : 'bg-gradient-to-tr from-neutral-200/80 to-neutral-300/80'
+          }`}>
+          <Bell className={`w-10 h-10 sm:w-12 sm:h-12 ${isDarkMode ? 'text-red-500' : 'text-neutral-600'
+            }`} />
+          <motion.div
+            className={`absolute inset-0 rounded-2xl border-2 ${isDarkMode ? 'border-red-500/30' : 'border-neutral-400/30'}`}
+            animate={{ rotate: 360 }}
+            transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+          />
+        </div>
+        <div>
+          <h3 className={`text-xl sm:text-2xl font-bold mb-3 sm:mb-4 leading-tight tracking-tight ${isDarkMode ? 'text-white' : 'text-neutral-900'
+            }`}>No Alerts Configured</h3>
+          <p className={`max-w-md text-sm sm:text-base font-medium leading-relaxed ${isDarkMode ? 'text-white/70' : 'text-neutral-600'
+            }`}>
+            Create your first alert to get notified about stock price changes and market signals.
+          </p>
+        </div>
+        <motion.button
+          onClick={() => handleOpenModal()}
+          className={`px-6 sm:px-8 py-3 sm:py-4 rounded-2xl transition-all duration-300 font-bold shadow-lg hover:shadow-xl text-sm sm:text-base ${isDarkMode
+              ? 'bg-red-800 text-white hover:bg-red-700'
+              : 'bg-neutral-800 text-white hover:bg-neutral-700'
+            }`}
+          whileTap={{ scale: 0.97 }}
+        >
+          Create Alert
+        </motion.button>
+      </motion.div>
+    </div>
+  );
+
   return (
-    <div className="relative flex flex-col h-screen w-full overflow-hidden bg-gradient-to-br from-gray-50 via-white to-gray-100 text-brand-black">
-      {/* Background decoration - Matching other pages */}
+    <div className={`relative flex flex-col h-screen w-full overflow-hidden transition-all duration-500 font-inter antialiased ${isDarkMode
+        ? 'bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white'
+        : 'bg-gradient-to-br from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
+      }`}>
+      {/* Enhanced Professional Background - Same as Landing Page */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full opacity-5 bg-gradient-to-br from-red-400 to-orange-400 blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full opacity-5 bg-gradient-to-tr from-blue-400 to-purple-400 blur-3xl" />
+        <div className={`absolute -top-40 -right-40 w-96 h-96 rounded-full opacity-5 blur-3xl ${isDarkMode
+            ? 'bg-gradient-to-br from-red-500 to-neutral-600'
+            : 'bg-gradient-to-br from-red-400 to-neutral-400'
+          }`} />
+        <div className={`absolute -bottom-40 -left-40 w-96 h-96 rounded-full opacity-5 blur-3xl ${isDarkMode
+            ? 'bg-gradient-to-tr from-neutral-600 to-red-500'
+            : 'bg-gradient-to-tr from-neutral-400 to-red-400'
+          }`} />
       </div>
 
-      {/* Header - Matching Monitoring Page Style */}
-      <header className="flex items-center justify-between px-8 h-20 bg-white shadow-sm border-b border-gray-200/60 sticky top-0 z-30 flex-shrink-0">
-        <motion.div
-          className="flex items-center space-x-4"
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <img src="/qf-logo0.1.svg" alt="Quantifore logo" className="h-8 select-none" />
-          <div className="flex items-center space-x-2">
-            <Bell className="w-5 h-5 text-red-600" />
-            <span className="text-lg font-semibold text-gray-900">Alert Management</span>
-          </div>
-        </motion.div>
-
-        <div className="flex items-center gap-3">
-          <motion.button
-            className="rounded-lg p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-all duration-200 shadow-sm border border-gray-200/50"
-            onClick={() => setIsPanelOpen(!isPanelOpen)}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            aria-label="Open menu"
+      {/* MOBILE MINIMAL HEADER */}
+      {isMobile ? (
+        <header className={`flex items-center justify-between px-4 h-16 backdrop-blur-xl shadow-sm border-b flex-shrink-0 z-30 transition-all duration-500 ${isDarkMode
+            ? 'bg-slate-900/90 border-neutral-700/30'
+            : 'bg-white/90 border-neutral-200/60'
+          }`}>
+          {/* Q Logo */}
+          <motion.div
+            className="flex items-center"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5 }}
           >
-            <motion.svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              animate={{ rotate: isPanelOpen ? 180 : 0 }}
-              transition={{ duration: 0.3 }}
+            <img
+              src="/Q-logo.svg"
+              alt="Quantifore logo"
+              className="h-8 select-none drop-shadow-sm"
+            />
+          </motion.div>
+
+          {/* Right Icons */}
+          <div className="flex items-center space-x-3">
+            {/* Theme Toggle */}
+            <ThemeToggle />
+
+            {/* Menu Button */}
+            <motion.button
+              onClick={() => setIsPanelOpen(!isPanelOpen)}
+              className={`rounded-lg p-2.5 transition-all duration-200 shadow-sm border backdrop-blur-sm ${isDarkMode
+                  ? 'text-white/80 hover:text-white hover:bg-white/10 bg-white/5 border-white/20'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80 bg-white/60 border-neutral-200/60'
+                }`}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
             >
-              <motion.path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                animate={{
-                  d: isPanelOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16",
-                }}
-              />
-            </motion.svg>
-          </motion.button>
-        </div>
-      </header>
-
-
-      {/* Error Display */}
-      {error && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-red-50 border border-red-200 text-red-700 p-4 mx-8 mt-4 rounded-xl flex items-center gap-3"
-        >
-          <AlertTriangle size={20} className="flex-shrink-0" />
-          <span className="font-medium">{error}</span>
-          <button
-            onClick={() => setError(null)}
-            className="ml-auto p-1 hover:bg-red-100 rounded"
+              <Menu className="h-5 w-5" />
+            </motion.button>
+          </div>
+        </header>
+      ) : (
+        /* DESKTOP HEADER */
+        <header className={`flex items-center justify-between px-4 sm:px-8 lg:px-12 h-20 sm:h-24 backdrop-blur-xl shadow-sm border-b flex-shrink-0 z-30 transition-all duration-500 ${isDarkMode
+            ? 'bg-slate-900/90 border-neutral-700/30'
+            : 'bg-white/90 border-neutral-200/60'
+          }`}>
+          <motion.div
+            className="flex items-center space-x-3 sm:space-x-5"
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5 }}
           >
-            <X size={16} />
-          </button>
-        </motion.div>
+            <img
+              src={isDarkMode ? "/qf-logo-light.svg" : "/qf-logo-dark.svg"}
+              alt="Quantifore logo"
+              className="h-8 sm:h-10 select-none drop-shadow-sm"
+            />
+            <div className="flex items-center space-x-2 sm:space-x-3">
+              <div className={`p-2 sm:p-3 rounded-xl shadow-lg ${isDarkMode ? 'bg-red-500/20' : 'bg-gradient-to-r from-neutral-300 to-neutral-400'
+                }`}>
+                <Bell className={`w-5 h-5 sm:w-6 sm:h-6 ${isDarkMode ? 'text-red-400' : 'text-neutral-900'
+                  }`} />
+              </div>
+              <div>
+                <div className={`text-lg sm:text-xl font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-neutral-900'
+                  }`}>
+                  Alert
+                </div>
+                <div className={`text-xs sm:text-sm font-medium ${isDarkMode ? 'text-white/70' : 'text-neutral-600'
+                  }`}>Smart Notifications</div>
+              </div>
+            </div>
+          </motion.div>
+
+          <div className="flex items-center space-x-3">
+            {/* Live Connection Status */}
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${isDarkMode
+                ? 'bg-white/5 text-emerald-400 border border-white/20'
+                : 'bg-white/60 text-emerald-700 border border-neutral-200/60'
+              }`}>
+              <motion.div
+                className="w-1.5 h-1.5 bg-emerald-500 rounded-full"
+                animate={{
+                  opacity: [1, 0.5, 1],
+                  scale: [1, 1.2, 1]
+                }}
+                transition={{ duration: 2, repeat: Infinity }}
+              />
+              <span className="hidden sm:inline">Live Data</span>
+            </div>
+
+            {/* Theme Toggle */}
+            <ThemeToggle />
+
+            {/* Settings Button */}
+            <motion.button
+              onClick={() => setIsPanelOpen(!isPanelOpen)}
+              className={`rounded-lg sm:rounded-xl p-2 sm:p-3 transition-all duration-200 shadow-sm border backdrop-blur-sm ${isDarkMode
+                  ? 'text-white/80 hover:text-white hover:bg-white/10 bg-white/5 border-white/20'
+                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80 bg-white/60 border-neutral-200/60'
+                }`}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <Menu className="h-5 w-5 sm:h-6" />
+            </motion.button>
+          </div>
+        </header>
       )}
 
+      {/* MAIN CONTENT LAYOUT */}
+      <main className={`flex-1 min-h-0 ${isMobile ? 'flex flex-col pb-20' : 'px-4 sm:px-8 lg:px-12 py-6 sm:py-8'}`}>
 
-      {/* Main Content with Fixed Height */}
-      <main className="flex-1 flex flex-col overflow-hidden min-h-0 relative z-10">
-        <div className="max-w-7xl mx-auto p-8 flex-1 flex flex-col min-h-0">
-          {/* Toolbar */}
-          <motion.div
-            className="flex flex-col md:flex-row items-center justify-between gap-6 mb-8"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-          >
-            <div className="w-full md:w-96">
-              <div className="relative group">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-red-600 transition-colors" size={20} />
+        {/* MOBILE HORIZONTAL STATS BAR */}
+        {isMobile && (
+          <div className={`border-b backdrop-blur-xl flex-shrink-0 ${isDarkMode ? 'border-neutral-700/50 bg-slate-900/60' : 'border-neutral-200/60 bg-white/80'
+            }`}>
+            <div className="px-4 py-3">
+              {/* Stats Cards - Mobile Horizontal Scroll */}
+              <div className="flex gap-3 overflow-x-auto pb-2">
+                <motion.div
+                  className={`flex-shrink-0 w-32 p-3 rounded-xl border transition-all duration-300 ${isDarkMode
+                      ? 'bg-slate-900/60 border-neutral-700/50'
+                      : 'bg-white/80 border-neutral-200/60'
+                    }`}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                >
+                  <div className="text-center">
+                    <div className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-neutral-900'
+                      }`}>
+                      {totalAlerts}
+                    </div>
+                    <div className={`text-xs font-medium ${isDarkMode ? 'text-white/70' : 'text-neutral-600'
+                      }`}>
+                      Total Alerts
+                    </div>
+                  </div>
+                </motion.div>
+
+                <motion.div
+                  className={`flex-shrink-0 w-32 p-3 rounded-xl border transition-all duration-300 ${isDarkMode
+                      ? 'bg-slate-900/60 border-green-700/50'
+                      : 'bg-white/80 border-green-200/60'
+                    }`}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">
+                      {activeAlerts}
+                    </div>
+                    <div className={`text-xs font-medium ${isDarkMode ? 'text-white/70' : 'text-neutral-600'
+                      }`}>
+                      Active Alerts
+                    </div>
+                  </div>
+                </motion.div>
+
+                <motion.div
+                  className={`flex-shrink-0 w-32 p-3 rounded-xl border transition-all duration-300 ${isDarkMode
+                      ? 'bg-slate-900/60 border-orange-700/50'
+                      : 'bg-white/80 border-orange-200/60'
+                    }`}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-orange-600">
+                      {pausedAlerts}
+                    </div>
+                    <div className={`text-xs font-medium ${isDarkMode ? 'text-white/70' : 'text-neutral-600'
+                      }`}>
+                      Paused Alerts
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+
+              {/* Mobile Search and Add Alert */}
+              <div className="mt-3 flex gap-2">
+                <div className="flex-1 relative">
+                  <Search className={`w-4 h-4 absolute left-3 top-3 opacity-40 ${isDarkMode ? 'text-white' : 'text-neutral-600'}`} />
+                  <input
+                    type="text"
+                    placeholder="Search alerts..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm transition-all placeholder-opacity-60 ${isDarkMode
+                        ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
+                        : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
+                      } focus:outline-none focus:ring-2 focus:ring-red-500/20`}
+                  />
+                </div>
+                <motion.button
+                  onClick={() => handleOpenModal()}
+                  className={`px-3 py-2.5 rounded-xl transition-all duration-300 font-bold shadow-md text-sm ${isDarkMode
+                      ? 'bg-red-800 text-white hover:bg-red-700'
+                      : 'bg-neutral-800 text-white hover:bg-neutral-700'
+                    }`}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <BellPlus className="w-4 h-4" />
+                </motion.button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* DESKTOP AND MOBILE CONTENT */}
+        <div className={`${isMobile ? 'flex-1 min-h-0' : 'h-full'}`}>
+          {!isMobile && (
+            /* DESKTOP TOP BAR */
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-6 mb-6 sm:mb-8">
+              <div>
+                <h1 className={`text-2xl sm:text-3xl font-bold tracking-tight mb-2 ${isDarkMode ? 'text-white' : 'text-neutral-900'
+                  }`}>
+                  Alert Center
+                </h1>
+                <p className={`text-sm sm:text-base font-medium ${isDarkMode ? 'text-white/70' : 'text-neutral-600'
+                  }`}>
+                  Manage your stock alerts and notifications
+                </p>
+              </div>
+              <motion.button
+                onClick={() => handleOpenModal()}
+                className={`flex items-center gap-2 px-4 sm:px-6 py-3 sm:py-4 rounded-2xl transition-all duration-300 font-bold shadow-lg hover:shadow-xl text-sm sm:text-base ${isDarkMode
+                    ? 'bg-red-800 text-white hover:bg-red-700'
+                    : 'bg-neutral-800 text-white hover:bg-neutral-700'
+                  }`}
+                whileTap={{ scale: 0.97 }}
+              >
+                <BellPlus className="w-4 h-4 sm:w-5 sm:h-5" />
+                Add New Alert
+              </motion.button>
+            </div>
+          )}
+
+          {!isMobile && (
+            /* DESKTOP STATS CARDS */
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+              <motion.div
+                className={`p-4 sm:p-6 rounded-2xl border shadow-sm backdrop-blur-xl ${isDarkMode
+                    ? 'bg-slate-900/60 border-neutral-700/50'
+                    : 'bg-white/90 border-neutral-200/60'
+                  }`}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className={`p-3 rounded-xl ${isDarkMode ? 'bg-white/5' : 'bg-neutral-100/80'
+                    }`}>
+                    <AlertTriangle className={`w-6 h-6 ${isDarkMode ? 'text-white' : 'text-neutral-600'
+                      }`} />
+                  </div>
+                  <div>
+                    <div className={`text-2xl sm:text-3xl font-bold ${isDarkMode ? 'text-white' : 'text-neutral-900'
+                      }`}>
+                      {totalAlerts}
+                    </div>
+                    <div className={`text-sm font-medium ${isDarkMode ? 'text-white/70' : 'text-neutral-600'
+                      }`}>
+                      Total Alerts
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+
+              <motion.div
+                className={`p-4 sm:p-6 rounded-2xl border shadow-sm backdrop-blur-xl ${isDarkMode
+                    ? 'bg-slate-900/60 border-green-700/50'
+                    : 'bg-white/90 border-green-200/60'
+                  }`}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className={`p-3 rounded-xl ${isDarkMode ? 'bg-green-900/20' : 'bg-green-100/80'
+                    }`}>
+                    <Play className="w-6 h-6 text-green-600" />
+                  </div>
+                  <div>
+                    <div className="text-2xl sm:text-3xl font-bold text-green-600">
+                      {activeAlerts}
+                    </div>
+                    <div className={`text-sm font-medium ${isDarkMode ? 'text-white/70' : 'text-neutral-600'
+                      }`}>
+                      Active Alerts
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+
+              <motion.div
+                className={`p-4 sm:p-6 rounded-2xl border shadow-sm backdrop-blur-xl ${isDarkMode
+                    ? 'bg-slate-900/60 border-orange-700/50'
+                    : 'bg-white/90 border-orange-200/60'
+                  }`}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className={`p-3 rounded-xl ${isDarkMode ? 'bg-orange-900/20' : 'bg-orange-100/80'
+                    }`}>
+                    <Pause className="w-6 h-6 text-orange-600" />
+                  </div>
+                  <div>
+                    <div className="text-2xl sm:text-3xl font-bold text-orange-600">
+                      {pausedAlerts}
+                    </div>
+                    <div className={`text-sm font-medium ${isDarkMode ? 'text-white/70' : 'text-neutral-600'
+                      }`}>
+                      Paused Alerts
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+
+          {!isMobile && (
+            /* DESKTOP SEARCH BAR */
+            <div className="mb-6 sm:mb-8">
+              <div className="relative max-w-md">
+                <Search className={`w-5 h-5 absolute left-4 top-4 opacity-40 ${isDarkMode ? 'text-white' : 'text-neutral-600'}`} />
                 <input
                   type="text"
-                  placeholder="Search for a stock..."
+                  placeholder="Search for alerts..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 border border-gray-200/60 rounded-xl shadow-sm focus:ring-2 focus:ring-red-300 focus:border-red-300 transition-all bg-white"
+                  className={`w-full pl-12 pr-4 py-3 sm:py-4 rounded-xl border text-sm sm:text-base transition-all placeholder-opacity-60 ${isDarkMode
+                      ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
+                      : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
+                    } focus:outline-none focus:ring-2 focus:ring-red-500/20`}
                 />
               </div>
             </div>
+          )}
 
-            <motion.button
-              onClick={() => handleOpenModal()}
-              className="w-full md:w-auto flex items-center justify-center gap-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <BellPlus size={20} />
-              Add New Alert
-            </motion.button>
-          </motion.div>
-
-
-          {/* Stats Cards */}
-          <motion.div
-            className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-          >
-            <div className="bg-white/90 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-gray-200/60">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Alerts</p>
-                  <p className="text-2xl font-bold text-gray-900">{totalAlerts}</p>
-                </div>
-                <div className="p-3 bg-gradient-to-br from-blue-100 to-blue-200 rounded-xl">
-                  <BellPlus className="w-6 h-6 text-blue-600" />
-                </div>
+          {/* ALERTS LIST CONTENT */}
+          {loading ? (
+            <div className={`flex items-center justify-center ${isMobile ? 'flex-1' : 'h-96'} rounded-2xl border backdrop-blur-xl ${isDarkMode
+                ? 'border-neutral-700/50 bg-slate-900/60'
+                : 'border-neutral-200/60 bg-white/95'
+              }`}>
+              <div className="text-center">
+                <motion.div
+                  className="animate-spin rounded-full h-12 w-12 border-4 border-red-600 border-t-transparent mx-auto mb-4"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                />
+                <p className={`font-bold ${isDarkMode ? 'text-white' : 'text-neutral-900'
+                  }`}>Loading alerts...</p>
               </div>
             </div>
-
-            <div className="bg-white/90 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-gray-200/60">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Active Alerts</p>
-                  <p className="text-2xl font-bold text-green-600">{activeAlerts}</p>
-                </div>
-                <div className="p-3 bg-gradient-to-br from-green-100 to-green-200 rounded-xl">
-                  <Play className="w-6 h-6 text-green-600" />
-                </div>
+          ) : error ? (
+            <div className={`flex items-center justify-center ${isMobile ? 'flex-1' : 'h-96'} rounded-2xl border backdrop-blur-xl ${isDarkMode
+                ? 'border-red-700/50 bg-red-900/20'
+                : 'border-red-200/60 bg-red-50/95'
+              }`}>
+              <div className="text-center">
+                <AlertTriangle className={`w-12 h-12 mx-auto mb-4 ${isDarkMode ? 'text-red-400' : 'text-red-600'
+                  }`} />
+                <p className={`font-bold ${isDarkMode ? 'text-red-400' : 'text-red-600'
+                  }`}>
+                  Error loading alerts: {error}
+                </p>
               </div>
             </div>
-
-            <div className="bg-white/90 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-gray-200/60">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Paused Alerts</p>
-                  <p className="text-2xl font-bold text-yellow-600">{pausedAlerts}</p>
-                </div>
-                <div className="p-3 bg-gradient-to-br from-yellow-100 to-yellow-200 rounded-xl">
-                  <Pause className="w-6 h-6 text-yellow-600" />
-                </div>
-              </div>
-            </div>
-          </motion.div>
-
-
-          {/* Alerts Table with Fixed Height and Internal Scrolling */}
-          <motion.div
-            className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200/60 overflow-hidden flex-1 flex flex-col min-h-0 mb-24"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-          >
-            {/* Table Header - Fixed */}
-            <div className="border-b border-gray-200/60 bg-gray-50/50 flex-shrink-0">
-              <div className="grid grid-cols-12 gap-4 p-6">
-                <div className="col-span-2">
-                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Stock</h3>
-                </div>
-                <div className="col-span-2">
-                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Status</h3>
-                </div>
-                <div className="col-span-2">
-                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Thresholds</h3>
-                </div>
-                <div className="col-span-2">
-                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Last Alert</h3>
-                </div>
-                <div className="col-span-2">
-                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Notifications</h3>
-                </div>
-                <div className="col-span-2">
-                  <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide text-right">Actions</h3>
-                </div>
-              </div>
-            </div>
-
-            {/* Table Body - Scrollable */}
-            <div className="flex-1 overflow-y-auto">
-              {loading ? (
-                <div className="flex items-center justify-center h-full p-6">
-                  <Loader className="w-8 h-8 animate-spin text-brand-red-600" />
-                  <p className="text-brand-gray-600">Loading alerts...</p>
-                </div>
-              ) : filteredAlerts.length > 0 ? (
-                filteredAlerts.map((alert, index) => (
-                  <motion.div
-                    key={alert.fav_stocks_guid}
-                    className="grid grid-cols-12 gap-4 p-6 border-b border-gray-200/60 last:border-b-0 hover:bg-gray-50/50 transition-all duration-300"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.4, delay: index * 0.1 }}
-                    whileHover={{ x: 5 }}
-                  >
-                    {/* Stock Name */}
-                    <div className="col-span-2">
-                      <div className="font-bold text-lg text-gray-900 capitalize">
-                        {alert.stock_name ? alert.stock_name.replace(/-/g, ' ') : 'Unknown Stock'}
-                      </div>
-                    </div>
-
-                    {/* Status */}
-                    <div className="col-span-2">
-                      <motion.span
-                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold shadow-sm ${alert.monitored
-                          ? 'bg-gradient-to-r from-green-100 to-green-200 text-green-800 border border-green-300'
-                          : 'bg-gradient-to-r from-yellow-100 to-yellow-200 text-yellow-800 border border-yellow-300'
-                          }`}
-                        whileHover={{ scale: 1.05 }}
-                      >
-                        <motion.div
-                          className={`w-2 h-2 rounded-full ${alert.monitored ? 'bg-green-500' : 'bg-yellow-500'}`}
-                          animate={{ scale: [1, 1.2, 1] }}
-                          transition={{ duration: 2, repeat: Infinity }}
-                        />
-                        {alert.monitored ? 'Active' : 'Paused'}
-                      </motion.span>
-                    </div>
-
-                    {/* Thresholds */}
-                    <div className="col-span-2">
-                      <div className="space-y-1">
-                        {alert.upper_threshold !== null && alert.upper_threshold > 0 && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <span className="text-red-600 font-bold">↑</span>
-                            <span className="text-gray-700">Upper: <span className="font-semibold">{alert.upper_threshold}</span></span>
-                          </div>
-                        )}
-                        {alert.lower_threshold !== null && alert.lower_threshold > 0 && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <span className="text-green-600 font-bold">↓</span>
-                            <span className="text-gray-700">Lower: <span className="font-semibold">{alert.lower_threshold}</span></span>
-                          </div>
-                        )}
-                        {(!alert.upper_threshold || alert.upper_threshold === 0) && (!alert.lower_threshold || alert.lower_threshold === 0) && (
-                          <span className="text-gray-400 text-sm">No thresholds set</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Last Alert */}
-                    <div className="col-span-2">
-                      <div className="text-sm font-medium text-gray-700">
-                        {alert.last_alert ? new Date(alert.last_alert).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        }) : 'Never'}
-                      </div>
-                      <div className="text-xs text-gray-500 capitalize">
-                        {alert.last_alert_frequency || 'daily'}
-                      </div>
-                    </div>
-
-                    {/* Notifications */}
-                    <div className="col-span-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {alert.email_alert && alert.email_alert.length > 0 && alert.email_alert[0] !== "string" && (
-                          <motion.div
-                            className="flex items-center gap-2 bg-blue-50 px-3 py-1 rounded-full"
-                            title={alert.email_alert.join(', ')}
-                            whileHover={{ scale: 1.05 }}
-                          >
-                            <Mail size={16} className="text-blue-600" />
-                            <span className="text-xs font-medium text-blue-700">
-                              {alert.email_alert.length} Email{alert.email_alert.length > 1 ? 's' : ''}
+          ) : filteredAlerts.length === 0 ? (
+            renderEmptyState()
+          ) : (
+            <div className={`${isMobile ? 'flex-1 overflow-y-auto p-4' : 'space-y-4'}`}>
+              {isMobile ? (
+                /* MOBILE CARDS LAYOUT */
+                <div className="space-y-3">
+                  {filteredAlerts.map((alert, index) => (
+                    <motion.div
+                      key={alert.fav_stocks_guid}
+                      className={`p-4 rounded-xl border transition-all duration-300 ${isDarkMode
+                          ? 'bg-slate-900/60 border-neutral-700/50'
+                          : 'bg-white/80 border-neutral-200/60'
+                        }`}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1 min-w-0">
+                          <h3 className={`font-bold text-sm truncate ${isDarkMode ? 'text-white' : 'text-neutral-900'
+                            }`}>
+                            {alert.stock_name}
+                          </h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${alert.monitored
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                : 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300'
+                              }`}>
+                              {alert.monitored ? (
+                                <Play className="w-3 h-3 mr-1" />
+                              ) : (
+                                <Pause className="w-3 h-3 mr-1" />
+                              )}
+                              {alert.monitored ? 'Active' : 'Paused'}
                             </span>
-                          </motion.div>
-                        )}
-                        {alert.sms_alert && alert.sms_alert.length > 0 && alert.sms_alert[0] !== "string" && (
-                          <motion.div
-                            className="flex items-center gap-2 bg-purple-50 px-3 py-1 rounded-full"
-                            title={alert.sms_alert.join(', ')}
-                            whileHover={{ scale: 1.05 }}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleToggleStatus(alert.fav_stocks_guid)}
+                            className={`p-1.5 rounded-lg transition-colors ${isDarkMode
+                                ? 'hover:bg-white/10 text-white/70'
+                                : 'hover:bg-neutral-100 text-neutral-500'
+                              }`}
                           >
-                            <Phone size={16} className="text-purple-600" />
-                            <span className="text-xs font-medium text-purple-700">
+                            {alert.monitored ? (
+                              <Pause className="w-4 h-4" />
+                            ) : (
+                              <Play className="w-4 h-4" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => handleOpenModal(alert)}
+                            className={`p-1.5 rounded-lg transition-colors ${isDarkMode
+                                ? 'hover:bg-white/10 text-white/70'
+                                : 'hover:bg-neutral-100 text-neutral-500'
+                              }`}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(alert.fav_stocks_guid)}
+                            className={`p-1.5 rounded-lg transition-colors ${isDarkMode
+                                ? 'hover:bg-red-900/20 text-red-400'
+                                : 'hover:bg-red-50 text-red-600'
+                              }`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 text-xs">
+                        {alert.upper_threshold && (
+                          <div className="flex justify-between">
+                            <span className={isDarkMode ? 'text-white/60' : 'text-neutral-600'}>Upper:</span>
+                            <span className={isDarkMode ? 'text-white' : 'text-neutral-900'}>{alert.upper_threshold}</span>
+                          </div>
+                        )}
+                        {alert.lower_threshold && (
+                          <div className="flex justify-between">
+                            <span className={isDarkMode ? 'text-white/60' : 'text-neutral-600'}>Lower:</span>
+                            <span className={isDarkMode ? 'text-white' : 'text-neutral-900'}>{alert.lower_threshold}</span>
+                          </div>
+                        )}
+                        {alert.email_alert && alert.email_alert.length > 0 && (
+                          <div className="flex items-center gap-1">
+                            <Mail className="w-3 h-3" />
+                            <span className={isDarkMode ? 'text-white/60' : 'text-neutral-600'}>
+                              {alert.email_alert.length} email(s)
+                            </span>
+                          </div>
+                        )}
+                        {alert.sms_alert && alert.sms_alert.length > 0 && (
+                          <div className="flex items-center gap-1">
+                            <Phone className="w-3 h-3" />
+                            <span className={isDarkMode ? 'text-white/60' : 'text-neutral-600'}>
                               {alert.sms_alert.length} SMS
                             </span>
-                          </motion.div>
+                          </div>
                         )}
-                        {(!alert.email_alert || alert.email_alert.length === 0 || alert.email_alert[0] === "string") &&
-                          (!alert.sms_alert || alert.sms_alert.length === 0 || alert.sms_alert[0] === "string") && (
-                            <span className="text-gray-400 text-sm">No notifications</span>
-                          )}
                       </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="col-span-2">
-                      <div className="flex items-center justify-end gap-2">
-                        <motion.button
-                          onClick={() => handleToggleStatus(alert.fav_stocks_guid)}
-                          className="p-3 rounded-xl hover:bg-gray-100 transition-colors shadow-sm border border-gray-200/60"
-                          title={alert.monitored ? 'Pause Alert' : 'Resume Alert'}
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                        >
-                          {alert.monitored ?
-                            <Pause size={18} className="text-yellow-600" /> :
-                            <Play size={18} className="text-green-600" />
-                          }
-                        </motion.button>
-                        <motion.button
-                          onClick={() => handleOpenModal(alert)}
-                          className="p-3 rounded-xl hover:bg-blue-50 transition-colors shadow-sm border border-blue-200"
-                          title="Edit Alert"
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                        >
-                          <Edit size={18} className="text-blue-600" />
-                        </motion.button>
-                        <motion.button
-                          onClick={() => handleDelete(alert.fav_stocks_guid)}
-                          className="p-3 rounded-xl hover:bg-red-50 transition-colors shadow-sm border border-red-200"
-                          title="Delete Alert"
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                        >
-                          <Trash2 size={18} className="text-red-600" />
-                        </motion.button>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))
+                    </motion.div>
+                  ))}
+                </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full p-12">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                    <BellPlus className="w-8 h-8 text-gray-400" />
-                  </div>
-                  <div className="text-gray-500 text-center">
-                    <p className="text-lg font-medium mb-2">No alerts found</p>
-                    <p className="text-sm">
-                      {searchTerm ?
-                        `No alerts matching "${searchTerm}" found.` :
-                        'Add your first alert to get started with monitoring!'
-                      }
-                    </p>
+                /* DESKTOP TABLE LAYOUT */
+                <div className={`rounded-2xl border shadow-lg backdrop-blur-xl overflow-hidden ${isDarkMode
+                    ? 'border-neutral-700/50 bg-slate-900/60'
+                    : 'border-neutral-200/60 bg-white/95'
+                  }`}>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className={`${isDarkMode ? 'bg-slate-900/80' : 'bg-neutral-50/80'
+                        }`}>
+                        <tr>
+                          <th className={`px-6 py-4 text-left text-sm font-bold tracking-wider ${isDarkMode ? 'text-white' : 'text-neutral-900'
+                            }`}>
+                            Stock Name
+                          </th>
+                          <th className={`px-6 py-4 text-left text-sm font-bold tracking-wider ${isDarkMode ? 'text-white' : 'text-neutral-900'
+                            }`}>
+                            Status
+                          </th>
+                          <th className={`px-6 py-4 text-left text-sm font-bold tracking-wider ${isDarkMode ? 'text-white' : 'text-neutral-900'
+                            }`}>
+                            Thresholds
+                          </th>
+                          <th className={`px-6 py-4 text-left text-sm font-bold tracking-wider ${isDarkMode ? 'text-white' : 'text-neutral-900'
+                            }`}>
+                            Notifications
+                          </th>
+                          <th className={`px-6 py-4 text-left text-sm font-bold tracking-wider ${isDarkMode ? 'text-white' : 'text-neutral-900'
+                            }`}>
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-200/50 dark:divide-neutral-700/50">
+                        {filteredAlerts.map((alert, index) => (
+                          <motion.tr
+                            key={alert.fav_stocks_guid}
+                            className={`transition-colors hover:bg-neutral-50/50 dark:hover:bg-slate-800/50`}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: index * 0.05 }}
+                          >
+                            <td className="px-6 py-4">
+                              <div className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-neutral-900'
+                                }`}>
+                                {alert.stock_name}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${alert.monitored
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                  : 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300'
+                                }`}>
+                                {alert.monitored ? (
+                                  <Play className="w-3 h-3 mr-1" />
+                                ) : (
+                                  <Pause className="w-3 h-3 mr-1" />
+                                )}
+                                {alert.monitored ? 'Active' : 'Paused'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="space-y-1">
+                                {alert.upper_threshold && (
+                                  <div className={`text-sm ${isDarkMode ? 'text-white/80' : 'text-neutral-700'
+                                    }`}>
+                                    Upper: {alert.upper_threshold}
+                                  </div>
+                                )}
+                                {alert.lower_threshold && (
+                                  <div className={`text-sm ${isDarkMode ? 'text-white/80' : 'text-neutral-700'
+                                    }`}>
+                                    Lower: {alert.lower_threshold}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center space-x-3">
+                                {alert.email_alert && alert.email_alert.length > 0 && (
+                                  <div className="flex items-center">
+                                    <Mail className="w-4 h-4 mr-1 text-blue-500" />
+                                    <span className={`text-sm ${isDarkMode ? 'text-white/70' : 'text-neutral-600'
+                                      }`}>
+                                      {alert.email_alert.length}
+                                    </span>
+                                  </div>
+                                )}
+                                {alert.sms_alert && alert.sms_alert.length > 0 && (
+                                  <div className="flex items-center">
+                                    <Phone className="w-4 h-4 mr-1 text-green-500" />
+                                    <span className={`text-sm ${isDarkMode ? 'text-white/70' : 'text-neutral-600'
+                                      }`}>
+                                      {alert.sms_alert.length}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center space-x-2">
+                                <button
+                                  onClick={() => handleToggleStatus(alert.fav_stocks_guid)}
+                                  className={`p-2 rounded-lg transition-colors ${isDarkMode
+                                      ? 'hover:bg-white/10 text-white/70'
+                                      : 'hover:bg-neutral-100 text-neutral-500'
+                                    }`}
+                                  title={alert.monitored ? 'Pause Alert' : 'Resume Alert'}
+                                >
+                                  {alert.monitored ? (
+                                    <Pause className="w-4 h-4" />
+                                  ) : (
+                                    <Play className="w-4 h-4" />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => handleOpenModal(alert)}
+                                  className={`p-2 rounded-lg transition-colors ${isDarkMode
+                                      ? 'hover:bg-white/10 text-white/70'
+                                      : 'hover:bg-neutral-100 text-neutral-500'
+                                    }`}
+                                  title="Edit Alert"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(alert.fav_stocks_guid)}
+                                  className={`p-2 rounded-lg transition-colors ${isDarkMode
+                                      ? 'hover:bg-red-900/20 text-red-400'
+                                      : 'hover:bg-red-50 text-red-600'
+                                    }`}
+                                  title="Delete Alert"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </motion.tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
             </div>
-          </motion.div>
+          )}
         </div>
       </main>
-
 
       {/* Backdrop and Sidebar */}
       <AnimatePresence>
@@ -491,7 +829,6 @@ export default function AlertPage() {
         )}
       </AnimatePresence>
 
-
       {/* Add/Edit Alert Modal */}
       {isModalOpen && (
         <AlertModal
@@ -501,12 +838,37 @@ export default function AlertPage() {
         />
       )}
       <Dock />
+
+      {/* Enhanced Custom Scrollbar Styles */}
+      <style>{`
+        .custom-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: ${isDarkMode ? '#475569 #1e293b' : '#cbd5e1 #f1f5f9'};
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: ${isDarkMode ? '#1e293b' : '#f1f5f9'};
+          border-radius: 3px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: ${isDarkMode ? '#475569' : '#cbd5e1'};
+          border-radius: 3px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: ${isDarkMode ? '#64748b' : '#94a3b8'};
+        }
+      `}</style>
     </div>
   );
 }
 
-
-// --- Enhanced Modal Component ---
+// --- Enhanced Modal Component with Landing Page Theme ---
 function AlertModal({
   alert,
   onClose,
@@ -516,6 +878,7 @@ function AlertModal({
   onClose: () => void;
   onSave: (data: Partial<Alert>) => void;
 }) {
+  const { isDarkMode } = useTheme();
   const [formData, setFormData] = useState({
     stock_name: alert?.stock_name || '',
     upper_threshold: alert?.upper_threshold?.toString() || '',
@@ -526,246 +889,214 @@ function AlertModal({
   });
   const [error, setError] = useState('');
 
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const { stock_name, upper_threshold, lower_threshold, email_alert, sms_alert } = formData;
 
-
-    // Validation
-    if (!stock_name) {
-      setError('Stock Name is required.');
+    if (!stock_name.trim()) {
+      setError('Stock name is required');
       return;
     }
+
     if (!upper_threshold && !lower_threshold) {
-      setError('At least one threshold (upper or lower) is required.');
-      return;
-    }
-    if (!email_alert && !sms_alert) {
-      setError('At least one notification method (Email or SMS) is required.');
+      setError('At least one threshold is required');
       return;
     }
 
-
-    setError('');
-
-
-    const alertData: Partial<Alert> = {
-      stock_name: stock_name.toLowerCase().replace(/\s+/g, '-'),
-      upper_threshold: upper_threshold ? parseFloat(upper_threshold) : null,
-      lower_threshold: lower_threshold ? parseFloat(lower_threshold) : null,
+    const processedData: Partial<Alert> = {
+      stock_name: stock_name.trim(),
+      upper_threshold: upper_threshold ? parseFloat(upper_threshold) : undefined,
+      lower_threshold: lower_threshold ? parseFloat(lower_threshold) : undefined,
       email_alert: email_alert ? email_alert.split(',').map(e => e.trim()).filter(e => e) : [],
       sms_alert: sms_alert ? sms_alert.split(',').map(s => s.trim()).filter(s => s) : [],
-      last_alert_frequency: formData.last_alert_frequency,
-      monitored: true,
+      last_alert_frequency: formData.last_alert_frequency as any,
+      monitored: true
     };
 
-
-    onSave(alertData);
+    onSave(processedData);
   };
-
-
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
 
   return (
-    <AnimatePresence>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <motion.div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={handleBackdropClick}
+        className={`w-full max-w-md rounded-2xl border shadow-2xl backdrop-blur-xl ${isDarkMode
+            ? 'bg-slate-900/95 border-neutral-700/50'
+            : 'bg-white/95 border-neutral-200/60'
+          }`}
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9, y: 20 }}
       >
-        <motion.div
-          className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-gray-200/60 overflow-hidden"
-          initial={{ scale: 0.9, opacity: 0, y: 20 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.9, opacity: 0, y: 20 }}
-          transition={{ type: "spring", duration: 0.5 }}
-          onClick={e => e.stopPropagation()}
-        >
-          <form onSubmit={handleSubmit}>
-            {/* Enhanced Header */}
-            <div className="p-6 border-b border-gray-200/60 bg-gray-50/50">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-gradient-to-br from-red-100 to-red-200 rounded-xl">
-                    <BellPlus className="w-6 h-6 text-red-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900">{alert ? 'Edit Alert' : 'Create New Alert'}</h3>
-                    <p className="text-sm text-gray-600">Configure your stock monitoring preferences</p>
-                  </div>
-                </div>
-                <motion.button
-                  type="button"
-                  onClick={onClose}
-                  className="p-2 rounded-xl hover:bg-gray-100 transition-colors"
-                  whileHover={{ scale: 1.1, rotate: 90 }}
-                  whileTap={{ scale: 0.9 }}
-                >
-                  <X size={20} className="text-gray-500" />
-                </motion.button>
-              </div>
+        <div className={`p-6 border-b ${isDarkMode ? 'border-neutral-700/50' : 'border-neutral-200/60'
+          }`}>
+          <div className="flex items-center justify-between">
+            <h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-neutral-900'
+              }`}>
+              {alert ? 'Edit Alert' : 'Create New Alert'}
+            </h3>
+            <button
+              onClick={onClose}
+              className={`p-2 rounded-lg transition-colors ${isDarkMode
+                  ? 'hover:bg-white/10 text-white/70'
+                  : 'hover:bg-neutral-100 text-neutral-500'
+                }`}
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <motion.div
+              className="p-3 rounded-xl bg-red-100 border border-red-200 text-red-800 text-sm"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              {error}
+            </motion.div>
+          )}
+
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-neutral-900'
+              }`}>
+              Stock Name
+            </label>
+            <input
+              type="text"
+              name="stock_name"
+              value={formData.stock_name}
+              onChange={handleChange}
+              className={`w-full px-4 py-3 rounded-xl border transition-all ${isDarkMode
+                  ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
+                  : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
+                } focus:outline-none focus:ring-2 focus:ring-red-500/20`}
+              placeholder="Enter stock name..."
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-neutral-900'
+                }`}>
+                Upper Threshold
+              </label>
+              <input
+                type="number"
+                name="upper_threshold"
+                value={formData.upper_threshold}
+                onChange={handleChange}
+                className={`w-full px-4 py-3 rounded-xl border transition-all ${isDarkMode
+                    ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
+                    : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
+                  } focus:outline-none focus:ring-2 focus:ring-red-500/20`}
+                placeholder="0.00"
+              />
             </div>
-
-
-            {/* Enhanced Form Content */}
-            <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
-              {/* Stock Name */}
-              <div>
-                <label htmlFor="stock_name" className="block text-sm font-semibold text-gray-700 mb-2">Stock Name</label>
-                <input
-                  type="text"
-                  name="stock_name"
-                  value={formData.stock_name}
-                  onChange={handleChange}
-                  placeholder="e.g., india-birthrate, china-population"
-                  className="w-full px-4 py-3 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-red-300 focus:border-red-300 transition-all bg-white"
-                  required
-                />
-              </div>
-
-
-              {/* Thresholds */}
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 mb-3">Thresholds</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="upper_threshold" className="block text-sm font-medium text-gray-600 mb-2">Upper Threshold (Optional)</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-red-600 font-bold">↑</span>
-                      <input
-                        type="number"
-                        name="upper_threshold"
-                        value={formData.upper_threshold}
-                        onChange={handleChange}
-                        placeholder="1000"
-                        className="w-full pl-8 pr-4 py-3 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-red-300 focus:border-red-300 transition-all bg-white"
-                        step="1"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label htmlFor="lower_threshold" className="block text-sm font-medium text-gray-600 mb-2">Lower Threshold (Optional)</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-green-600 font-bold">↓</span>
-                      <input
-                        type="number"
-                        name="lower_threshold"
-                        value={formData.lower_threshold}
-                        onChange={handleChange}
-                        placeholder="500"
-                        className="w-full pl-8 pr-4 py-3 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-red-300 focus:border-red-300 transition-all bg-white"
-                        step="1"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-
-              {/* Alert Frequency */}
-              <div>
-                <label htmlFor="last_alert_frequency" className="block text-sm font-semibold text-gray-700 mb-2">Alert Frequency</label>
-                <select
-                  name="last_alert_frequency"
-                  value={formData.last_alert_frequency}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-red-300 focus:border-red-300 transition-all bg-white"
-                  required
-                >
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                </select>
-              </div>
-
-
-              {/* Notifications */}
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 mb-3">Notification Methods</h4>
-                <p className="text-xs text-gray-500 mb-4">Configure at least one notification method to receive alerts. Use comma to separate multiple entries.</p>
-                <div className="space-y-4">
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600" size={20} />
-                    <input
-                      type="text"
-                      name="email_alert"
-                      value={formData.email_alert}
-                      onChange={handleChange}
-                      placeholder="email1@example.com, email2@example.com"
-                      className="w-full pl-12 pr-4 py-3 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-blue-300 focus:border-blue-300 transition-all bg-white"
-                    />
-                    <div className="text-xs text-gray-500 mt-1">Separate multiple emails with commas</div>
-                  </div>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-purple-600" size={20} />
-                    <input
-                      type="text"
-                      name="sms_alert"
-                      value={formData.sms_alert}
-                      onChange={handleChange}
-                      placeholder="1234567890, 0987654321"
-                      className="w-full pl-12 pr-4 py-3 border border-gray-200/60 rounded-xl focus:ring-2 focus:ring-purple-300 focus:border-purple-300 transition-all bg-white"
-                    />
-                    <div className="text-xs text-gray-500 mt-1">Separate multiple phone numbers with commas</div>
-                  </div>
-                </div>
-              </div>
-
-
-              {/* Error Message */}
-              <AnimatePresence>
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl flex items-center gap-3"
-                  >
-                    <AlertTriangle size={20} className="flex-shrink-0" />
-                    <span className="font-medium">{error}</span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-neutral-900'
+                }`}>
+                Lower Threshold
+              </label>
+              <input
+                type="number"
+                name="lower_threshold"
+                value={formData.lower_threshold}
+                onChange={handleChange}
+                className={`w-full px-4 py-3 rounded-xl border transition-all ${isDarkMode
+                    ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
+                    : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
+                  } focus:outline-none focus:ring-2 focus:ring-red-500/20`}
+                placeholder="0.00"
+              />
             </div>
+          </div>
 
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-neutral-900'
+              }`}>
+              Email Alerts (comma-separated)
+            </label>
+            <input
+              type="text"
+              name="email_alert"
+              value={formData.email_alert}
+              onChange={handleChange}
+              className={`w-full px-4 py-3 rounded-xl border transition-all ${isDarkMode
+                  ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
+                  : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
+                } focus:outline-none focus:ring-2 focus:ring-red-500/20`}
+              placeholder="email1@example.com, email2@example.com"
+            />
+          </div>
 
-            {/* Enhanced Footer */}
-            <div className="p-6 bg-gray-50/50 border-t border-gray-200/60 flex justify-end gap-4">
-              <motion.button
-                type="button"
-                onClick={onClose}
-                className="px-6 py-3 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                Cancel
-              </motion.button>
-              <motion.button
-                type="submit"
-                className="px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-xl text-sm font-semibold shadow-lg transition-all"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                {alert ? 'Update Alert' : 'Create Alert'}
-              </motion.button>
-            </div>
-          </form>
-        </motion.div>
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-neutral-900'
+              }`}>
+              SMS Alerts (comma-separated)
+            </label>
+            <input
+              type="text"
+              name="sms_alert"
+              value={formData.sms_alert}
+              onChange={handleChange}
+              className={`w-full px-4 py-3 rounded-xl border transition-all ${isDarkMode
+                  ? 'bg-white/5 border-white/20 text-white placeholder-white/50 focus:bg-white/10 focus:border-white/30'
+                  : 'bg-white/60 border-neutral-200/60 text-neutral-800 placeholder-neutral-400 focus:bg-white/80 focus:border-neutral-300/80'
+                } focus:outline-none focus:ring-2 focus:ring-red-500/20`}
+              placeholder="+1234567890, +0987654321"
+            />
+          </div>
+
+          <div>
+            <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-neutral-900'
+              }`}>
+              Alert Frequency
+            </label>
+            <select
+              name="last_alert_frequency"
+              value={formData.last_alert_frequency}
+              onChange={handleChange}
+              className={`w-full px-4 py-3 rounded-xl border transition-all ${isDarkMode
+                  ? 'bg-white/5 border-white/20 text-white focus:bg-white/10 focus:border-white/30'
+                  : 'bg-white/60 border-neutral-200/60 text-neutral-800 focus:bg-white/80 focus:border-neutral-300/80'
+                } focus:outline-none focus:ring-2 focus:ring-red-500/20`}
+            >
+              <option value="immediate">Immediate</option>
+              <option value="hourly">Hourly</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all ${isDarkMode
+                  ? 'bg-white/10 text-white hover:bg-white/20'
+                  : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+                }`}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className={`flex-1 px-4 py-3 rounded-xl font-bold transition-all shadow-lg hover:shadow-xl ${isDarkMode
+                  ? 'bg-red-800 text-white hover:bg-red-700'
+                  : 'bg-neutral-800 text-white hover:bg-neutral-700'
+                }`}
+            >
+              {alert ? 'Update Alert' : 'Create Alert'}
+            </button>
+          </div>
+        </form>
       </motion.div>
-    </AnimatePresence>
+    </div>
   );
 }

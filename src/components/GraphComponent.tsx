@@ -1,742 +1,791 @@
-//GraphComponent(child):
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import * as d3 from 'd3';
-import { GraphData, NodeData, LinkData, Relationship } from '../services/types';
+import { GraphData, NodeData, LinkData } from '../services/types';
 import { formatLargeNumber, formatStockName } from '../utils/utility';
-import LoadingScreen from './ui/LoadingScreen';
 import { Loader, RotateCcw } from 'lucide-react';
 
+const TWC = {
+  brand: {
+    primary: {
+      '50': '#f9fafb', '100': '#f3f4f6', '200': '#e5e7eb', '300': '#d1d5db',
+      '400': '#9ca3af', '500': '#6b7280', '600': '#4b5563', '700': '#374151',
+      '800': '#1f2937', '900': '#111827', '950': '#0f172a'
+    },
+    secondary: {
+      '50': '#ffffff', '100': '#fefefe', '200': '#fcfcfc', '300': '#f8f8f8',
+      '400': '#f4f4f4', '500': '#f0f0f0', '600': '#e8e8e8', '700': '#d8d8d8',
+      '800': '#c0c0c0', '900': '#a8a8a8', '950': '#edede9'
+    },
+    dark: { '950': '#250902' }
+  },
+  neutral: {
+    '50': '#fafafa', '100': '#f5f5f5', '200': '#e5e5e5', '300': '#d4d4d4',
+    '400': '#a3a3a3', '500': '#737373', '600': '#525252', '700': '#404040',
+    '800': '#262626', '900': '#171717', '950': '#0a0a0a'
+  },
+  accent: {
+    red: {
+      '50': '#fef2f2', '100': '#fee2e2', '200': '#fecaca', '300': '#fca5a5',
+      '400': '#f87171', '500': '#ef4444', '600': '#dc2626', '700': '#b91c1c',
+      '800': '#991b1b', '900': '#7f1d1d', '950': '#450a0a'
+    }
+  },
+  success: {
+    '50': '#f0fdf4', '100': '#dcfce7', '200': '#bbf7d0', '300': '#86efac',
+    '400': '#4ade80', '500': '#22c55e', '600': '#16a34a', '700': '#15803d',
+    '800': '#166534', '900': '#14532d', '950': '#052e16'
+  },
+  warning: {
+    '50': '#fffbeb', '100': '#fef3c7', '200': '#fde68a', '300': '#fcd34d',
+    '400': '#fbbf24', '500': '#f59e0b', '600': '#d97706', '700': '#b45309',
+    '800': '#92400e', '900': '#78350f', '950': '#451a03'
+  },
+  error: {
+    '50': '#fef2f2', '100': '#fee2e2', '200': '#fecaca', '300': '#fca5a5',
+    '400': '#f87171', '500': '#ef4444', '600': '#dc2626', '700': '#b91c1c',
+    '800': '#991b1b', '900': '#7f1d1d', '950': '#450a0a'
+  }
+} as const;
+// ────────────────────────────────────────────────────────────────────────────────
+// Enhanced Theme system with realistic colors
+// ────────────────────────────────────────────────────────────────────────────────
+type NodeTheme = {
+  useGradients: boolean;
+  gradients?: Array<{ start: string; end: string; accent: string; mid?: string }>;
+  fills?: string[];
+  centerFillSolid?: string;
+  centerRingColor?: string;
+  useGlow?: boolean;
+  nodeBorder: (isDark: boolean) => { color: string; width: number };
+  centerBorder: (isDark: boolean) => { color: string; width: number };
+  ringWidth: number;
+  ringOpacity: number;
+  ringColors?: string[];
+  valueText: (isDark: boolean) => string;
+};
+
+const NODE_THEMES: Record<string, NodeTheme> = {
+  // REALISTIC DARK THEME - Light teal outlines with blue/teal nodes
+  'realistic-dark': {
+    useGradients: false,
+    fills: [
+      '#4DD0E1', // Light cyan
+      '#26C6DA', // Medium cyan
+      '#00ACC1', // Darker cyan
+      '#0097A7', // Dark cyan-teal
+      '#00838F', // Deep teal
+      '#006064'  // Very dark teal
+    ],
+    centerFillSolid: '#FF5722', // Warm orange-red accent for center
+    centerRingColor: '#5DD5D5', // Light teal ring
+    nodeBorder: () => ({ color: '#5DD5D5', width: 2 }), // Light teal borders
+    centerBorder: () => ({ color: '#5DD5D5', width: 2.5 }),
+    ringWidth: 1.2,
+    ringOpacity: 0.8,
+    ringColors: ['#5DD5D5', '#4DD0E1', '#26C6DA'],
+    valueText: () => '#FFFFFF'
+  },
+
+  // REALISTIC LIGHT THEME - Dark red borders with cream/peach nodes
+  'realistic-light': {
+    useGradients: false,
+    fills: [
+      '#FFF3E0', // Light cream
+      '#FFECB3', // Cream yellow
+      '#FFE0B2', // Peach cream
+      '#FFCCBC', // Light peach
+      '#FFAB91', // Medium peach
+      '#FF8A65'  // Deeper peach
+    ],
+    centerFillSolid: '#C62828', // Deep red center
+    centerRingColor: '#D32F2F', // Dark red ring
+    nodeBorder: () => ({ color: '#D32F2F', width: 2 }), // Dark red borders
+    centerBorder: () => ({ color: '#B71C1C', width: 2.5 }), // Even darker red for center
+    ringWidth: 1.1,
+    ringOpacity: 0.9,
+    ringColors: ['#D32F2F', '#F44336', '#FF5722'],
+    valueText: () => '#2E2E2E'
+  },
+
+  // Keep existing themes for backward compatibility
+  'brand-dark-minimal': {
+    useGradients: false,
+    fills: [
+      '#374151', '#4B5563', '#6B7280', '#1F2937', '#9CA3AF', '#111827'
+    ],
+    centerFillSolid: '#0F172A',
+    centerRingColor: '#EF4444',
+    nodeBorder: () => ({ color: '#FFFFFF', width: 2 }),
+    centerBorder: () => ({ color: '#FFFFFF', width: 2.5 }),
+    ringWidth: 1.1,
+    ringOpacity: 0.9,
+    ringColors: ['#D8D8D8', '#C0C0C0', '#F0F0F0', '#E8E8E8'],
+    valueText: () => '#FFFFFF'
+  },
+
+  'brand-light-minimal': {
+    useGradients: false,
+    fills: [
+      '#A8A8A8', '#C0C0C0', '#D8D8D8', '#525252', '#737373', '#E8E8E8'
+    ],
+    centerFillSolid: '#EDEDE9',
+    centerRingColor: '#DC2626',
+    nodeBorder: () => ({ color: '#0F172A', width: 2 }),
+    centerBorder: () => ({ color: '#0F172A', width: 2.5 }),
+    ringWidth: 1.15,
+    ringOpacity: 0.85,
+    ringColors: ['#D1D5DB', '#E5E7EB', '#D4D4D4', '#9CA3AF'],
+    valueText: () => '#111827'
+  },
+
+  'brand-gradient': {
+    useGradients: true,
+    gradients: [
+      { start: '#374151', end: '#111827', accent: '#FCFCFC', mid: '#6B7280' },
+      { start: '#4B5563', end: '#1F2937', accent: '#FEFEFE', mid: '#9CA3AF' },
+      { start: '#6B7280', end: '#374151', accent: '#F8F8F8', mid: '#9CA3AF' },
+      { start: '#1F2937', end: '#0F172A', accent: '#FCFCFC', mid: '#374151' },
+      { start: '#9CA3AF', end: '#374151', accent: '#FFFFFF', mid: '#6B7280' },
+      { start: '#374151', end: '#0F172A', accent: '#F8F8F8', mid: '#4B5563' }
+    ],
+    nodeBorder: (isDark) => ({ color: isDark ? '#FFFFFF' : '#0F172A', width: 1.5 }),
+    centerBorder: (isDark) => ({ color: isDark ? '#FFFFFF' : '#0F172A', width: 2 }),
+    ringWidth: 0.9,
+    ringOpacity: 0.6,
+    valueText: () => '#FFFFFF'
+  }
+};
+
+// Theme names available via prop
+type NodeColorThemeName =
+  | 'realistic-dark'
+  | 'realistic-light'
+  | 'brand-auto'
+  | 'brand-dark-minimal'
+  | 'brand-light-minimal'
+  | 'brand-gradient';
+
 interface GraphComponentProps {
-    graphData: GraphData | null;
-    selectedElement: NodeData | LinkData | null;
-    setSelectedElement: (element: NodeData | LinkData | null) => void;
-    sidebarWidth: number;
-    nodeValueChangeCallback: (nodeId: string, newValue: number) => void;
-    simulationSettings: { value: number, timeUnit: string };
-    simulationValue: number;
-    runSimulation: boolean;
-    isLoading: boolean
+  graphData: GraphData | null;
+  selectedElement: NodeData | LinkData | null;
+  setSelectedElement: (element: NodeData | LinkData | null) => void;
+  sidebarWidth: number;
+  nodeValueChangeCallback: (nodeId: string, newValue: number) => void;
+  simulationSettings: { value: number; timeUnit: string };
+  simulationValue: number;
+  runSimulation: boolean;
+  isLoading: boolean;
+  isDarkMode?: boolean;
+  nodeTheme?: NodeColorThemeName;
 }
 
 const GraphComponent: React.FC<GraphComponentProps> = ({
-    isLoading,
-    graphData,
-    selectedElement,
-    setSelectedElement,
-    sidebarWidth,
-    nodeValueChangeCallback,
-    simulationSettings,
-    simulationValue,
-    runSimulation
+  isLoading,
+  graphData,
+  selectedElement,
+  setSelectedElement,
+  sidebarWidth,
+  nodeValueChangeCallback,
+  simulationSettings,
+  simulationValue,
+  runSimulation,
+  isDarkMode = false,
+  nodeTheme = 'realistic-dark' // Default to realistic dark theme
 }) => {
-    const svgRef = useRef<SVGSVGElement | null>(null);
-    const containerRef = useRef<HTMLDivElement | null>(null);
-    const [nodeColors, setNodeColors] = useState<Record<string, string>>({});
-    const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
-    const [animatedValues, setAnimatedValues] = useState<Record<string, number>>({});
-    const [initialRender, setInitialRender] = useState(true);
-    const [zoomTransform, setZoomTransform] = useState<d3.ZoomTransform | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [nodeColors, setNodeColors] = useState<Record<string, string>>({});
+  const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
+  const [animatedValues, setAnimatedValues] = useState<Record<string, number>>({});
+  const [initialRender, setInitialRender] = useState(true);
+  const [zoomTransform, setZoomTransform] = useState<d3.ZoomTransform | null>(null);
 
-    // Zoom behavior ref
-    const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
-    const simulationRef = useRef<d3.Simulation<NodeData, any> | null>(null);
+  const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const simulationRef = useRef<d3.Simulation<NodeData, any> | null>(null);
 
-    // Calculate container dimensions and observe changes
-    useEffect(() => {
-        if (!containerRef.current) return;
+  // Resolve auto theme to realistic themes based on dark mode
+  const resolvedNodeTheme: Exclude<NodeColorThemeName, 'brand-auto'> =
+    (nodeTheme === 'brand-auto'
+      ? (isDarkMode ? 'realistic-dark' : 'realistic-light')
+      : nodeTheme) as Exclude<NodeColorThemeName, 'brand-auto'>;
 
-        const updateDimensions = () => {
-            if (!containerRef.current) return;
-            const containerRect = containerRef.current.getBoundingClientRect();
-            setContainerDimensions({
-                width: containerRect.width,
-                height: containerRect.height
-            });
-        };
+  const activeTheme: NodeTheme = useMemo(
+    () => NODE_THEMES[resolvedNodeTheme],
+    [resolvedNodeTheme]
+  );
 
-        updateDimensions();
+  // Resize observer
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const updateDimensions = () => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      setContainerDimensions({ width: rect.width, height: rect.height });
+    };
+    updateDimensions();
+    const ro = new ResizeObserver(updateDimensions);
+    ro.observe(containerRef.current);
+    return () => { try { ro.disconnect(); } catch {} };
+  }, []);
 
-        const resizeObserver = new ResizeObserver(updateDimensions);
-        resizeObserver.observe(containerRef.current);
+  // Nodes with center flag
+  const nodes: NodeData[] = useMemo(() => {
+    if (!graphData) return [];
+    return graphData.nodes.map((node) => ({
+      ...node,
+      isCenter: node.id === graphData.stock.guid
+    }));
+  }, [graphData]);
 
-        return () => {
-            if (containerRef.current) {
-                resizeObserver.unobserve(containerRef.current);
-            }
-            resizeObserver.disconnect();
-        };
-    }, []);
+  // Link wiring
+  const links = useMemo(() => {
+    if (!graphData?.edges || !graphData?.nodes) return [];
+    const nameToId = new Map<string, string>();
+    graphData.nodes.forEach((n) => nameToId.set(n.name, n.id));
+    const d3Links = graphData.edges.map((edge) => {
+      if (!edge.relationshipList?.length) return null;
+      const first = edge.relationshipList[0];
+      const s = nameToId.get(first.fromName);
+      const t = nameToId.get(first.toName);
+      if (!s || !t) return null;
+      return { ...edge, source: s, target: t };
+    });
+    return d3Links.filter(Boolean) as (LinkData & { source: string; target: string })[];
+  }, [graphData]);
 
-    const nodes: NodeData[] = useMemo(() => {
-        if (!graphData) return [];
+  // Font sizing helper
+  function getFontSize(text: string, radius: number, maxFont: number, minFont: number) {
+    const size = Math.floor((radius * 2) / Math.max(text.length, 1) * 1.2) + 5;
+    return `${Math.max(minFont, Math.min(maxFont, size))}px`;
+  }
 
-        return graphData.nodes.map((node) => ({
-            ...node,
-            isCenter: node.id === graphData.stock.guid
-        }));
-    }, [graphData]);
+  // Label color aligned to brand tokens
+  const labelColor = isDarkMode ? TWC.brand.secondary['50'] : TWC.brand.primary['900'];
 
-    // At top, just below imports
-    function getFontSize(text: string, radius: number, maxFont: number, minFont: number) {
-        const size = Math.floor((radius * 2) / Math.max(text.length, 1) * 1.2)+5;
-        return `${Math.max(minFont, Math.min(maxFont, size))}px`;
+  // Build node color map (gradient URLs or solid fills)
+  useEffect(() => {
+    if (!graphData || !nodes.length) return;
+    const map: Record<string, string> = {};
+    nodes.forEach((node, index) => {
+      if (activeTheme.useGradients) {
+        map[node.id] = node.isCenter ? 'url(#centerGradient)' : `url(#nodeGradient${index % (activeTheme.gradients?.length || 1)})`;
+      } else {
+        const list = activeTheme.fills || ['#94a3b8'];
+        const fi = index % list.length;
+        map[node.id] = node.isCenter ? (activeTheme.centerFillSolid || list[0]) : list[fi];
+      }
+    });
+    setNodeColors(map);
+    sessionStorage.setItem('nodeColors', JSON.stringify(map));
+  }, [nodes, graphData, activeTheme]);
+
+  // Main render
+  useEffect(() => {
+    if (!graphData || !svgRef.current || containerDimensions.width === 0 || links.length === 0) return;
+
+    // Preserve previous positions when re-rendering
+    if (simulationRef.current) {
+      const prev = simulationRef.current.nodes();
+      const pos = new Map(prev.map((n: any) => [n.id, { x: n.x, y: n.y, vx: n?.vx, vy: n?.vy, fx: n.fx, fy: n.fy }]));
+      nodes.forEach((n) => { const p = pos.get(n.id); if (p) Object.assign(n, p); });
     }
 
-    // This hook is updated to correctly process the pre-structured edges from the API.
-    const links = useMemo(() => {
-        if (!graphData || !graphData.edges || !graphData.nodes) {
-            return [];
+    const svg = d3.select(svgRef.current);
+    svg.selectAll('*').remove();
+
+    const width = containerDimensions.width;
+    const height = containerDimensions.height;
+    const nodeRadius = 35;
+    const centerNodeRadius = 45;
+
+    const g = svg.append('g');
+    const zoom = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.1, 4])
+      .on('zoom', (event) => {
+        const transform = event.transform;
+        setZoomTransform(transform);
+        g.attr('transform', transform);
+      });
+    zoomBehaviorRef.current = zoom;
+    svg.call(zoom);
+
+    // Edge colors aligned to tokens
+    const edgeColor = d3.scaleOrdinal<string>()
+      .domain(['positive', 'negative', 'neutral'])
+      .range(
+        isDarkMode
+          ? [TWC.success['400'], TWC.error['400'], TWC.neutral['400']]
+          : [TWC.success['600'], TWC.error['600'], TWC.neutral['500']]
+      );
+
+    const defs = svg.append('defs');
+
+    // Center gradient (accent red) + node gradients if theme uses gradients
+    if (activeTheme.useGradients) {
+      const centerGradient = defs.append('radialGradient')
+        .attr('id', 'centerGradient')
+        .attr('cx', '40%').attr('cy', '30%').attr('r', '80%');
+      centerGradient.append('stop').attr('offset', '0%').attr('stop-color', TWC.accent.red['100']).attr('stop-opacity', 0.9);
+      centerGradient.append('stop').attr('offset', '40%').attr('stop-color', TWC.accent.red['500']).attr('stop-opacity', 1);
+      centerGradient.append('stop').attr('offset', '100%').attr('stop-color', TWC.accent.red['700']).attr('stop-opacity', 1);
+
+      (activeTheme.gradients || []).forEach((grad, index) => {
+        const nodeGradient = defs.append('radialGradient')
+          .attr('id', `nodeGradient${index}`)
+          .attr('cx', '40%').attr('cy', '30%').attr('r', '80%');
+        nodeGradient.append('stop').attr('offset', '0%').attr('stop-color', grad.accent).attr('stop-opacity', 0.8);
+        nodeGradient.append('stop').attr('offset', '50%').attr('stop-color', grad.mid || grad.end).attr('stop-opacity', 1);
+        nodeGradient.append('stop').attr('offset', '100%').attr('stop-color', grad.start).attr('stop-opacity', 1);
+      });
+    }
+
+    // Arrowheads
+    ['positive', 'negative', 'neutral'].forEach((impact) => {
+      const color = edgeColor(impact);
+      defs.append('marker')
+        .attr('id', `arrowhead-${impact}`)
+        .attr('viewBox', '-2 -8 12 16')
+        .attr('refX', 8).attr('refY', 0).attr('orient', 'auto')
+        .attr('markerWidth', 6).attr('markerHeight', 6).attr('markerUnits', 'strokeWidth')
+        .append('path').attr('d', 'M 0,-6 L 10,0 L 0,6 Z')
+        .attr('fill', color).attr('stroke', color).attr('stroke-width', 1);
+
+      defs.append('marker')
+        .attr('id', `arrowhead-start-${impact}`)
+        .attr('viewBox', '-2 -8 12 16')
+        .attr('refX', 2).attr('refY', 0).attr('orient', 'auto')
+        .attr('markerWidth', 6).attr('markerHeight', 6).attr('markerUnits', 'strokeWidth')
+        .append('path').attr('d', 'M 10,-6 L 0,0 L 10,6 Z')
+        .attr('fill', color).attr('stroke', color).attr('stroke-width', 1);
+    });
+
+    // Filters
+    const dropShadow = defs.append('filter')
+      .attr('id', 'drop-shadow').attr('x', '-50%').attr('y', '-50%')
+      .attr('width', '200%').attr('height', '200%');
+    dropShadow.append('feGaussianBlur').attr('in', 'SourceAlpha').attr('stdDeviation', 3);
+    dropShadow.append('feOffset').attr('dx', 0).attr('dy', 2).attr('result', 'offsetblur');
+    const feComponentTransfer = dropShadow.append('feComponentTransfer');
+    feComponentTransfer.append('feFuncA').attr('type', 'linear').attr('slope', 0.25);
+    const dsMerge = dropShadow.append('feMerge');
+    dsMerge.append('feMergeNode');
+    dsMerge.append('feMergeNode').attr('in', 'SourceGraphic');
+
+    const glow = defs.append('filter')
+      .attr('id', 'glow-filter').attr('x', '-50%').attr('y', '-50%')
+      .attr('width', '200%').attr('height', '200%');
+    glow.append('feGaussianBlur').attr('stdDeviation', 3).attr('result', 'coloredBlur');
+    const glowMerge = glow.append('feMerge');
+    glowMerge.append('feMergeNode').attr('in', 'coloredBlur');
+    glowMerge.append('feMergeNode').attr('in', 'SourceGraphic');
+
+    // Load saved positions and zoom
+    const storedNodePositions = sessionStorage.getItem('nodePositions');
+    let initialPositions: Record<string, { x: number; y: number }> = {};
+    if (storedNodePositions) { try { initialPositions = JSON.parse(storedNodePositions); } catch {} }
+    const storedZoomTransform = sessionStorage.getItem('zoomTransform');
+    if (storedZoomTransform && !zoomTransform) {
+      try {
+        const t = JSON.parse(storedZoomTransform);
+        svg.call(zoom.transform, d3.zoomIdentity.translate(t.x, t.y).scale(t.k));
+      } catch {}
+    }
+
+    // Initial positions
+    nodes.forEach((node) => {
+      if (initialPositions[node.id]) {
+        node.x = initialPositions[node.id].x; node.y = initialPositions[node.id].y;
+        node.fx = initialPositions[node.id].x; node.fy = initialPositions[node.id].y;
+      } else {
+        if (node.isCenter) {
+          node.x = width / 2; node.y = height / 2;
+        } else {
+          const angleStep = (2 * Math.PI) / (Math.max(nodes.length - 1, 1));
+          const idx = nodes.filter((n) => !n.isCenter).indexOf(node);
+          const angle = idx * angleStep;
+          const radius = Math.min(width, height) * 0.3;
+          node.x = width / 2 + Math.cos(angle) * radius;
+          node.y = height / 2 + Math.sin(angle) * radius;
         }
+      }
+    });
 
-        // Create a lookup map from node name to node ID for efficient linking.
-        const nameToIdMap = new Map<string, string>();
-        graphData.nodes.forEach(node => {
-            nameToIdMap.set(node.name, node.id);
-        });
+    // Simulation
+    const simulation = d3.forceSimulation(nodes)
+      .force('link', d3.forceLink(links).id((d: any) => d.id).distance(180).strength(0.2))
+      .force('charge', d3.forceManyBody().strength(-600))
+      .force('center', d3.forceCenter(width / 2, height / 2))
+      .force('collision', d3.forceCollide((d: any) => (d.isCenter ? centerNodeRadius : nodeRadius) + 10))
+      .alphaDecay(0.02)
+      .velocityDecay(0.4);
 
-        // The edges are already processed for bidirectionality.
-        const d3Links = graphData.edges.map(edge => {
-            if (!edge.relationshipList || edge.relationshipList.length === 0) {
-                console.warn("Edge object has no relationships:", edge);
-                return null;
-            }
+    simulationRef.current = simulation;
 
-            // Get source and target names from the first relationship in the list.
-            const firstRelationship = edge.relationshipList[0];
-            const sourceName = firstRelationship.fromName;
-            const targetName = firstRelationship.toName;
-            
-            // Look up the corresponding node IDs.
-            const sourceId = nameToIdMap.get(sourceName);
-            const targetId = nameToIdMap.get(targetName);
-
-            // If IDs are not found, we cannot create the link.
-            if (!sourceId || !targetId) {
-                console.warn(`Could not find node IDs for link between "${sourceName}" and "${targetName}"`);
-                return null;
-            }
-            
-            // Return the link object with all original data plus the source/target IDs for D3.
-            return {
-                ...edge,
-                source: sourceId,
-                target: targetId,
-            };
-        });
-
-        // Filter out any links that could not be created.
-        return d3Links.filter(link => link !== null) as (LinkData & { source: string, target: string })[];
-
-    }, [graphData]);
-    const centerColor = '#FF9999';
-    const labelColor = '#1F2937';
-
-    // Updated node colors with light shades
-    useEffect(() => {
-        if (!graphData || !nodes.length) return;
-
-        // Light color palette with red, cream, peach, brown, grey shades
-        const lightColors: string[] = [
-            '#FFB3BA', // Pastel Red
-            '#FFDFBA', // Pastel Peach
-            '#FFFFBA', // Pastel Yellow
-            '#BAFFC9', // Pastel Green
-            '#BAE1FF', // Pastel Blue
-            '#E0BBE4', // Pastel Lavender
-            '#FFDAC1', // Pastel Cream
-            '#C7CEEA', // Pastel Periwinkle
-            '#F4E1D2', // Pastel Beige
-            '#D5E8D4', // Pastel Mint
-            '#FFE4E1', // Misty Rose
-            '#E8E9F3', // Light Grey-Blue
-            '#F0F0F0', // Light Grey
-            '#FCE1E4', // Pastel Pink
-            '#E8DFE0', // Pastel Mauve
-            '#FFF5E1', // Pastel Ivory
-        ];
-
-        const newNodeColors: Record<string, string> = {};
-
-        nodes.forEach((node, index) => {
-            if (node.isCenter) {
-                // Center node gets a slightly darker red for emphasis
-                newNodeColors[node.id] = '#FF9999';
-            } else {
-                // Use light colors for other nodes
-                const colorIndex = index % lightColors.length;
-                newNodeColors[node.id] = lightColors[colorIndex];
-            }
-        });
-
-        setNodeColors(newNodeColors);
-        
-        // Store colors in session storage
-        sessionStorage.setItem('nodeColors', JSON.stringify(newNodeColors));
-    }, [nodes, graphData]);
-
-    // Main rendering effect
-    useEffect(() => {
-        if (!graphData || !svgRef.current || containerDimensions.width === 0 || links.length === 0) return;
-
-        if (simulationRef.current) {
-            const previousNodes = simulationRef.current.nodes();
-            const nodePositionMap = new Map(previousNodes.map(node => [node.id, { x: node.x, y: node.y, vx: node?.vx, vy: node?.vy, fx: node.fx, fy: node.fy }]));
-            
-            nodes.forEach(node => {
-                if (nodePositionMap.has(node.id)) {
-                    const pos = nodePositionMap.get(node.id)!;
-                    Object.assign(node, pos);
-                }
-            });
+    // Links
+    const link = g.append('g')
+      .selectAll('line')
+      .data(links)
+      .join('line')
+      .attr('stroke', (d: any) => edgeColor(d.relationshipList?.[0]?.impact))
+      .attr('stroke-width', 2)
+      .attr('opacity', isDarkMode ? 0.8 : 0.7)
+      .attr('class', 'link')
+      .style('cursor', 'pointer')
+      .attr('marker-end', (d: any) => {
+        const impact = d.relationshipList?.[0]?.impact || 'neutral';
+        return `url(#arrowhead-${impact})`;
+      })
+      .attr('marker-start', (d: any) => {
+        if (d.isBidirectional) {
+          const impact = d.relationshipList?.[1]?.impact || d.relationshipList?.[0]?.impact || 'neutral';
+          return `url(#arrowhead-start-${impact})`;
         }
+        return null;
+      })
+      .on('click', (event: any, d: any) => {
+        event.stopPropagation();
+        setSelectedElement({ ...d, relationshipList: d.relationshipList ?? [], isBidirectional: d.isBidirectional ?? false });
+      });
 
-        const svg = d3.select(svgRef.current);
-        svg.selectAll("*").remove();
+    // Borders from theme
+    const nodeBorder = activeTheme.nodeBorder(!!isDarkMode);
+    const centerBorder = activeTheme.centerBorder(!!isDarkMode);
+    const nodeFilterStyle = activeTheme.useGlow ? 'url(#glow-filter)' : 'url(#drop-shadow)';
 
-        const width = containerDimensions.width;
-        const height = containerDimensions.height;
-        
-        // Standard node sizes
-        const nodeRadius = 40; 
-        const centerNodeRadius = 50; 
+    // Center node(s)
+    const centerGroup = g.append('g')
+      .selectAll('g')
+      .data(nodes.filter((d: any) => d.isCenter))
+      .join('g')
+      .style('cursor', 'pointer');
 
-        // Create zoom behavior
-        const zoom = d3.zoom<SVGSVGElement, unknown>()
-            .scaleExtent([0.1, 4])
-            .on("zoom", (event) => {
-                const transform = event.transform;
-                setZoomTransform(transform);
-                g.attr("transform", transform);
-            });
+    centerGroup.append('circle')
+      .attr('r', centerNodeRadius)
+      .attr('fill', (d: any) => nodeColors[d.id])
+      .attr('stroke', centerBorder.color)
+      .attr('stroke-width', centerBorder.width)
+      .style('filter', nodeFilterStyle)
+      .attr('opacity', 1);
 
-        zoomBehaviorRef.current = zoom;
-        svg.call(zoom);
+    centerGroup.append('circle')
+      .attr('r', centerNodeRadius + 1)
+      .attr('fill', 'none')
+      .attr('stroke', activeTheme.centerRingColor ?? TWC.accent.red['500'])
+      .attr('stroke-width', 1)
+      .attr('opacity', 0.4);
 
-        // Create main group for all elements
-        const g = svg.append("g");
+    centerGroup.append('circle')
+      .attr('r', centerNodeRadius)
+      .attr('fill', 'transparent')
+      .style('cursor', 'pointer')
+      .on('click', (event: any, d: any) => {
+        event.stopPropagation();
+        setSelectedElement(d);
+      });
 
-        // Edge colors matching theme
-        const edgeColor = d3.scaleOrdinal<string>()
-            .domain(['positive', 'negative', 'neutral'])
-            .range(['#10B981', '#EF4444', '#9CA3AF']); // Green, Red, Gray
-        
-        const defs = svg.append("defs");
-        const impacts = ['positive', 'negative', 'neutral'];
-        impacts.forEach(impact => {
-            const color = edgeColor(impact);
+    // Regular nodes
+    const nodeGroups = g.append('g')
+      .selectAll('g')
+      .data(nodes.filter((d: any) => !d.isCenter))
+      .join('g')
+      .style('cursor', 'pointer');
 
-            // Arrow markers with better styling
-            defs.append("marker")
-                .attr("id", `arrowhead-${impact}`)
-                .attr("viewBox", "-2 -8 12 16")
-                .attr("refX", 8)
-                .attr("refY", 0)
-                .attr("orient", "auto")
-                .attr("markerWidth", 6)
-                .attr("markerHeight", 6)
-                .attr("markerUnits", "strokeWidth")
-                .append("path")
-                .attr("d", "M 0,-6 L 10,0 L 0,6 Z")
-                .attr("fill", color)
-                .attr("stroke", color)
-                .attr("stroke-width", 1);
+    nodeGroups.append('circle')
+      .attr('r', nodeRadius)
+      .attr('fill', (d: any) => nodeColors[d.id])
+      .attr('stroke', nodeBorder.color)
+      .attr('stroke-width', nodeBorder.width)
+      .style('filter', nodeFilterStyle)
+      .attr('opacity', 1);
 
-            defs.append("marker")
-                .attr("id", `arrowhead-start-${impact}`)
-                .attr("viewBox", "-2 -8 12 16")
-                .attr("refX", 2)
-                .attr("refY", 0)
-                .attr("orient", "auto")
-                .attr("markerWidth", 6)
-                .attr("markerHeight", 6)
-                .attr("markerUnits", "strokeWidth")
-                .append("path")
-                .attr("d", "M 10,-6 L 0,0 L 10,6 Z")
-                .attr("fill", color)
-                .attr("stroke", color)
-                .attr("stroke-width", 1);
-        });
-
-        // Create subtle drop shadow filter
-        const filter = defs.append("filter")
-            .attr("id", "drop-shadow")
-            .attr("x", "-50%")
-            .attr("y", "-50%")
-            .attr("width", "200%")
-            .attr("height", "200%");
-
-        filter.append("feGaussianBlur")
-            .attr("in", "SourceAlpha")
-            .attr("stdDeviation", 3);
-
-        filter.append("feOffset")
-            .attr("dx", 0)
-            .attr("dy", 2)
-            .attr("result", "offsetblur");
-
-        const feComponentTransfer = filter.append("feComponentTransfer");
-        feComponentTransfer.append("feFuncA")
-            .attr("type", "linear")
-            .attr("slope", 0.2);
-
-        const feMerge = filter.append("feMerge");
-        feMerge.append("feMergeNode");
-        feMerge.append("feMergeNode")
-            .attr("in", "SourceGraphic");
-
-        // Load saved positions
-        const storedNodePositions = sessionStorage.getItem('nodePositions');
-        let initialPositions: Record<string, { x: number; y: number }> = {};
-        if (storedNodePositions) {
-            try {
-                initialPositions = JSON.parse(storedNodePositions);
-            } catch (error) {
-                console.error("Error parsing node positions:", error);
-            }
+    nodeGroups.append('circle')
+      .attr('r', nodeRadius + 0.5)
+      .attr('fill', 'none')
+      .attr('stroke', (d: any, i: number) => {
+        if (activeTheme.useGradients && activeTheme.gradients?.length) {
+          const gi = i % activeTheme.gradients.length;
+          return activeTheme.gradients[gi].accent;
         }
-
-        // Load saved zoom transform
-        const storedZoomTransform = sessionStorage.getItem('zoomTransform');
-        if (storedZoomTransform && !zoomTransform) {
-            try {
-                const savedTransform = JSON.parse(storedZoomTransform);
-                const transform = d3.zoomIdentity
-                    .translate(savedTransform.x, savedTransform.y)
-                    .scale(savedTransform.k);
-                svg.call(zoom.transform, transform);
-            } catch (error) {
-                console.error("Error parsing zoom transform:", error);
-            }
+        if (activeTheme.ringColors?.length) {
+          return activeTheme.ringColors[i % activeTheme.ringColors.length];
         }
+        return isDarkMode ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.25)';
+      })
+      .attr('stroke-width', activeTheme.ringWidth)
+      .attr('opacity', activeTheme.ringOpacity);
 
-        // Initialize node positions
-        nodes.forEach(node => {
-            if (initialPositions[node.id]) {
-                node.x = initialPositions[node.id].x;
-                node.y = initialPositions[node.id].y;
-                node.fx = initialPositions[node.id].x;
-                node.fy = initialPositions[node.id].y;
-            } else {
-                if (node.isCenter) {
-                    node.x = width / 2;
-                    node.y = height / 2;
-                } else {
-                    const angleStep = (2 * Math.PI) / (nodes.length - 1);
-                    const nodeIndex = nodes.filter(n => !n.isCenter).indexOf(node);
-                    const angle = nodeIndex * angleStep;
-                    const radius = Math.min(width, height) * 0.3;
-                    node.x = (width / 2) + Math.cos(angle) * radius;
-                    node.y = (height / 2) + Math.sin(angle) * radius;
-                }
-            }
+    nodeGroups.append('circle')
+      .attr('r', nodeRadius)
+      .attr('fill', 'transparent')
+      .style('cursor', 'pointer')
+      .on('click', (event: any, d: any) => {
+        event.stopPropagation();
+        setSelectedElement(d);
+      });
+
+    // Center text
+    centerGroup.each(function (d: any) {
+      const group = d3.select(this);
+      const name = formatStockName(d.name);
+      const valueText = formatLargeNumber((animatedValues[d.id] ?? d.value.value) | 0);
+
+      group.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dy', '0.35em')
+        .attr('class', 'node-value')
+        .style('fontFamily', 'Inter, system-ui, -apple-system, sans-serif')
+        .style('fill', activeTheme.valueText(!!isDarkMode))
+        .style('font-weight', '800')
+        .style('font-size', getFontSize(valueText, centerNodeRadius - 8, 15, 10))
+        .style('text-shadow', '2px 2px 4px rgba(0,0,0,0.8)')
+        .text(valueText)
+        .append('title')
+        .text(`${valueText} ${d.value.unit}`);
+
+      group.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dy', centerNodeRadius + 16)
+        .attr('class', 'node-name')
+        .style('fontFamily', 'Inter, system-ui, -apple-system, sans-serif')
+        .style('fill', labelColor)
+        .style('font-weight', '700')
+        .style('font-size', '13px')
+        .style('text-shadow', `1px 1px 3px ${isDarkMode ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)'}`)
+        .text(name);
+    });
+
+    // Regular node text
+    nodeGroups.each(function (d: any) {
+      const group = d3.select(this);
+      const name = formatStockName(d.name);
+      const valueText = formatLargeNumber((animatedValues[d.id] ?? d.value.value) | 0);
+
+      group.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dy', '0.35em')
+        .attr('class', 'node-value')
+        .style('fontFamily', 'Inter, system-ui, -apple-system, sans-serif')
+        .style('fill', activeTheme.valueText(!!isDarkMode))
+        .style('font-weight', '800')
+        .style('font-size', getFontSize(valueText, nodeRadius - 6, 13, 8))
+        .style('text-shadow', '2px 2px 4px rgba(0,0,0,0.8)')
+        .text(valueText)
+        .append('title')
+        .text(`${valueText} ${d.value.unit}`);
+
+      group.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dy', nodeRadius + 14)
+        .attr('class', 'node-name')
+        .style('fontFamily', 'Inter, system-ui, -apple-system, sans-serif')
+        .style('fill', labelColor)
+        .style('font-weight', '600')
+        .style('font-size', '11px')
+        .style('text-shadow', `1px 1px 3px ${isDarkMode ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)'}`)
+        .text(name);
+    });
+
+    // Hover interactions
+    nodeGroups.on('mouseenter', function () {
+      d3.select(this).select('circle:first-child')
+        .transition().duration(200)
+        .attr('stroke-width', nodeBorder.width + 0.5)
+        .attr('r', nodeRadius + 2)
+        .style('filter', 'url(#glow-filter)');
+    }).on('mouseleave', function () {
+      d3.select(this).select('circle:first-child')
+        .transition().duration(200)
+        .attr('stroke-width', nodeBorder.width)
+        .attr('r', nodeRadius)
+        .style('filter', nodeFilterStyle);
+    });
+
+    centerGroup.on('mouseenter', function () {
+      d3.select(this).select('circle:first-child')
+        .transition().duration(200)
+        .attr('stroke-width', centerBorder.width + 1)
+        .attr('r', centerNodeRadius + 2)
+        .style('filter', 'url(#glow-filter)');
+    }).on('mouseleave', function () {
+      d3.select(this).select('circle:first-child')
+        .transition().duration(200)
+        .attr('stroke-width', centerBorder.width)
+        .attr('r', centerNodeRadius)
+        .style('filter', nodeFilterStyle);
+    });
+
+    // Dragging
+    const drag = d3.drag<any, any>()
+      .on('start', (event: any, d: any) => {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x; d.fy = d.y;
+      })
+      .on('drag', (event: any, d: any) => {
+        d.fx = event.x; d.fy = event.y;
+      })
+      .on('end', (event: any, d: any) => {
+        if (!event.active) simulation.alphaTarget(0);
+        const saved: Record<string, { x: number; y: number }> = JSON.parse(sessionStorage.getItem('nodePositions') || '{}');
+        saved[d.id] = { x: d.fx, y: d.fy };
+        sessionStorage.setItem('nodePositions', JSON.stringify(saved));
+      });
+
+    nodeGroups.call(drag as any);
+    centerGroup.call(drag as any);
+
+    // Ticks
+    simulation.on('tick', () => {
+      link
+        .attr('x1', (d: any) => {
+          const dx = d.target.x - d.source.x; const dy = d.target.y - d.source.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const r = d.source.isCenter ? centerNodeRadius + 2 : nodeRadius + 2;
+          return d.source.x + (dx / dist) * r;
+        })
+        .attr('y1', (d: any) => {
+          const dx = d.target.x - d.source.x; const dy = d.target.y - d.source.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const r = d.source.isCenter ? centerNodeRadius + 2 : nodeRadius + 2;
+          return d.source.y + (dy / dist) * r;
+        })
+        .attr('x2', (d: any) => {
+          const dx = d.target.x - d.source.x; const dy = d.target.y - d.source.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const r = d.target.isCenter ? centerNodeRadius + 2 : nodeRadius + 2;
+          return d.target.x - (dx / dist) * r;
+        })
+        .attr('y2', (d: any) => {
+          const dx = d.target.x - d.source.x; const dy = d.target.y - d.source.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const r = d.target.isCenter ? centerNodeRadius + 2 : nodeRadius + 2;
+          return d.target.y - (dy / dist) * r;
         });
 
-        // Create simulation
-        const simulation = d3.forceSimulation(nodes)
-            .force("link", d3.forceLink(links).id((d: any) => d.id).distance(180).strength(0.2))
-            .force("charge", d3.forceManyBody().strength(-600))
-            .force("center", d3.forceCenter(width / 2, height / 2))
-            .force("collision", d3.forceCollide((d: any) => (d.isCenter ? centerNodeRadius : nodeRadius) + 10))
-            .alphaDecay(0.02)
-            .velocityDecay(0.4);
+      nodeGroups.attr('transform', (d: any) => `translate(${d.x},${d.y})`);
+      centerGroup.attr('transform', (d: any) => `translate(${d.x},${d.y})`);
+    });
 
-        simulationRef.current = simulation;
+    // Persist zoom
+    zoom.on('zoom', (event) => {
+      const t = event.transform;
+      setZoomTransform(t);
+      g.attr('transform', t);
+      sessionStorage.setItem('zoomTransform', JSON.stringify({ x: t.x, y: t.y, k: t.k }));
+    });
 
-        // Create links
-        const link = g.append("g")
-            .selectAll("line")
-            .data(links)
-            .join("line")
-            .attr("stroke", (d: any) => edgeColor(d.relationshipList?.[0]?.impact))
-            .attr("stroke-width", 2)
-            .attr("opacity", 0.7)
-            .attr("class", "link")
-            .style("cursor", "pointer")
-            .attr("marker-end", (d: any) => {
-                const impact = d.relationshipList?.[0]?.impact || 'neutral';
-                return `url(#arrowhead-${impact})`;
-            })
-            .attr("marker-start", (d: any) => {
-                if (d.isBidirectional) {
-                    const impact = d.relationshipList?.[1]?.impact || d.relationshipList?.[0]?.impact || 'neutral';
-                    return `url(#arrowhead-start-${impact})`;
-                }
-                return null;
-            })
-            .on("click", (event: any, d: any) => {
-                event.stopPropagation();
-                setSelectedElement({
-                    ...d,
-                    relationshipList: d.relationshipList ?? [],
-                    isBidirectional: d.isBidirectional ?? false
-                });
-            });
+    setTimeout(() => simulation.stop(), 3000);
+    return () => { simulation.stop(); };
+  }, [graphData, nodeColors, links, setSelectedElement, nodes, containerDimensions, animatedValues, isDarkMode, activeTheme]);
 
-        // Create center nodes with filled colors
-        const centerGroup = g.append("g")
-            .selectAll("g")
-            .data(nodes.filter((d: any) => d.isCenter))
-            .join("g")
-            .style("cursor", "pointer");
+  // Simulation animation (unchanged)
+  useEffect(() => {
+    if (initialRender) { setInitialRender(false); return; }
+    if (!graphData || !runSimulation) return;
 
-        // Center node filled circle
-        centerGroup.append("circle")
-            .attr("r", centerNodeRadius)
-            .attr("fill", (d: any) => nodeColors[d.id])
-            .attr("stroke", "#ffffff")
-            .attr("stroke-width", 3)
-            .style("filter", "url(#drop-shadow)")
-            .attr("opacity", 0.9);
+    const startValues = nodes.reduce((acc, node) => { acc[node.id] = node.value.value; return acc; }, {} as Record<string, number>);
+    let yearEquivalent = 0;
+    switch (simulationSettings.timeUnit) {
+      case 'days': yearEquivalent = simulationValue / 365; break;
+      case 'weeks': yearEquivalent = simulationValue / 52; break;
+      case 'months': yearEquivalent = simulationValue / 12; break;
+      case 'years': yearEquivalent = simulationValue; break;
+    }
+    const targetValues = nodes.reduce((acc, node) => {
+      const growth = 0.02;
+      acc[node.id] = node.value.value * Math.pow(1 + growth, yearEquivalent);
+      return acc;
+    }, {} as Record<string, number>);
 
-        // Center node border ring
-        centerGroup.append("circle")
-            .attr("r", centerNodeRadius)
-            .attr("fill", "none")
-            .attr("stroke", "#ffffff")
-            .attr("stroke-width", 2)
-            .attr("opacity", 0.8);
-
-        // Make entire center node clickable
-        centerGroup.append("circle")
-            .attr("r", centerNodeRadius)
-            .attr("fill", "transparent")
-            .style("cursor", "pointer")
-            .on("click", (event: any, d: any) => {
-                event.stopPropagation();
-                setSelectedElement(d);
-            });
-
-        // Center node text
-        centerGroup.each(function(d: any) {
-            const group = d3.select(this);
-            const name = formatStockName(d.name);
-            const valueText = formatLargeNumber(
-              (animatedValues[d.id] ?? d.value.value) | 0
-            );
-          
-            // Node name
-            group.append("text")
-              .attr("text-anchor", "middle")
-              .attr("dy", d.isCenter ? "-0.5em" : "-0.6em")
-              .attr("class", "node-name")
-              .style("font-family", "system-ui, -apple-system, sans-serif")
-              .style("fill", labelColor)
-              .style("font-weight", "600")
-              .style("font-size", getFontSize(name, centerNodeRadius - 8, 14, 8))
-              .text(name);
-          
-            // Node value
-            group.append("text")
-              .attr("text-anchor", "middle")
-              .attr("dy", "0.6em")
-              .attr("class", "node-value")
-              .style("font-family", "system-ui, -apple-system, sans-serif")
-              .style("fill", labelColor)
-              .style("font-weight", "700")
-              .style("font-size", getFontSize(valueText, centerNodeRadius - 8, 16, 10))
-              .text(valueText)
-              .append("title")
-              .text(`${valueText} ${d.value.unit}`);
-          });
-          
-
-        // Create regular nodes with filled colors
-        const nodeGroups = g.append("g")
-            .selectAll("g")
-            .data(nodes.filter((d: any) => !d.isCenter))
-            .join("g")
-            .style("cursor", "pointer");
-
-        // Regular node filled circle
-        nodeGroups.append("circle")
-            .attr("r", nodeRadius)
-            .attr("fill", (d: any) => nodeColors[d.id])
-            .attr("stroke", "#ffffff")
-            .attr("stroke-width", 2.5)
-            .style("filter", "url(#drop-shadow)")
-            .attr("opacity", (d: any) => d.isSecondary ? 0.8 : 0.9);
-
-        // Regular node border ring
-        nodeGroups.append("circle")
-            .attr("r", nodeRadius)
-            .attr("fill", "none")
-            .attr("stroke", "#ffffff")
-            .attr("stroke-width", 1.5)
-            .attr("opacity", 0.7);
-
-        // Make entire regular node clickable
-        nodeGroups.append("circle")
-            .attr("r", nodeRadius)
-            .attr("fill", "transparent")
-            .style("cursor", "pointer")
-            .on("click", (event: any, d: any) => {
-                event.stopPropagation();
-                setSelectedElement(d);
-            });
-
-        // Regular node text
-        nodeGroups.each(function(d: any) {
-            const group = d3.select(this);
-            const name = formatStockName(d.name);
-            const valueText = formatLargeNumber(
-              (animatedValues[d.id] ?? d.value.value) | 0
-            );
-          
-            group.append("text")
-              .attr("text-anchor", "middle")
-              .attr("dy", "-0.4em")
-              .attr("class", "node-name")
-              .style("font-family", "system-ui, -apple-system, sans-serif")
-              .style("fill", labelColor)
-              .style("font-weight", "600")
-              .style("font-size", getFontSize(name, nodeRadius - 6, 12, 6))
-              .text(name);
-          
-            group.append("text")
-              .attr("text-anchor", "middle")
-              .attr("dy", "0.5em")
-              .attr("class", "node-value")
-              .style("font-family", "system-ui, -apple-system, sans-serif")
-              .style("fill", labelColor)
-              .style("font-weight", "700")
-              .style("font-size", getFontSize(valueText, nodeRadius - 6, 14, 8))
-              .text(valueText)
-              .append("title")
-              .text(`${valueText} ${d.value.unit}`);
-          });
-          
-
-        // Add hover effects
-        nodeGroups.on("mouseenter", function(event: any, d: any) {
-            d3.select(this).select("circle:first-child")
-                .transition()
-                .duration(200)
-                .attr("stroke-width", 4)
-                .attr("r", nodeRadius + 3)
-                .attr("opacity", 1);
-        }).on("mouseleave", function(event: any, d: any) {
-            d3.select(this).select("circle:first-child")
-                .transition()
-                .duration(200)
-                .attr("stroke-width", 2.5)
-                .attr("r", nodeRadius)
-                .attr("opacity", (d: any) => d.isSecondary ? 0.8 : 0.9);
-        });
-
-        centerGroup.on("mouseenter", function(event: any, d: any) {
-            d3.select(this).select("circle:first-child")
-                .transition()
-                .duration(200)
-                .attr("stroke-width", 4)
-                .attr("r", centerNodeRadius + 3)
-                .attr("opacity", 1);
-        }).on("mouseleave", function(event: any, d: any) {
-            d3.select(this).select("circle:first-child")
-                .transition()
-                .duration(200)
-                .attr("stroke-width", 3)
-                .attr("r", centerNodeRadius)
-                .attr("opacity", 0.9);
-        });
-
-        // Drag behavior
-        const drag = d3.drag<any, any>()
-            .on("start", (event: any, d: any) => {
-                if (!event.active) simulation.alphaTarget(0.3).restart();
-                d.fx = d.x;
-                d.fy = d.y;
-            })
-            .on("drag", (event: any, d: any) => {
-                d.fx = event.x;
-                d.fy = event.y;
-            })
-            .on("end", (event: any, d: any) => {
-                if (!event.active) simulation.alphaTarget(0);
-                const nodePositions: Record<string, { x: number, y: number }> = JSON.parse(sessionStorage.getItem('nodePositions') || '{}');
-                nodePositions[d.id] = { x: d.fx, y: d.fy };
-                sessionStorage.setItem('nodePositions', JSON.stringify(nodePositions));
-            });
-
-        // Apply drag to all node groups
-        nodeGroups.call(drag as any);
-        centerGroup.call(drag as any);
-
-        // Simulation tick with smooth edges
-        simulation.on("tick", () => {
-            link
-                .attr("x1", (d: any) => {
-                    const dx = d.target.x - d.source.x;
-                    const dy = d.target.y - d.source.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    if (distance === 0) return d.source.x;
-                    const sourceRadius = d.source.isCenter ? centerNodeRadius + 2 : nodeRadius + 2;
-                    const offsetX = (dx / distance) * sourceRadius;
-                    return d.source.x + offsetX;
-                })
-                .attr("y1", (d: any) => {
-                    const dx = d.target.x - d.source.x;
-                    const dy = d.target.y - d.source.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    if (distance === 0) return d.source.y;
-                    const sourceRadius = d.source.isCenter ? centerNodeRadius + 2 : nodeRadius + 2;
-                    const offsetY = (dy / distance) * sourceRadius;
-                    return d.source.y + offsetY;
-                })
-                .attr("x2", (d: any) => {
-                    const dx = d.target.x - d.source.x;
-                    const dy = d.target.y - d.source.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    if (distance === 0) return d.target.x;
-                    const targetRadius = d.target.isCenter ? centerNodeRadius + 2 : nodeRadius + 2;
-                    const offsetX = (dx / distance) * targetRadius;
-                    return d.target.x - offsetX;
-                })
-                .attr("y2", (d: any) => {
-                    const dx = d.target.x - d.source.x;
-                    const dy = d.target.y - d.source.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    if (distance === 0) return d.target.y;
-                    const targetRadius = d.target.isCenter ? centerNodeRadius + 2 : nodeRadius + 2;
-                    const offsetY = (dy / distance) * targetRadius;
-                    return d.target.y - offsetY;
-                });
-
-            nodeGroups.attr("transform", (d: any) => `translate(${d.x},${d.y})`);
-            centerGroup.attr("transform", (d: any) => `translate(${d.x},${d.y})`);
-        });
-
-        // Save zoom transform on zoom events
-        zoom.on("zoom", (event) => {
-            const transform = event.transform;
-            setZoomTransform(transform);
-            g.attr("transform", transform);
-            sessionStorage.setItem('zoomTransform', JSON.stringify({ x: transform.x, y: transform.y, k: transform.k }));
-        });
-
-        // Stop simulation after initial layout
-        setTimeout(() => {
-            simulation.stop();
-        }, 3000);
-
-        return () => {
-            simulation.stop();
-        };
-
-    }, [graphData, nodeColors, links, setSelectedElement, nodes, containerDimensions, animatedValues]);
-
-    // Handle simulation animation
-    useEffect(() => {
-        if (initialRender) {
-            setInitialRender(false);
-            return;
-        }
-
-        if (!graphData || !runSimulation) return;
-
-        const startValues = nodes.reduce((acc, node) => {
-            acc[node.id] = node.value.value;
-            return acc;
-        }, {} as Record<string, number>);
-
-        let yearEquivalent = 0;
-        switch (simulationSettings.timeUnit) {
-            case "days": yearEquivalent = simulationValue / 365; break;
-            case "weeks": yearEquivalent = simulationValue / 52; break;
-            case "months": yearEquivalent = simulationValue / 12; break;
-            case "years": yearEquivalent = simulationValue; break;
-        }
-
-        const targetValues = nodes.reduce((acc, node) => {
-            const growthFactor = 0.02; // Example growth factor
-            acc[node.id] = node.value.value * Math.pow(1 + growthFactor, yearEquivalent);
-            return acc;
-        }, {} as Record<string, number>);
-
-        const startTime = performance.now();
-        const duration = 2000;
-
-        const animate = (currentTime: number) => {
-            const elapsedTime = currentTime - startTime;
-            const progress = Math.min(elapsedTime / duration, 1);
-            const newValues = nodes.reduce((acc, node) => {
-                acc[node.id] = startValues[node.id] + (targetValues[node.id] - startValues[node.id]) * progress;
-                return acc;
-            }, {} as Record<string, number>);
-            setAnimatedValues(newValues);
-            if (progress < 1) {
-                requestAnimationFrame(animate);
-            }
-        };
-        requestAnimationFrame(animate);
-    }, [runSimulation, graphData, nodes, simulationValue, simulationSettings, initialRender]);
-
-    // Update node values when animation changes
-    useEffect(() => {
-        if (!svgRef.current) return;
-        const svg = d3.select(svgRef.current);
-        svg.selectAll(".node-value")
-            .text((d: any) => {
-                const animatedValue = animatedValues[d.id];
-                const roundedValue = animatedValue !== undefined ? Math.round(animatedValue) : Math.round(d.value.value);
-                return formatLargeNumber(roundedValue);
-            })
-            .select("title")
-            .text((d: any) => {
-                const animatedValue = animatedValues[d.id];
-                const roundedValue = animatedValue !== undefined ? Math.round(animatedValue) : Math.round(d.value.value);
-                return `${roundedValue} ${d.value.unit}`;
-            });
-    }, [animatedValues]);
-
-    // Reset zoom function
-    const resetZoom = () => {
-        if (svgRef.current && zoomBehaviorRef.current) {
-            const svg = d3.select(svgRef.current);
-            svg.transition().duration(750).call(
-                zoomBehaviorRef.current.transform,
-                d3.zoomIdentity
-            );
-            sessionStorage.removeItem('zoomTransform');
-        }
+    const startTime = performance.now();
+    const duration = 2000;
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const newValues = nodes.reduce((acc, node) => {
+        acc[node.id] = startValues[node.id] + (targetValues[node.id] - startValues[node.id]) * progress;
+        return acc;
+      }, {} as Record<string, number>);
+      setAnimatedValues(newValues);
+      if (progress < 1) requestAnimationFrame(animate);
     };
+    requestAnimationFrame(animate);
+  }, [runSimulation, graphData, nodes, simulationValue, simulationSettings, initialRender]);
 
-    return (
-        <div
-            ref={containerRef}
-            style={{ width: "100%", height: "100%", position: "relative", backgroundColor: "#FAFAFA" }}
-        >
-            {isLoading && (
-                <div className="flex flex-col items-center justify-center h-full p-6">
-                  <Loader className="w-10 h-10 animate-spin text-brand-red-600" />
-                  <p className="text-brand-gray-600 font-extrabold animate-pulse">Loading Visualization...</p>
-                </div>
-              )}
-            {!isLoading && (
-                <>
-                    <div className="absolute inset-0">
-                        <svg
-                            ref={svgRef}
-                            width="100%"
-                            height="100%"
-                            style={{ cursor: "grab" }}
-                            onMouseDown={(e) => { if (e.target === svgRef.current) (e.target as SVGElement).style.cursor = "pointer"; }}
-                            onMouseUp={(e) => { (e.target as SVGElement).style.cursor = "grab"; }}
-                        />
-                    </div>
-                    {/* Clean Reset Zoom Button */}
-                    <div className="absolute top-6 right-6 z-10">
-                        <button
-                            onClick={resetZoom}
-                            className="w-12 h-12 bg-white border border-gray-200 rounded-lg flex items-center justify-center hover:bg-gray-50 shadow-md text-gray-600 transition-all duration-200 hover:shadow-lg group"
-                            title="Reset Zoom"
-                        >
-                            <RotateCcw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-300" />
-                        </button>
-                    </div>
-                </>
-            )}
+  // Update text with animated values
+  useEffect(() => {
+    if (!svgRef.current) return;
+    const svg = d3.select(svgRef.current);
+    svg.selectAll('.node-value')
+      .text((d: any) => {
+        const v = animatedValues[d.id];
+        const rounded = v !== undefined ? Math.round(v) : Math.round(d.value.value);
+        return formatLargeNumber(rounded);
+      })
+      .select('title')
+      .text((d: any) => {
+        const v = animatedValues[d.id];
+        const rounded = v !== undefined ? Math.round(v) : Math.round(d.value.value);
+        return `${rounded} ${d.value.unit}`;
+      });
+  }, [animatedValues]);
+
+  // Reset zoom
+  const resetZoom = () => {
+    if (svgRef.current && zoomBehaviorRef.current) {
+      const svg = d3.select(svgRef.current);
+      svg.transition().duration(750).call(zoomBehaviorRef.current.transform, d3.zoomIdentity);
+      sessionStorage.removeItem('zoomTransform');
+    }
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        width: '100%',
+        height: '100%',
+        position: 'relative',
+      }}
+      className={`${isDarkMode
+        ? 'bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white'
+        : 'bg-gradient-to-br from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
+    }`}
+    >
+      {isLoading && (
+        <div className="flex flex-col items-center justify-center h-full p-6">
+          <Loader className={`w-10 h-10 animate-spin ${isDarkMode ? 'text-red-400' : 'text-red-600'}`} />
+          <p className={`font-bold animate-pulse ${isDarkMode ? 'text-white/80' : 'text-neutral-600'}`}>
+            Loading Visualization...
+          </p>
         </div>
-    );
+      )}
+      {!isLoading && (
+        <>
+          <div className="absolute inset-0">
+            <svg
+              ref={svgRef}
+              width="100%"
+              height="100%"
+              style={{ cursor: 'grab' }}
+            />
+          </div>
+          <div className="absolute top-6 right-6 z-10">
+            <button
+              onClick={() => {/* reset zoom logic */}}
+              className={`w-12 h-12 rounded-lg flex items-center justify-center shadow-md transition-all duration-200 hover:shadow-lg group border backdrop-blur-sm ${
+                isDarkMode
+                  ? 'bg-slate-800/90 border-slate-700/50 text-white/80 hover:bg-slate-700/90 hover:text-white'
+                  : 'bg-white/90 border-neutral-200/60 text-neutral-600 hover:bg-white hover:text-neutral-900'
+              }`}
+              title="Reset Zoom"
+            >
+              <RotateCcw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-300" />
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
 };
 
 export default React.memo(GraphComponent);
