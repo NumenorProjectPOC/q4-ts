@@ -228,7 +228,7 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
         currentQueryRef.current = trimmed;
 
         try {
-            await sendQuery(trimmed);
+            await sendQuery(trimmed, currentTab);
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : 'Search failed';
             onShowToast?.('error', errorMsg);

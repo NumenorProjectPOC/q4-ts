@@ -541,12 +541,21 @@ export default function SignalTrackerPage() {
 
     el.addEventListener('click', (e) => {
       e.stopPropagation();
+      
       if (location.innerRegions) {
+        // Zoom into inner regions
         setZoomedRegion(location);
         map.flyTo({
           center: [location.lng, location.lat],
           zoom: 12,
           duration: 1500
+        });
+      } else {
+        // Just zoom to this location without changing region
+        map.flyTo({
+          center: [location.lng, location.lat],
+          zoom: 10,
+          duration: 1000
         });
       }
     });
@@ -746,6 +755,15 @@ export default function SignalTrackerPage() {
       tooltip.classList.remove('show');
     });
 
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      map.flyTo({
+        center: [event.location.lng, event.location.lat],
+        zoom: 8,
+        duration: 1000
+      });
+    });
+
     const mapboxMarker = new mapboxgl.Marker({
       element: el,
       anchor: 'center'
@@ -825,6 +843,14 @@ export default function SignalTrackerPage() {
     el.addEventListener('mouseleave', () => {
       tooltip.classList.remove('show');
     });
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      map.flyTo({
+        center: [event.location.lng, event.location.lat],
+        zoom: 8,
+        duration: 1000
+      });
+    });
 
     const mapboxMarker = new mapboxgl.Marker({
       element: el,
@@ -834,6 +860,37 @@ export default function SignalTrackerPage() {
     markersRef.current.push(mapboxMarker);
   };
 
+  const handleViewModeChange = (mode: 'location' | 'contributing') => {
+    const map = mapRef.current;
+    if (!map) return;
+  
+    // Clear existing markers and reset zoom state
+    clearMarkers();
+    setZoomedRegion(null);
+  
+    if (mode === 'location') {
+      // Zoom to UAE for location view
+      map.flyTo({
+        center: [55, 25],
+        zoom: 7,
+        duration: 1500
+      });
+    } else {
+      // Zoom to global view for contributing events
+      map.flyTo({
+        center: [25, 35], // Centered between UAE and contributing regions
+        zoom: 4,
+        duration: 1500
+      });
+    }
+  
+    // Small delay to ensure zoom completes before rendering
+    setTimeout(() => {
+      renderEventsOnMap();
+    }, 500);
+  };
+
+  
   const drawEnhancedConnections = (mainEvent: SignalEvent) => {
     const map = mapRef.current;
     if (!map) return;
@@ -1535,7 +1592,10 @@ export default function SignalTrackerPage() {
                         }`}
                     >
                       <button
-                        onClick={() => setViewMode('location')}
+                       onClick={() => {
+                        setViewMode('location');
+                        handleViewModeChange('location');
+                      }}
                         className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold transition-all duration-200 ${viewMode === 'location'
                             ? isDarkMode
                               ? 'bg-red-800 text-white shadow-md'
@@ -1549,7 +1609,10 @@ export default function SignalTrackerPage() {
                         Location
                       </button>
                       <button
-                        onClick={() => setViewMode('contributing')}
+                        onClick={() => {
+                          setViewMode('contributing');
+                          handleViewModeChange('contributing');
+                        }}
                         className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold transition-all duration-200 ${viewMode === 'contributing'
                             ? isDarkMode
                               ? 'bg-red-800 text-white shadow-md'
@@ -1653,6 +1716,7 @@ export default function SignalTrackerPage() {
                 )}
 
                 <div ref={mapContainer} className={`w-full h-full ${isMobile ? '' : 'rounded-2xl sm:rounded-3xl'}`} />
+                
               </div>
             </motion.div>
           ) : (
