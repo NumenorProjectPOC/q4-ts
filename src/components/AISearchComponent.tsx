@@ -378,8 +378,8 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     className={`mt-4 text-sm px-4 py-3 rounded-xl border flex items-center gap-3 ${isDarkMode
-                            ? 'text-red-400 bg-red-500/10 border-red-500/20'
-                            : 'text-red-700 bg-red-50 border-red-200'
+                        ? 'text-red-400 bg-red-500/10 border-red-500/20'
+                        : 'text-red-700 bg-red-50 border-red-200'
                         }`}
                 >
                     <WifiOff className="w-4 h-4" />
@@ -395,8 +395,8 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                         <button
                             onClick={() => reconnect()}
                             className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${isDarkMode
-                                    ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400'
-                                    : 'bg-red-100 hover:bg-red-200 text-red-700'
+                                ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400'
+                                : 'bg-red-100 hover:bg-red-200 text-red-700'
                                 }`}
                         >
                             Retry
@@ -412,8 +412,8 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     className={`mt-4 text-sm px-4 py-3 rounded-xl border flex items-center gap-3 ${isDarkMode
-                            ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
-                            : 'text-amber-700 bg-amber-50 border-amber-200'
+                        ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                        : 'text-amber-700 bg-amber-50 border-amber-200'
                         }`}
                 >
                     <AlertCircle className="w-4 h-4" />
@@ -450,20 +450,20 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                         exit={{ opacity: 0, scale: 0.95, y: 50 }}
                         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
                         className={`relative w-full max-w-4xl max-h-[90vh] rounded-3xl shadow-2xl border flex flex-col overflow-hidden ${isDarkMode
-                                ? 'bg-slate-900/95 border-neutral-700/50 backdrop-blur-xl'
-                                : 'bg-white/95 border-gray-100/50 backdrop-blur-xl'
+                            ? 'bg-slate-900/95 border-neutral-700/50 backdrop-blur-xl'
+                            : 'bg-white/95 border-gray-100/50 backdrop-blur-xl'
                             }`}
                     >
                         {/* Improved Header */}
                         <div className={`border-b ${isDarkMode
-                                ? 'bg-slate-800/50 border-neutral-700/50'
-                                : 'bg-gray-50/50 border-gray-200/50'
+                            ? 'bg-slate-800/50 border-neutral-700/50'
+                            : 'bg-gray-50/50 border-gray-200/50'
                             }`}>
                             <div className={`relative flex justify-between items-center px-8 py-6`}>
                                 <div className="flex items-center gap-4">
                                     <div className={`p-3 rounded-2xl ${isDarkMode
-                                            ? 'bg-gradient-to-br from-red-500/20 to-orange-500/20 text-red-400'
-                                            : 'bg-gradient-to-br from-neutral-500/10 to-neutral-500/10 text-neutral-600'
+                                        ? 'bg-gradient-to-br from-red-500/20 to-orange-500/20 text-red-400'
+                                        : 'bg-gradient-to-br from-neutral-500/10 to-neutral-500/10 text-neutral-600'
                                         }`}>
                                         <Bot className="w-6 h-6" />
                                     </div>
@@ -475,12 +475,12 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                                 Discover and analyze with AI-powered search
                                             </span>
                                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium ${isConnected
-                                                    ? isDarkMode
-                                                        ? 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30'
-                                                        : 'text-emerald-700 bg-emerald-100 border-emerald-200'
-                                                    : isDarkMode
-                                                        ? 'text-red-400 bg-red-500/20 border-red-500/30'
-                                                        : 'text-red-700 bg-red-100 border-red-200'
+                                                ? isDarkMode
+                                                    ? 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30'
+                                                    : 'text-emerald-700 bg-emerald-100 border-emerald-200'
+                                                : isDarkMode
+                                                    ? 'text-red-400 bg-red-500/20 border-red-500/30'
+                                                    : 'text-red-700 bg-red-100 border-red-200'
                                                 }`}>
                                                 <motion.span
                                                     className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-red-500'}`}
@@ -496,8 +496,8 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                 <motion.button
                                     onClick={onClose}
                                     className={`p-2.5 rounded-xl transition-all duration-200 ${isDarkMode
-                                            ? 'text-neutral-400 hover:bg-neutral-700/50 hover:text-white'
-                                            : 'text-gray-500 hover:bg-gray-200 hover:text-gray-900'
+                                        ? 'text-neutral-400 hover:bg-neutral-700/50 hover:text-white'
+                                        : 'text-gray-500 hover:bg-gray-200 hover:text-gray-900'
                                         }`}
                                     whileHover={{ scale: 1.1 }}
                                     whileTap={{ scale: 0.9 }}
@@ -516,12 +516,12 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                     <div className="flex-1">
                                         <motion.div
                                             className={`relative rounded-2xl border-2 transition-all ${isInputFocused
-                                                    ? isDarkMode
-                                                        ? 'border-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.15)] bg-slate-800'
-                                                        : 'border-neutral-500 shadow-[0_0_0_4px_rgba(100,100,100,0.15)] bg-white'
-                                                    : isDarkMode
-                                                        ? 'border-neutral-600 hover:border-neutral-500 bg-slate-800/50'
-                                                        : 'border-gray-200 hover:border-gray-300 bg-gray-50'
+                                                ? isDarkMode
+                                                    ? 'border-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.15)] bg-slate-800'
+                                                    : 'border-neutral-500 shadow-[0_0_0_4px_rgba(100,100,100,0.15)] bg-white'
+                                                : isDarkMode
+                                                    ? 'border-neutral-600 hover:border-neutral-500 bg-slate-800/50'
+                                                    : 'border-gray-200 hover:border-gray-300 bg-gray-50'
                                                 } ${status === "processing" ? "opacity-70" : ""} ${!isConnected ? "opacity-50" : ""
                                                 }`}
                                         >
@@ -529,8 +529,8 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                                 }`}>
                                                 {status === "processing" ? (
                                                     <div className={`w-5 h-5 border-2 rounded-full animate-spin ${isDarkMode
-                                                            ? 'border-red-300 border-t-red-500'
-                                                            : 'border-neutral-300 border-t-neutral-500'
+                                                        ? 'border-red-300 border-t-red-500'
+                                                        : 'border-neutral-300 border-t-neutral-500'
                                                         }`} />
                                                 ) : !isConnected ? (
                                                     <WifiOff className="w-5 h-5" />
@@ -553,8 +553,8 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                                 }
                                                 disabled={!isConnected || status === "processing"}
                                                 className={`w-full pl-12 pr-12 py-4 text-base bg-transparent focus:outline-none font-medium ${isDarkMode
-                                                        ? 'text-white placeholder-neutral-500'
-                                                        : 'text-gray-900 placeholder-gray-400'
+                                                    ? 'text-white placeholder-neutral-500'
+                                                    : 'text-gray-900 placeholder-gray-400'
                                                     }`}
                                             />
                                             <AnimatePresence>
@@ -562,8 +562,8 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                                     <button
                                                         onClick={() => setQuery("")}
                                                         className={`absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full transition-colors ${isDarkMode
-                                                                ? 'hover:bg-neutral-700 text-neutral-400 hover:text-neutral-300'
-                                                                : 'hover:bg-gray-100 text-gray-400 hover:text-gray-600'
+                                                            ? 'hover:bg-neutral-700 text-neutral-400 hover:text-neutral-300'
+                                                            : 'hover:bg-gray-100 text-gray-400 hover:text-gray-600'
                                                             }`}
                                                     >
                                                         <X className="w-4 h-4" />
@@ -576,8 +576,8 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                         onClick={handleSearch}
                                         disabled={isSearchDisabled}
                                         className={`px-8 py-4 rounded-2xl font-semibold text-white shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${isDarkMode
-                                                ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800'
-                                                : 'bg-gradient-to-r from-neutral-700 to-neutral-800 hover:from-neutral-800 hover:to-neutral-900'
+                                            ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800'
+                                            : 'bg-gradient-to-r from-neutral-700 to-neutral-800 hover:from-neutral-800 hover:to-neutral-900'
                                             }`}
                                         whileHover={{ scale: isSearchDisabled ? 1 : 1.02 }}
                                         whileTap={{ scale: isSearchDisabled ? 1 : 0.98 }}
@@ -589,7 +589,7 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                             </span>
                                         ) : (
                                             <span className="inline-flex items-center gap-2">
-                                                <Sparkles className="h-5 w-5" />
+                                                <Search className="h-5 w-5" />
                                                 <span>Search</span>
                                             </span>
                                         )}
@@ -605,8 +605,8 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                     <div className="flex-1 flex flex-col items-center justify-center text-center">
                                         <motion.div
                                             className={`w-32 h-32 rounded-full flex items-center justify-center mb-8 shadow-lg ${isDarkMode
-                                                    ? 'bg-gradient-to-br from-red-500/20 to-neutral-500/20'
-                                                    : 'bg-gradient-to-br from-neutral-100 to-neutral-200'
+                                                ? 'bg-gradient-to-br from-red-500/20 to-neutral-500/20'
+                                                : 'bg-gradient-to-br from-neutral-100 to-neutral-200'
                                                 }`}
                                             initial={{ scale: 0.8, opacity: 0 }}
                                             animate={{ scale: 1, opacity: 1 }}
@@ -626,8 +626,8 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                             <div className="w-full max-w-3xl">
                                                 <div className="flex items-center gap-3 mb-6">
                                                     <div className={`p-2 rounded-lg ${isDarkMode
-                                                            ? 'bg-red-500/20 text-red-400'
-                                                            : 'bg-neutral-100 text-neutral-600'
+                                                        ? 'bg-red-500/20 text-red-400'
+                                                        : 'bg-neutral-100 text-neutral-600'
                                                         }`}>
                                                         <Clock className="h-5 w-5" />
                                                     </div>
@@ -635,8 +635,8 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                                         }`}>Recent Searches</h5>
                                                 </div>
                                                 <div className={`border rounded-2xl overflow-hidden shadow-sm ${isDarkMode
-                                                        ? 'bg-slate-800/50 border-neutral-600'
-                                                        : 'bg-white border-gray-200'
+                                                    ? 'bg-slate-800/50 border-neutral-600'
+                                                    : 'bg-white border-gray-200'
                                                     }`}>
                                                     <ul className={`divide-y ${isDarkMode ? 'divide-neutral-700' : 'divide-gray-100'
                                                         }`}>
@@ -652,8 +652,8 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                                                     <button
                                                                         onClick={() => handleRecentQueryClick(cachedQuery)}
                                                                         className={`flex-1 flex items-center justify-between px-6 py-4 text-left transition-colors duration-150 ${isDarkMode
-                                                                                ? 'hover:bg-slate-700/30'
-                                                                                : 'hover:bg-gray-50'
+                                                                            ? 'hover:bg-slate-700/30'
+                                                                            : 'hover:bg-gray-50'
                                                                             }`}
                                                                     >
                                                                         <span className={`text-base truncate mr-4 font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'
@@ -661,24 +661,24 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                                                         <div className="flex items-center gap-3 flex-shrink-0">
                                                                             {cachedQuery.response.status === 'completed' && cachedQuery.response.stockResults.length > 0 && (
                                                                                 <span className={`text-sm px-3 py-1 rounded-full font-medium ${isDarkMode
-                                                                                        ? 'text-red-400 bg-red-500/20'
-                                                                                        : 'text-neutral-700 bg-neutral-100'
+                                                                                    ? 'text-red-400 bg-red-500/20'
+                                                                                    : 'text-neutral-700 bg-neutral-100'
                                                                                     }`}>
                                                                                     {cachedQuery.response.stockResults.length} found
                                                                                 </span>
                                                                             )}
                                                                             {cachedQuery.response.status === 'completed' && cachedQuery.response.stockResults.length === 0 && (
                                                                                 <span className={`text-sm px-3 py-1 rounded-full font-medium ${isDarkMode
-                                                                                        ? 'text-neutral-400 bg-neutral-600/20'
-                                                                                        : 'text-gray-600 bg-gray-100'
+                                                                                    ? 'text-neutral-400 bg-neutral-600/20'
+                                                                                    : 'text-gray-600 bg-gray-100'
                                                                                     }`}>
                                                                                     0 found
                                                                                 </span>
                                                                             )}
                                                                             {cachedQuery.response.status === 'error' && (
                                                                                 <span className={`text-sm px-3 py-1 rounded-full font-medium ${isDarkMode
-                                                                                        ? 'text-red-400 bg-red-500/20'
-                                                                                        : 'text-red-700 bg-red-100'
+                                                                                    ? 'text-red-400 bg-red-500/20'
+                                                                                    : 'text-red-700 bg-red-100'
                                                                                     }`}>
                                                                                     Error
                                                                                 </span>
@@ -690,8 +690,8 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                                                     <motion.button
                                                                         onClick={() => removeRecentQuery(index)}
                                                                         className={`p-3 mx-2 rounded-xl transition-all duration-150 opacity-0 group-hover:opacity-100 ${isDarkMode
-                                                                                ? 'text-neutral-500 hover:text-red-400 hover:bg-red-500/10'
-                                                                                : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+                                                                            ? 'text-neutral-500 hover:text-red-400 hover:bg-red-500/10'
+                                                                            : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
                                                                             }`}
                                                                         whileHover={{ scale: 1.1 }}
                                                                         whileTap={{ scale: 0.9 }}
@@ -713,15 +713,15 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                     <div className="flex-1 flex flex-col items-center justify-center text-center">
                                         <motion.div
                                             className={`w-32 h-32 rounded-full flex items-center justify-center mb-8 shadow-lg ${isDarkMode
-                                                    ? 'bg-gradient-to-br from-red-500/20 to-neutral-500/20'
-                                                    : 'bg-gradient-to-br from-neutral-100 to-neutral-200'
+                                                ? 'bg-gradient-to-br from-red-500/20 to-neutral-500/20'
+                                                : 'bg-gradient-to-br from-neutral-100 to-neutral-200'
                                                 }`}
                                             animate={{ rotate: 360 }}
                                             transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
                                         >
                                             <div className={`w-16 h-16 border-4 rounded-full animate-spin ${isDarkMode
-                                                    ? 'border-red-300/30 border-t-red-500'
-                                                    : 'border-neutral-300 border-t-neutral-600'
+                                                ? 'border-red-300/30 border-t-red-500'
+                                                : 'border-neutral-300 border-t-neutral-600'
                                                 }`}></div>
                                         </motion.div>
                                         <h4 className={`text-2xl font-bold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-900'
@@ -737,8 +737,8 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                     <div className="flex-1 flex flex-col items-center justify-center text-center">
                                         <motion.div
                                             className={`w-32 h-32 rounded-full flex items-center justify-center mb-8 shadow-lg ${isDarkMode
-                                                    ? 'bg-red-500/20'
-                                                    : 'bg-red-100'
+                                                ? 'bg-red-500/20'
+                                                : 'bg-red-100'
                                                 }`}
                                             initial={{ scale: 0.8, opacity: 0 }}
                                             animate={{ scale: 1, opacity: 1 }}
@@ -756,8 +756,8 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                             <motion.button
                                                 onClick={handleRetry}
                                                 className={`px-8 py-4 text-white rounded-2xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-3 ${isDarkMode
-                                                        ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800'
-                                                        : 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800'
+                                                    ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800'
+                                                    : 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800'
                                                     }`}
                                                 whileHover={{ scale: 1.02 }}
                                                 whileTap={{ scale: 0.98 }}
@@ -769,204 +769,198 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                                     </div>
                                 )}
 
-                                {status === "completed" && (
+                                {status === 'completed' && (
                                     <div className="space-y-8">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-4">
-                                                <div className={`p-3 rounded-2xl ${isDarkMode
-                                                        ? 'bg-red-500/20 text-red-400'
-                                                        : 'bg-neutral-100 text-neutral-600'
-                                                    }`}>
-                                                    <CheckCircle className="h-6 w-6" />
-                                                </div>
-                                                <h4 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'
-                                                    }`}>
-                                                    Discovery Complete - {stockResults.length} Item{stockResults.length !== 1 ? 's' : ''} Found
-                                                </h4>
-                                            </div>
-                                            <motion.button
-                                                onClick={handleDiscard}
-                                                className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 ${isDarkMode
-                                                        ? 'bg-neutral-600/20 text-neutral-300 hover:bg-neutral-600/30'
-                                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                                    }`}
-                                                title="Clear search results"
-                                                whileHover={{ scale: 1.02 }}
-                                                whileTap={{ scale: 0.98 }}
-                                            >
-                                                <X className="h-4 w-4" /> Discard
-                                            </motion.button>
-                                        </div>
-
                                         {stockResults.length > 0 ? (
-                                            <div className="grid gap-6">
-                                                {stockResults.map((stock, index) => {
-                                                    const isSaved = isStockSaved(stock);
+                                            <>
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="p-3 rounded-2xl bg-red-500/20 text-red-400">
+                                                            <CheckCircle className="h-6 w-6" />
+                                                        </div>
+                                                        <h4 className="text-xl font-bold">
+                                                            Discovery Complete - {stockResults.length} Item{stockResults.length !== 1 ? 's' : ''} Found
+                                                        </h4>
+                                                    </div>
+                                                    <motion.button
+                                                        onClick={handleDiscard}
+                                                        className="px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2"
+                                                        title="Clear search results"
+                                                        whileHover={{ scale: 1.02 }}
+                                                        whileTap={{ scale: 0.98 }}
+                                                    >
+                                                        <X className="h-4 w-4" />
+                                                        Discard
+                                                    </motion.button>
+                                                </div>
 
-                                                    const renderActionButtons = () => {
-                                                        if ((stock.context === 'stock' && currentTab === 'monitoring') || (stock.context === 'model' && currentTab === 'visualization')) {
-                                                            const buttonText = stock.context === 'model' ? 'Saved Models' : 'Favorites';
+                                                <div className="grid gap-6">
+                                                    {stockResults.map((stock, index) => {
+                                                        const isSaved = isStockSaved(stock);
 
-                                                            if (isSaved) {
-                                                                return (
-                                                                    <div className="flex items-center gap-3">
-                                                                        <div className={`flex items-center gap-2 px-4 py-2 border rounded-xl ${isDarkMode
+                                                        const renderActionButtons = () => {
+                                                            if ((stock.context === 'stock' && currentTab === 'monitoring') || (stock.context === 'model' && currentTab === 'visualization')) {
+                                                                const buttonText = stock.context === 'model' ? 'Saved Models' : 'Favorites';
+
+                                                                if (isSaved) {
+                                                                    return (
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className={`flex items-center gap-2 px-4 py-2 border rounded-xl ${isDarkMode
                                                                                 ? 'bg-red-500/10 border-red-500/20 text-red-400'
                                                                                 : 'bg-neutral-100 border-neutral-200 text-neutral-700'
-                                                                            }`}>
-                                                                            <Check className="h-4 w-4" />
-                                                                            <span className="font-medium">In {buttonText}</span>
-                                                                        </div>
+                                                                                }`}>
+                                                                                <Check className="h-4 w-4" />
+                                                                                <span className="font-medium">In {buttonText}</span>
+                                                                            </div>
 
-                                                                        <button
-                                                                            onClick={() => handleGoToDashboard(currentTab as 'monitoring' | 'visualization')}
-                                                                            className={`px-6 py-3 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2 ${isDarkMode
+                                                                            <button
+                                                                                onClick={() => handleGoToDashboard(currentTab as 'monitoring' | 'visualization')}
+                                                                                className={`px-6 py-3 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2 ${isDarkMode
                                                                                     ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800'
                                                                                     : 'bg-gradient-to-r from-neutral-700 to-neutral-800 hover:from-neutral-800 hover:to-neutral-900'
-                                                                                }`}
-                                                                        >
-                                                                            <ExternalLink className="h-4 w-4" />
-                                                                            View in {currentTab === 'monitoring' ? 'Monitoring' : 'Visualization'}
-                                                                        </button>
-                                                                    </div>
-                                                                );
-                                                            } else {
-                                                                return (
-                                                                    // In your renderActionButtons function, update the button to show loading
-                                                                    <button
-                                                                        onClick={() => handleAddToFavorites(stock)}
-                                                                        disabled={savingStocks.has(stock.guid)}
-                                                                        className={`px-6 py-3 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${isDarkMode
+                                                                                    }`}
+                                                                            >
+                                                                                <ExternalLink className="h-4 w-4" />
+                                                                                View in {currentTab === 'monitoring' ? 'Monitoring' : 'Visualization'}
+                                                                            </button>
+                                                                        </div>
+                                                                    );
+                                                                } else {
+                                                                    return (
+                                                                        // In your renderActionButtons function, update the button to show loading
+                                                                        <button
+                                                                            onClick={() => handleAddToFavorites(stock)}
+                                                                            disabled={savingStocks.has(stock.guid)}
+                                                                            className={`px-6 py-3 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${isDarkMode
                                                                                 ? 'bg-gradient-to-r from-neutral-600 to-neutral-700 hover:from-neutral-700 hover:to-neutral-800'
                                                                                 : 'bg-gradient-to-r from-neutral-700 to-neutral-800 hover:from-neutral-800 hover:to-neutral-900'
-                                                                            }`}
-                                                                    >
-                                                                        {savingStocks.has(stock.guid) ? (
-                                                                            <>
-                                                                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                                                <span>Saving...</span>
-                                                                            </>
-                                                                        ) : (
-                                                                            <>
-                                                                                <Plus className="h-4 w-4" />
-                                                                                <span>Add to {stock.context === 'model' ? 'Saved Models' : 'Favorites'}</span>
-                                                                            </>
-                                                                        )}
-                                                                    </button>
-
-                                                                );
-                                                            }
-                                                        }
-                                                        return null;
-                                                    };
-
-                                                    const renderNavigationMessage = () => {
-                                                        if (stock.context === 'stock' && currentTab === 'visualization') {
-                                                            return (
-                                                                <div className={`border rounded-2xl p-6 flex items-start gap-4 ${isDarkMode
-                                                                        ? 'bg-gradient-to-r from-red-500/10 to-neutral-500/10 border-red-500/20'
-                                                                        : 'bg-gradient-to-r from-neutral-50 to-neutral-100 border-neutral-200'
-                                                                    }`}>
-                                                                    <div className={`flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${isDarkMode
-                                                                            ? 'bg-gradient-to-br from-red-600 to-red-700'
-                                                                            : 'bg-gradient-to-br from-neutral-700 to-neutral-800'
-                                                                        }`}>
-                                                                        <Activity className="h-6 w-6" />
-                                                                    </div>
-                                                                    <div className="flex-1">
-                                                                        <p className={`text-base mb-4 font-medium ${isDarkMode ? 'text-neutral-200' : 'text-gray-700'
-                                                                            }`}>This is a stock. Go to the Monitoring Dashboard to track its performance.</p>
-                                                                        <button
-                                                                            onClick={() => handleGoToDashboard('monitoring')}
-                                                                            className={`inline-flex items-center gap-2 px-6 py-3 text-white rounded-xl font-semibold transition-all ${isDarkMode
-                                                                                    ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800'
-                                                                                    : 'bg-gradient-to-r from-neutral-700 to-neutral-800 hover:from-neutral-800 hover:to-neutral-900'
                                                                                 }`}
                                                                         >
-                                                                            <Activity className="h-4 w-4" /> Go to Monitoring
+                                                                            {savingStocks.has(stock.guid) ? (
+                                                                                <>
+                                                                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                                                    <span>Saving...</span>
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <Plus className="h-4 w-4" />
+                                                                                    <span>Add to {stock.context === 'model' ? 'Saved Models' : 'Favorites'}</span>
+                                                                                </>
+                                                                            )}
                                                                         </button>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        }
-                                                        if (stock.context === 'model' && currentTab !== 'visualization') {
-                                                            return (
-                                                                <div className={`border rounded-2xl p-6 flex items-start gap-4 ${isDarkMode
-                                                                        ? 'bg-gradient-to-r from-red-500/10 to-red-500/10 border-red-500/20'
+
+                                                                    );
+                                                                }
+                                                            }
+                                                            return null;
+                                                        };
+
+                                                        const renderNavigationMessage = () => {
+                                                            if (stock.context === 'stock' && currentTab === 'visualization') {
+                                                                return (
+                                                                    <div className={`border rounded-2xl p-6 flex items-start gap-4 ${isDarkMode
+                                                                        ? 'bg-gradient-to-r from-red-500/10 to-neutral-500/10 border-red-500/20'
                                                                         : 'bg-gradient-to-r from-neutral-50 to-neutral-100 border-neutral-200'
-                                                                    }`}>
-                                                                    <div className={`flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${isDarkMode
+                                                                        }`}>
+                                                                        <div className={`flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${isDarkMode
                                                                             ? 'bg-gradient-to-br from-red-600 to-red-700'
                                                                             : 'bg-gradient-to-br from-neutral-700 to-neutral-800'
+                                                                            }`}>
+                                                                            <Activity className="h-6 w-6" />
+                                                                        </div>
+                                                                        <div className="flex-1">
+                                                                            <p className={`text-base mb-4 font-medium ${isDarkMode ? 'text-neutral-200' : 'text-gray-700'
+                                                                                }`}>This is a stock. Go to the Monitoring Dashboard to track its performance.</p>
+                                                                            <button
+                                                                                onClick={() => handleGoToDashboard('monitoring')}
+                                                                                className={`inline-flex items-center gap-2 px-6 py-3 text-white rounded-xl font-semibold transition-all ${isDarkMode
+                                                                                    ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800'
+                                                                                    : 'bg-gradient-to-r from-neutral-700 to-neutral-800 hover:from-neutral-800 hover:to-neutral-900'
+                                                                                    }`}
+                                                                            >
+                                                                                <Activity className="h-4 w-4" /> Go to Monitoring
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            if (stock.context === 'model' && currentTab !== 'visualization') {
+                                                                return (
+                                                                    <div className={`border rounded-2xl p-6 flex items-start gap-4 ${isDarkMode
+                                                                        ? 'bg-gradient-to-r from-red-500/10 to-red-500/10 border-red-500/20'
+                                                                        : 'bg-gradient-to-r from-neutral-50 to-neutral-100 border-neutral-200'
                                                                         }`}>
-                                                                        <Eye className="h-6 w-6" />
+                                                                        <div className={`flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${isDarkMode
+                                                                            ? 'bg-gradient-to-br from-red-600 to-red-700'
+                                                                            : 'bg-gradient-to-br from-neutral-700 to-neutral-800'
+                                                                            }`}>
+                                                                            <Eye className="h-6 w-6" />
+                                                                        </div>
+                                                                        <div className="flex-1">
+                                                                            <p className={`text-base mb-4 font-medium ${isDarkMode ? 'text-neutral-200' : 'text-gray-700'
+                                                                                }`}>This is a model. Go to the Visualization tab to explore its structure.</p>
+                                                                            <button
+                                                                                onClick={() => handleGoToDashboard('visualization')}
+                                                                                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-neutral-700 to-red-700 hover:from-neutral-800 hover:to-red-800 text-white rounded-xl font-semibold transition-all"
+                                                                            >
+                                                                                <Eye className="h-4 w-4" /> Go to Visualization
+                                                                            </button>
+                                                                        </div>
                                                                     </div>
-                                                                    <div className="flex-1">
-                                                                        <p className={`text-base mb-4 font-medium ${isDarkMode ? 'text-neutral-200' : 'text-gray-700'
-                                                                            }`}>This is a model. Go to the Visualization tab to explore its structure.</p>
-                                                                        <button
-                                                                            onClick={() => handleGoToDashboard('visualization')}
-                                                                            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-neutral-700 to-red-700 hover:from-neutral-800 hover:to-red-800 text-white rounded-xl font-semibold transition-all"
-                                                                        >
-                                                                            <Eye className="h-4 w-4" /> Go to Visualization
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        }
-                                                        return null;
-                                                    };
+                                                                );
+                                                            }
+                                                            return null;
+                                                        };
 
-                                                    return (
-                                                        <motion.div
-                                                            key={stock.guid}
-                                                            initial={{ opacity: 0, y: 20 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            transition={{ delay: index * 0.1, type: "spring", stiffness: 300 }}
-                                                            className={`rounded-2xl border shadow-lg hover:shadow-xl transition-all duration-300 p-8 ${isDarkMode
+                                                        return (
+                                                            <motion.div
+                                                                key={stock.guid}
+                                                                initial={{ opacity: 0, y: 20 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                transition={{ delay: index * 0.1, type: "spring", stiffness: 300 }}
+                                                                className={`rounded-2xl border shadow-lg hover:shadow-xl transition-all duration-300 p-8 ${isDarkMode
                                                                     ? 'bg-slate-800/50 border-neutral-600'
                                                                     : 'bg-white border-gray-200'
-                                                                }`}
-                                                        >
-                                                            <div className="flex items-center justify-between mb-6">
-                                                                <div className="flex items-center gap-4">
-                                                                    <h5 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'
-                                                                        }`}>{stock.name}</h5>
-                                                                    {stock.context && (
-                                                                        <span className={`px-3 py-1 text-sm font-semibold rounded-full capitalize ${isDarkMode
+                                                                    }`}
+                                                            >
+                                                                <div className="flex items-center justify-between mb-6">
+                                                                    <div className="flex items-center gap-4">
+                                                                        <h5 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'
+                                                                            }`}>{stock.name}</h5>
+                                                                        {stock.context && (
+                                                                            <span className={`px-3 py-1 text-sm font-semibold rounded-full capitalize ${isDarkMode
                                                                                 ? 'bg-neutral-600/20 text-neutral-300'
                                                                                 : 'bg-gray-100 text-gray-700'
-                                                                            }`}>
-                                                                            {stock.context}
-                                                                        </span>
-                                                                    )}
+                                                                                }`}>
+                                                                                {stock.context}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
-                                                            </div>
 
-                                                            <div className="flex items-center gap-3 flex-wrap mb-6">
-                                                                {renderActionButtons()}
-                                                            </div>
-
-                                                            {renderNavigationMessage() && (
-                                                                <div>
-                                                                    {renderNavigationMessage()}
+                                                                <div className="flex items-center gap-3 flex-wrap mb-6">
+                                                                    {renderActionButtons()}
                                                                 </div>
-                                                            )}
-                                                        </motion.div>
-                                                    );
-                                                })}
-                                            </div>
+
+                                                                {renderNavigationMessage() && (
+                                                                    <div>
+                                                                        {renderNavigationMessage()}
+                                                                    </div>
+                                                                )}
+                                                            </motion.div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </>
                                         ) : (
                                             <div className="text-center py-16">
-                                                <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 ${isDarkMode ? 'bg-neutral-600/20' : 'bg-gray-100'
-                                                    }`}>
-                                                    <Search className={`h-12 w-12 ${isDarkMode ? 'text-neutral-500' : 'text-gray-400'
-                                                        }`} />
+                                                <div className="w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 bg-neutral-600/20">
+                                                    <Search className="h-12 w-12 text-neutral-500" />
                                                 </div>
-                                                <h4 className={`text-xl font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'
-                                                    }`}>No Results Found</h4>
-                                                <p className={`text-lg ${isDarkMode ? 'text-neutral-300' : 'text-gray-500'
-                                                    }`}>No matching stocks or models were found for your query.</p>
+                                                <h4 className="text-xl font-semibold mb-2">No Results Found</h4>
+                                                <p className="text-lg text-neutral-300">
+                                                    {errorMessage || "No matching stocks or models were found for your query."}
+                                                </p>
                                             </div>
                                         )}
                                     </div>

@@ -288,6 +288,10 @@ const Playground: React.FC = () => {
         }
     }, [visualizingModelId]);
 
+    const handleGoToDashboard = (targetTab?: "monitoring" | "visualization") => {
+        if (targetTab) navigate(`/${targetTab}`);
+      };
+
     const setSelectedElement = useCallback((element: NodeData | LinkData | null) => {
         setEditedValue(null);
         if (element && 'source' in element) {
@@ -1405,22 +1409,16 @@ const Playground: React.FC = () => {
                 isOpen={showAISearch}
                 onClose={() => setShowAISearch(false)}
                 onStockFound={(stock) => {
-                    // Handle stock found
-                    if (stock.context === 'model') {
-                      // Refresh the saved models list after a short delay
-                      setTimeout(refreshSavedModels, 500);
-                    }
+                    console.log("Data found:", stock);
                   }}
-                  onAddToFavorites={(stock) => {
-                    // Handle add to favorites
-                    if (stock.context === 'model') {
-                      // Refresh the saved models list
-                      setTimeout(refreshSavedModels, 500);
-                    }
+                onAddToFavorites={() => {
+                    refreshSavedModels();
                   }}
                 onRemoveFromFavorites={() => { }}
-                onShowToast={() => { }}
-                onGoToDashboard={() => { }}
+                onShowToast={(type, message) => {
+                    setToastSocket({ type, message });
+                  }}
+                  onGoToDashboard={handleGoToDashboard}
                 currentTab="visualization"
             />
             <Dock />

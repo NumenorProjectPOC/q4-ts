@@ -85,63 +85,109 @@ export const AIWebSocketProvider: React.FC<AIWebSocketProviderProps> = ({
             };
 
             // MODIFIED: Simplified message handler for the new API contract
-            socket.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    console.log("AI WebSocket message received:", data);
-
-                    if (queryTimeoutRef.current) {
-                        clearTimeout(queryTimeoutRef.current);
-                        queryTimeoutRef.current = null;
-                    }
-                    if (data.status === "processing") {
-                        updateSearchResponse({ status: "processing", stockResults: [], errorMessage: "" });
-                    }
-                    else if (data.status === "error") {
-                        updateSearchResponse({
-                            status: "error",
-                            errorMessage: data.message || "An unknown error occurred.",
-                            stockResults: []
-                        });
-                    }
-                    else if (data.status === "completed") {
-                        console.log("1122");
-
-                        // The result object can be in `data.message` or `data.response`
-                        const resultPayload = data.response.message;
-
-                        // Check if we received a valid stock/model object
-                        if (resultPayload && typeof resultPayload === 'object' && resultPayload.name && resultPayload.guid && resultPayload.context) {
-                            console.log("uiuiu");
-
-                            const newResult: StockData = {
-                                name: formatStockName(resultPayload.name),
-                                guid: resultPayload.guid,
-                                context: resultPayload.context,
-                            };
-                            updateSearchResponse({
-                                status: "completed",
-                                stockResults: [newResult],
-                                errorMessage: ""
-                            });
-                        } else {
-                            // Completed, but no valid object found. Treat as "0 results".
-                            updateSearchResponse({
-                                status: "completed",
-                                stockResults: [],
-                                errorMessage: typeof resultPayload === 'string' ? resultPayload : ""
-                            });
-                        }
-                    }
-                    else {
-                        console.warn("Unknown response format:", data);
-                        updateSearchResponse({ status: "error", errorMessage: "Received an unknown response format." });
-                    }
-                } catch (error) {
-                    console.error("Error parsing AI response:", error);
-                    updateSearchResponse({ status: "error", errorMessage: "Invalid response format from server." });
-                }
+            // In AIWebSocketContext.tsx - Replace the socket.onmessage handler
+socket.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      console.log('AI WebSocket message received:', data);
+  
+      // Clear any query timeout when we receive a response
+      if (queryTimeoutRef.current) {
+        clearTimeout(queryTimeoutRef.current);
+        queryTimeoutRef.current = null;
+      }
+  
+      // Handle different response statuses
+      if (data.status === 'processing') {
+        // Status: Processing - show loading state
+        updateSearchResponse({
+          status: 'processing',
+          stockResults: [],
+          errorMessage: data.message || 'Your query is being processed. Please wait.'
+        });
+        
+      } else if (data.status === 'error') {
+        // Status: Internal error
+        updateSearchResponse({
+          status: 'error',
+          errorMessage: data.message || 'An unexpected server error occurred.',
+          stockResults: []
+        });
+        
+      } else if (data.status === 'completed') {
+        // Status: Completed - check response payload
+        if (data.response?.status === 'completed' && data.response?.message) {
+          // Valid stock/model found
+          const resultPayload = data.response.message;
+          
+          if (resultPayload && typeof resultPayload === 'object' && 
+              resultPayload.name && resultPayload.guid && resultPayload.context) {
+            
+            const newResult: StockData = {
+              name: formatStockName(resultPayload.name),
+              guid: resultPayload.guid,
+              context: resultPayload.context,
             };
+            
+            updateSearchResponse({
+              status: 'completed',
+              stockResults: [newResult],
+              errorMessage: ''
+            });
+          } else {
+            // Invalid result format
+            updateSearchResponse({
+              status: 'error',
+              stockResults: [],
+              errorMessage: 'Invalid response format received.'
+            });
+          }
+          
+        } else if (data.response?.status === 'invalid_query') {
+          
+          updateSearchResponse({
+            status: 'completed',
+            stockResults: [],
+            errorMessage: data.response.message || 'Invalid query. Please try a different search term.'
+          });
+          
+        } else if (data.response?.status === 'no_stocks_found') {
+          // No stocks found
+          updateSearchResponse({
+            status: 'completed',
+            stockResults: [],
+            errorMessage: data.response.message || 'No stocks were found for your query.'
+          });
+          
+        } else {
+          // Unknown completed status
+          updateSearchResponse({
+            status: 'error',
+            stockResults: [],
+            errorMessage: 'Unknown response format received.'
+          });
+        }
+        
+      } else {
+        // Unknown status
+        console.warn('Unknown response status:', data);
+        updateSearchResponse({
+          status: 'error',
+          errorMessage: 'Received an unknown response status.',
+          stockResults: []
+        });
+      }
+      
+    } catch (error) {
+      console.error('Error parsing AI response:', error);
+      updateSearchResponse({
+        status: 'error',
+        errorMessage: 'Invalid response format from server.',
+        stockResults: []
+      });
+    }
+  };
+  
 
             socket.onerror = (error) => {
                 console.error("AI WebSocket error:", error);

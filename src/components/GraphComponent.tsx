@@ -38,7 +38,7 @@ const TWC = {
   warning: {
     '50': '#fffbeb', '100': '#fef3c7', '200': '#fde68a', '300': '#fcd34d',
     '400': '#fbbf24', '500': '#f59e0b', '600': '#d97706', '700': '#b45309',
-    '800': '#92400e', '900': '#78350f', '950': '#451a03'
+      '800': '#92400e', '900': '#78350f', '950': '#451a03'
   },
   error: {
     '50': '#fef2f2', '100': '#fee2e2', '200': '#fecaca', '300': '#fca5a5',
@@ -47,9 +47,6 @@ const TWC = {
   }
 } as const;
 
-// ────────────────────────────────────────────────────────────────────────────────
-// Enhanced Theme system with realistic colors
-// ────────────────────────────────────────────────────────────────────────────────
 type NodeTheme = {
   useGradients: boolean;
   gradients?: Array<{ start: string; end: string; accent: string; mid?: string }>;
@@ -66,54 +63,33 @@ type NodeTheme = {
 };
 
 const NODE_THEMES: Record<string, NodeTheme> = {
-  // REALISTIC DARK THEME - Light teal outlines with blue/teal nodes
   'realistic-dark': {
     useGradients: false,
-    fills: [
-      '#4DD0E1', // Light cyan
-      '#26C6DA', // Medium cyan
-      '#00ACC1', // Darker cyan
-      '#0097A7', // Dark cyan-teal
-      '#00838F', // Deep teal
-      '#006064'  // Very dark teal
-    ],
-    centerFillSolid: '#FF5722', // Warm orange-red accent for center
-    centerRingColor: '#5DD5D5', // Light teal ring
-    nodeBorder: () => ({ color: '#5DD5D5', width: 2 }), // Light teal borders
+    fills: ['#4DD0E1', '#26C6DA', '#00ACC1', '#0097A7', '#00838F', '#006064'],
+    centerFillSolid: '#FF5722',
+    centerRingColor: '#5DD5D5',
+    nodeBorder: () => ({ color: '#5DD5D5', width: 2 }),
     centerBorder: () => ({ color: '#5DD5D5', width: 2.5 }),
     ringWidth: 1.2,
     ringOpacity: 0.8,
     ringColors: ['#5DD5D5', '#4DD0E1', '#26C6DA'],
     valueText: () => '#FFFFFF'
   },
-
-  // REALISTIC LIGHT THEME - Dark red borders with cream/peach nodes
   'realistic-light': {
     useGradients: false,
-    fills: [
-      '#FFF3E0', // Light cream
-      '#FFECB3', // Cream yellow
-      '#FFE0B2', // Peach cream
-      '#FFCCBC', // Light peach
-      '#FFAB91', // Medium peach
-      '#FF8A65'  // Deeper peach
-    ],
-    centerFillSolid: '#C62828', // Deep red center
-    centerRingColor: '#D32F2F', // Dark red ring
-    nodeBorder: () => ({ color: '#D32F2F', width: 2 }), // Dark red borders
-    centerBorder: () => ({ color: '#B71C1C', width: 2.5 }), // Even darker red for center
+    fills: ['#FFF3E0', '#FFECB3', '#FFE0B2', '#FFCCBC', '#FFAB91', '#FF8A65'],
+    centerFillSolid: '#C62828',
+    centerRingColor: '#D32F2F',
+    nodeBorder: () => ({ color: '#D32F2F', width: 2 }),
+    centerBorder: () => ({ color: '#B71C1C', width: 2.5 }),
     ringWidth: 1.1,
     ringOpacity: 0.9,
     ringColors: ['#D32F2F', '#F44336', '#FF5722'],
     valueText: () => '#2E2E2E'
   },
-
-  // Keep existing themes for backward compatibility
   'brand-dark-minimal': {
     useGradients: false,
-    fills: [
-      '#374151', '#4B5563', '#6B7280', '#1F2937', '#9CA3AF', '#111827'
-    ],
+    fills: ['#374151', '#4B5563', '#6B7280', '#1F2937', '#9CA3AF', '#111827'],
     centerFillSolid: '#0F172A',
     centerRingColor: '#EF4444',
     nodeBorder: () => ({ color: '#FFFFFF', width: 2 }),
@@ -123,12 +99,9 @@ const NODE_THEMES: Record<string, NodeTheme> = {
     ringColors: ['#D8D8D8', '#C0C0C0', '#F0F0F0', '#E8E8E8'],
     valueText: () => '#FFFFFF'
   },
-
   'brand-light-minimal': {
     useGradients: false,
-    fills: [
-      '#A8A8A8', '#C0C0C0', '#D8D8D8', '#525252', '#737373', '#E8E8E8'
-    ],
+    fills: ['#A8A8A8', '#C0C0C0', '#D8D8D8', '#525252', '#737373', '#E8E8E8'],
     centerFillSolid: '#EDEDE9',
     centerRingColor: '#DC2626',
     nodeBorder: () => ({ color: '#0F172A', width: 2 }),
@@ -138,7 +111,6 @@ const NODE_THEMES: Record<string, NodeTheme> = {
     ringColors: ['#D1D5DB', '#E5E7EB', '#D4D4D4', '#9CA3AF'],
     valueText: () => '#111827'
   },
-
   'brand-gradient': {
     useGradients: true,
     gradients: [
@@ -157,7 +129,6 @@ const NODE_THEMES: Record<string, NodeTheme> = {
   }
 };
 
-// Theme names available via prop
 type NodeColorThemeName =
   | 'realistic-dark'
   | 'realistic-light'
@@ -180,6 +151,23 @@ interface GraphComponentProps {
   nodeTheme?: NodeColorThemeName;
 }
 
+const NODE_POSITIONS_KEY = 'nodePositions';
+const USER_PINNED_KEY = 'userPinnedNodes';
+const ZOOM_KEY = 'zoomTransform';
+
+const loadPositions = (): Record<string, { x: number; y: number }> => {
+  try { return JSON.parse(sessionStorage.getItem(NODE_POSITIONS_KEY) || '{}'); } catch { return {}; }
+};
+const savePositions = (map: Record<string, { x: number; y: number }>) => {
+  sessionStorage.setItem(NODE_POSITIONS_KEY, JSON.stringify(map));
+};
+const loadUserPinned = (): Record<string, boolean> => {
+  try { return JSON.parse(sessionStorage.getItem(USER_PINNED_KEY) || '{}'); } catch { return {}; }
+};
+const saveUserPinned = (map: Record<string, boolean>) => {
+  sessionStorage.setItem(USER_PINNED_KEY, JSON.stringify(map));
+};
+
 const GraphComponent: React.FC<GraphComponentProps> = ({
   isLoading,
   graphData,
@@ -191,24 +179,24 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
   simulationValue,
   runSimulation,
   isDarkMode = false,
-  nodeTheme = 'realistic-dark' // Default to realistic dark theme
+  nodeTheme = 'realistic-dark'
 }) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [nodeColors, setNodeColors] = useState<Record<string, string>>({});
-  const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
-  const [animatedValues, setAnimatedValues] = useState<Record<string, number>>({});
-  const [initialRender, setInitialRender] = useState(true);
-  const [zoomTransform, setZoomTransform] = useState<d3.ZoomTransform | null>(null);
-
-  // NEW STATE VARIABLES FOR STABLE POSITIONING
-  const [positionsStable, setPositionsStable] = useState(false);
-  const [isSimulationActive, setIsSimulationActive] = useState(false);
 
   const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
-  const simulationRef = useRef<d3.Simulation<NodeData, any> | null>(null);
+  const zoomStateRef = useRef<d3.ZoomTransform>(d3.zoomIdentity);
 
-  // Resolve auto theme to realistic themes based on dark mode
+  const simulationRef = useRef<d3.Simulation<any, any> | null>(null);
+
+  const [nodeColors, setNodeColors] = useState<Record<string, string>>({});
+  const [containerDimensions, setContainerDimensions] =  useState({ width: 0, height: 0 });
+  const [animatedValues, setAnimatedValues] = useState<Record<string, number>>({});
+  const [initialRender, setInitialRender] = useState(true);
+
+  const [positionsStable, setPositionsStable] = useState(false);
+  const [userPinned, setUserPinned] = useState<Record<string, boolean>>(() => loadUserPinned());
+
   const resolvedNodeTheme: Exclude<NodeColorThemeName, 'brand-auto'> =
     (nodeTheme === 'brand-auto'
       ? (isDarkMode ? 'realistic-dark' : 'realistic-light')
@@ -219,54 +207,46 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
     [resolvedNodeTheme]
   );
 
-  // NEW: Helper function for stable positioning
   const calculateStablePositions = useCallback((nodes: NodeData[], width: number, height: number) => {
     const positions: Record<string, { x: number; y: number }> = {};
+    const nonCenterNodes = nodes.filter((n: any) => !(n as any).isCenter);
+    const angleStep = (2 * Math.PI) / Math.max(nonCenterNodes.length, 1);
+    const radius = Math.min(width, height) * 0.3;
 
     nodes.forEach((node) => {
-      if (node.isCenter) {
+      const isCenter = (node as any).isCenter;
+      if (isCenter) {
         positions[node.id] = { x: width / 2, y: height / 2 };
       } else {
-        const nonCenterNodes = nodes.filter(n => !n.isCenter);
-        const index = nonCenterNodes.indexOf(node);
-        const angleStep = (2 * Math.PI) / Math.max(nonCenterNodes.length, 1);
-        const angle = index * angleStep;
-        const radius = Math.min(width, height) * 0.3; // Better initial spacing
-
+        const idx = nonCenterNodes.indexOf(node);
+        const angle = idx * angleStep;
         positions[node.id] = {
           x: (width / 2) + Math.cos(angle) * radius,
           y: (height / 2) + Math.sin(angle) * radius
         };
       }
     });
-
     return positions;
   }, []);
 
-  // Resize observer
   useEffect(() => {
     if (!containerRef.current) return;
-    const updateDimensions = () => {
+    const update = () => {
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
       setContainerDimensions({ width: rect.width, height: rect.height });
     };
-    updateDimensions();
-    const ro = new ResizeObserver(updateDimensions);
+    update();
+    const ro = new ResizeObserver(update);
     ro.observe(containerRef.current);
     return () => { try { ro.disconnect(); } catch { } };
   }, []);
 
-  // Nodes with center flag
   const nodes: NodeData[] = useMemo(() => {
     if (!graphData) return [];
-    return graphData.nodes.map((node) => ({
-      ...node,
-      isCenter: node.id === graphData.stock.guid
-    }));
+    return graphData.nodes.map(n => ({ ...n, isCenter: n.id === graphData.stock.guid })) as any[];
   }, [graphData]);
 
-  // Link wiring
   const links = useMemo(() => {
     if (!graphData?.edges || !graphData?.nodes) return [];
     const nameToId = new Map<string, string>();
@@ -282,155 +262,112 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
     return d3Links.filter(Boolean) as (LinkData & { source: string; target: string })[];
   }, [graphData]);
 
-  // Font sizing helper
-  function getFontSize(text: string, radius: number, maxFont: number, minFont: number) {
-    const size = Math.floor((radius * 2) / Math.max(text.length, 1) * 1.2) + 5;
-    return `${Math.max(minFont, Math.min(maxFont, size))}px`;
-  }
-
-  // Label color aligned to brand tokens
-  const labelColor = isDarkMode ? TWC.brand.secondary['50'] : TWC.brand.primary['900'];
-
-  // NEW: Initialize stable positions on first load
   useEffect(() => {
     if (!graphData || !containerDimensions.width) return;
+    const storedPositionsRaw = sessionStorage.getItem(NODE_POSITIONS_KEY);
 
-    const storedPositions = sessionStorage.getItem('nodePositions');
-    if (!storedPositions && nodes.length > 0) {
-      // Calculate and save initial stable positions
+    if (!storedPositionsRaw && nodes.length > 0) {
       const positions = calculateStablePositions(nodes, containerDimensions.width, containerDimensions.height);
-      sessionStorage.setItem('nodePositions', JSON.stringify(positions));
+      savePositions(positions);
       setPositionsStable(true);
-    } else if (storedPositions) {
+    } else if (storedPositionsRaw) {
       try {
-        const positions = JSON.parse(storedPositions);
-        const hasAllPositions = nodes.every(node => positions[node.id]);
-        setPositionsStable(hasAllPositions);
-      } catch (e) {
-        console.error('Error parsing stored positions:', e);
-        // Reset with stable positions if corrupted
-        const positions = calculateStablePositions(nodes, containerDimensions.width, containerDimensions.height);
-        sessionStorage.setItem('nodePositions', JSON.stringify(positions));
+        const positions = JSON.parse(storedPositionsRaw);
+        const ok = nodes.every(n => positions[n.id]);
+        setPositionsStable(ok);
+        if (!ok) {
+          const p = calculateStablePositions(nodes, containerDimensions.width, containerDimensions.height);
+          savePositions(p);
+          setPositionsStable(true);
+        }
+      } catch {
+        const p = calculateStablePositions(nodes, containerDimensions.width, containerDimensions.height);
+        savePositions(p);
         setPositionsStable(true);
       }
     }
+    setUserPinned(loadUserPinned());
   }, [graphData, nodes, containerDimensions, calculateStablePositions]);
 
-  // Build node color map (gradient URLs or solid fills)
   useEffect(() => {
     if (!graphData || !nodes.length) return;
     const map: Record<string, string> = {};
     nodes.forEach((node, index) => {
       if (activeTheme.useGradients) {
-        map[node.id] = node.isCenter ? 'url(#centerGradient)' : `url(#nodeGradient${index % (activeTheme.gradients?.length || 1)})`;
+        map[node.id] = (node as any).isCenter ? 'url(#centerGradient)' : `url(#nodeGradient${index % (activeTheme.gradients?.length || 1)})`;
       } else {
         const list = activeTheme.fills || ['#94a3b8'];
         const fi = index % list.length;
-        map[node.id] = node.isCenter ? (activeTheme.centerFillSolid || list[0]) : list[fi];
+        map[node.id] = (node as any).isCenter ? (activeTheme.centerFillSolid || list[0]) : list[fi];
       }
     });
     setNodeColors(map);
     sessionStorage.setItem('nodeColors', JSON.stringify(map));
   }, [nodes, graphData, activeTheme]);
 
-  // MAIN RENDER EFFECT - IMPROVED VERSION WITH STABLE POSITIONING
+  function getFontSize(text: string, radius: number, maxFont: number, minFont: number) {
+    const size = Math.floor((radius * 2) / Math.max(text.length, 1) * 1.2) + 5;
+    return `${Math.max(minFont, Math.min(maxFont, size))}px`;
+  }
+
   useEffect(() => {
     if (!graphData || !svgRef.current || containerDimensions.width === 0 || links.length === 0) return;
-
-    // Check if we have stable positions
-    const storedNodePositions = sessionStorage.getItem('nodePositions');
-    let hasStablePositions = false;
-
-    if (storedNodePositions) {
-      try {
-        const positions = JSON.parse(storedNodePositions);
-        hasStablePositions = nodes.every(node => positions[node.id]);
-      } catch (e) {
-        console.error('Error parsing stored positions:', e);
-      }
-    }
-
-    // Preserve previous positions when re-rendering
-    if (simulationRef.current && !isSimulationActive) {
-      const prev = simulationRef.current.nodes();
-      const pos = new Map(prev.map((n: any) => [n.id, {
-        x: n.x, y: n.y, vx: n?.vx || 0, vy: n?.vy || 0, fx: n.fx, fy: n.fy
-      }]));
-
-      nodes.forEach(n => {
-        const p = pos.get(n.id);
-        if (p) {
-          Object.assign(n, p);
-        }
-      });
-    }
-
-    const svg = d3.select(svgRef.current);
-    svg.selectAll('*').remove();
 
     const width = containerDimensions.width;
     const height = containerDimensions.height;
     const nodeRadius = 35;
     const centerNodeRadius = 45;
+    const dragThresholdPx = 5;
+
+    const svg = d3.select(svgRef.current);
+    svg.selectAll('*').remove();
 
     const g = svg.append('g');
 
-    // Create zoom behavior
     const zoom = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.1, 4])
       .on('zoom', (event) => {
-        const transform = event.transform;
-        setZoomTransform(transform);
-        g.attr('transform', transform);
-        // Save zoom state
-        sessionStorage.setItem('zoomTransform', JSON.stringify({ x: transform.x, y: transform.y, k: transform.k }));
+        zoomStateRef.current = event.transform;
+        g.attr('transform', `translate(${event.transform.x},${event.transform.y}) scale(${event.transform.k})`);
+        sessionStorage.setItem(ZOOM_KEY, JSON.stringify({ x: event.transform.x, y: event.transform.y, k: event.transform.k }));
       });
-
     zoomBehaviorRef.current = zoom;
-    svg.call(zoom);
+    svg.call(zoom as any);
 
-    // Apply saved zoom transform
-    const storedZoomTransform = sessionStorage.getItem('zoomTransform');
-    if (storedZoomTransform && !zoomTransform) {
+    const savedZoomRaw = sessionStorage.getItem(ZOOM_KEY);
+    if (savedZoomRaw) {
       try {
-        const t = JSON.parse(storedZoomTransform);
-        svg.call(zoom.transform, d3.zoomIdentity.translate(t.x, t.y).scale(t.k));
-      } catch (e) {
-        console.error('Error applying zoom transform:', e);
-      }
+        const t = JSON.parse(savedZoomRaw);
+        const transform = d3.zoomIdentity.translate(t.x, t.y).scale(t.k);
+        zoomStateRef.current = transform;
+        g.attr('transform', `translate(${t.x},${t.y}) scale(${t.k})`);
+        svg.call(zoom.transform as any, transform);
+      } catch { /* ignore */ }
     }
 
-    // Edge colors aligned to tokens
     const edgeColor = d3.scaleOrdinal<string>()
       .domain(['positive', 'negative', 'neutral'])
-      .range(
-        isDarkMode
-          ? [TWC.success['400'], TWC.error['400'], TWC.neutral['400']]
-          : [TWC.success['600'], TWC.error['600'], TWC.neutral['500']]
-      );
+      .range(isDarkMode ? [TWC.success['400'], TWC.error['400'], TWC.neutral['400']]
+                        : [TWC.success['600'], TWC.error['600'], TWC.neutral['500']]);
 
     const defs = svg.append('defs');
 
-    // Center gradient (accent red) + node gradients if theme uses gradients
     if (activeTheme.useGradients) {
       const centerGradient = defs.append('radialGradient')
-        .attr('id', 'centerGradient')
-        .attr('cx', '40%').attr('cy', '30%').attr('r', '80%');
+        .attr('id', 'centerGradient').attr('cx', '40%').attr('cy', '30%').attr('r', '80%');
       centerGradient.append('stop').attr('offset', '0%').attr('stop-color', TWC.accent.red['100']).attr('stop-opacity', 0.9);
       centerGradient.append('stop').attr('offset', '40%').attr('stop-color', TWC.accent.red['500']).attr('stop-opacity', 1);
       centerGradient.append('stop').attr('offset', '100%').attr('stop-color', TWC.accent.red['700']).attr('stop-opacity', 1);
 
       (activeTheme.gradients || []).forEach((grad, index) => {
         const nodeGradient = defs.append('radialGradient')
-          .attr('id', `nodeGradient${index}`)
-          .attr('cx', '40%').attr('cy', '30%').attr('r', '80%');
+          .attr('id', `nodeGradient${index}`).attr('cx', '40%').attr('cy', '30%').attr('r', '80%');
         nodeGradient.append('stop').attr('offset', '0%').attr('stop-color', grad.accent).attr('stop-opacity', 0.8);
         nodeGradient.append('stop').attr('offset', '50%').attr('stop-color', grad.mid || grad.end).attr('stop-opacity', 1);
         nodeGradient.append('stop').attr('offset', '100%').attr('stop-color', grad.start).attr('stop-opacity', 1);
       });
     }
 
-    // Arrowheads
     ['positive', 'negative', 'neutral'].forEach((impact) => {
       const color = edgeColor(impact);
       defs.append('marker')
@@ -450,7 +387,6 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
         .attr('fill', color).attr('stroke', color).attr('stroke-width', 1);
     });
 
-    // Filters
     const dropShadow = defs.append('filter')
       .attr('id', 'drop-shadow').attr('x', '-50%').attr('y', '-50%')
       .attr('width', '200%').attr('height', '200%');
@@ -470,97 +406,102 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
     glowMerge.append('feMergeNode').attr('in', 'coloredBlur');
     glowMerge.append('feMergeNode').attr('in', 'SourceGraphic');
 
-    // IMPROVED: Load or set initial positions with immediate fixing
-    nodes.forEach((node) => {
-      if (storedNodePositions) {
-        try {
-          const positions = JSON.parse(storedNodePositions);
-          if (positions[node.id]) {
-            node.x = positions[node.id].x;
-            node.y = positions[node.id].y;
-            node.fx = positions[node.id].x; // Fix position immediately
-            node.fy = positions[node.id].y;
-            return; // Skip default positioning
-          }
-        } catch (e) {
-          console.error('Error loading node position:', e);
-        }
-      }
-
-      // Default positioning for new nodes only
-      if (node.isCenter) {
-        node.x = width / 2;
-        node.y = height / 2;
-        node.fx = width / 2;  // Fix center node position
-        node.fy = height / 2;
+    const stored = loadPositions();
+    (nodes as any[]).forEach(n => {
+      const sp = stored[n.id];
+      if (sp) {
+        n.x = sp.x; n.y = sp.y; n.fx = sp.x; n.fy = sp.y;
       } else {
-        const nonCenterNodes = nodes.filter(n => !n.isCenter);
-        const index = nonCenterNodes.indexOf(node);
-        const angleStep = (2 * Math.PI) / Math.max(nonCenterNodes.length, 1);
-        const angle = index * angleStep;
-        const radius = Math.min(width, height) * 0.3;
-
-        node.x = (width / 2) + Math.cos(angle) * radius;
-        node.y = (height / 2) + Math.sin(angle) * radius;
-        node.fx = node.x;  // Fix position immediately
-        node.fy = node.y;
+        if ((n as any).isCenter) {
+          n.x = width / 2; n.y = height / 2; n.fx = n.x; n.fy = n.y;
+        } else {
+          const nonCenter = nodes.filter((m: any) => !m.isCenter);
+          const idx = nonCenter.indexOf(n);
+          const angle = (2 * Math.PI) * (idx / Math.max(nonCenter.length, 1));
+          const r = Math.min(width, height) * 0.3;
+          const x = width / 2 + Math.cos(angle) * r;
+          const y = height / 2 + Math.sin(angle) * r;
+          n.x = x; n.y = y; n.fx = x; n.fy = y;
+        }
       }
     });
 
-    // Create simulation with better configuration for stability
-    const simulation = d3.forceSimulation(nodes)
-      .force('link', d3.forceLink(links).id((d: any) => d.id).distance(120).strength(0.1)) // Reduced strength
-      .force('charge', d3.forceManyBody().strength(-300)) // Reduced repulsion  
-      .force('center', d3.forceCenter(width / 2, height / 2).strength(0.1)) // Weak centering
+    const simulation = d3.forceSimulation(nodes as any)
+      .force('link', d3.forceLink(links as any).id((d: any) => d.id).distance(120).strength(0.1))
+      .force('charge', d3.forceManyBody().strength(-300))
+      .force('center', d3.forceCenter(width / 2, height / 2).strength(0.06))
       .force('collision', d3.forceCollide((d: any) => (d.isCenter ? centerNodeRadius : nodeRadius) + 15))
-      .alphaDecay(0.1) // Faster settling
-      .velocityDecay(0.8); // High damping
+      .alphaDecay(0.1)
+      .velocityDecay(0.8);
+
+    const boundsForce = (() => {
+      let local: any[] = [];
+      const pad = 60;
+      function force(alpha: number) {
+        const minX = pad, minY = pad;
+        const maxX = width - pad, maxY = height - pad;
+        for (const n of local) {
+          if (n.x < minX) n.vx += (minX - n.x) * 0.1 * alpha;
+          if (n.x > maxX) n.vx += (maxX - n.x) * 0.1 * alpha;
+          if (n.y < minY) n.vy += (minY - n.y) * 0.1 * alpha;
+          if (n.y > maxY) n.vy += (maxY - n.y) * 0.1 * alpha;
+        }
+      }
+      (force as any).initialize = (nl: any[]) => { local = nl; };
+      return force as d3.Force<NodeData, any>;
+    })();
+    simulation.force('bounds', boundsForce);
+
+    let currentDraggingId: string | null = null;
+    const enforcePinned = (() => {
+      let local: any[] = [];
+      function force() {
+        for (const n of local) {
+          const pos = loadPositions()[n.id];
+          if (userPinned[n.id] && n.id !== currentDraggingId && pos) {
+            n.fx = pos.x; n.fy = pos.y;
+            n.x = pos.x; n.y = pos.y;
+          }
+        }
+      }
+      (force as any).initialize = (nl: any[]) => { local = nl; };
+      return force as d3.Force<NodeData, any>;
+    })();
+    simulation.force('enforcePinned', enforcePinned);
 
     simulationRef.current = simulation;
 
-    // CRITICAL: Stop simulation immediately if positions are stable
-    if (hasStablePositions) {
+    if (positionsStable) {
       simulation.alpha(0);
       setTimeout(() => simulation.stop(), 50);
-      setIsSimulationActive(false);
     } else {
-      setIsSimulationActive(true);
-
-      // Auto-save positions when simulation settles
       simulation.on('end', () => {
         const positions: Record<string, { x: number; y: number }> = {};
-        nodes.forEach(node => {
-          if (node.x !== undefined && node.y !== undefined) {
-            positions[node.id] = { x: node.x, y: node.y };
-            node.fx = node.x; // Fix all positions
-            node.fy = node.y;
+        (nodes as any[]).forEach(n => {
+          if (n.x != null && n.y != null) {
+            positions[n.id] = { x: n.x, y: n.y };
+            n.fx = n.x; n.fy = n.y;
           }
         });
-        sessionStorage.setItem('nodePositions', JSON.stringify(positions));
+        savePositions(positions);
         setPositionsStable(true);
-        setIsSimulationActive(false);
       });
-
-      // Force stop after 2 seconds and save positions
       setTimeout(() => {
         if (simulation.alpha() > 0) {
           const positions: Record<string, { x: number; y: number }> = {};
-          nodes.forEach(node => {
-            if (node.x !== undefined && node.y !== undefined) {
-              positions[node.id] = { x: node.x, y: node.y };
-              node.fx = node.x;
-              node.fy = node.y;
+          (nodes as any[]).forEach(n => {
+            if (n.x != null && n.y != null) {
+              positions[n.id] = { x: n.x, y: n.y };
+              n.fx = n.x; n.fy = n.y;
             }
           });
-          sessionStorage.setItem('nodePositions', JSON.stringify(positions));
+          savePositions(positions);
           simulation.stop();
           setPositionsStable(true);
-          setIsSimulationActive(false);
         }
       }, 2000);
     }
 
-    // Links
     const link = g.append('g')
       .selectAll('line')
       .data(links)
@@ -570,28 +511,19 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
       .attr('opacity', isDarkMode ? 0.8 : 0.7)
       .attr('class', 'link')
       .style('cursor', 'pointer')
-      .attr('marker-end', (d: any) => {
-        const impact = d.relationshipList?.[0]?.impact || 'neutral';
-        return `url(#arrowhead-${impact})`;
-      })
-      .attr('marker-start', (d: any) => {
-        if (d.isBidirectional) {
-          const impact = d.relationshipList?.[1]?.impact || d.relationshipList?.[0]?.impact || 'neutral';
-          return `url(#arrowhead-start-${impact})`;
-        }
-        return null;
-      })
+      .attr('marker-end', (d: any) => `url(#arrowhead-${d.relationshipList?.[0]?.impact || 'neutral'})`)
+      .attr('marker-start', (d: any) => d.isBidirectional
+        ? `url(#arrowhead-start-${d.relationshipList?.[1]?.impact || d.relationshipList?.[0]?.impact || 'neutral'})`
+        : null as any)
       .on('click', (event: any, d: any) => {
         event.stopPropagation();
         setSelectedElement({ ...d, relationshipList: d.relationshipList ?? [], isBidirectional: d.isBidirectional ?? false });
       });
 
-    // Borders from theme
     const nodeBorder = activeTheme.nodeBorder(!!isDarkMode);
     const centerBorder = activeTheme.centerBorder(!!isDarkMode);
     const nodeFilterStyle = activeTheme.useGlow ? 'url(#glow-filter)' : 'url(#drop-shadow)';
 
-    // Center node(s)
     const centerGroup = g.append('g')
       .selectAll('g')
       .data(nodes.filter((d: any) => d.isCenter))
@@ -622,7 +554,6 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
         setSelectedElement(d);
       });
 
-    // Regular nodes
     const nodeGroups = g.append('g')
       .selectAll('g')
       .data(nodes.filter((d: any) => !d.isCenter))
@@ -662,11 +593,15 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
         setSelectedElement(d);
       });
 
-    // Center text
+    const labelColor = isDarkMode ? TWC.brand.secondary['50'] : TWC.brand.primary['900'];
+
+    const getValueSize = (text: string, r: number) => getFontSize(text, r - 6, 13, 8);
+    const getCenterValueSize = (text: string, r: number) => getFontSize(text, r - 8, 15, 10);
+
     centerGroup.each(function (d: any) {
       const group = d3.select(this);
       const name = formatStockName(d.name);
-      const valueText = formatLargeNumber(animatedValues[d.id] ?? d.value.value, 2) // Changed from 0 to 2 decimal places
+      const valueText = formatLargeNumber(animatedValues[d.id] ?? d.value.value, 2);
 
       group.append('text')
         .attr('text-anchor', 'middle')
@@ -675,11 +610,10 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
         .style('fontFamily', 'Inter, system-ui, -apple-system, sans-serif')
         .style('fill', activeTheme.valueText(!!isDarkMode))
         .style('font-weight', '800')
-        .style('font-size', getFontSize(valueText, centerNodeRadius - 8, 15, 10))
+        .style('font-size', getCenterValueSize(valueText, centerNodeRadius))
         .style('text-shadow', '2px 2px 4px rgba(0,0,0,0.8)')
         .text(valueText)
-        .append('title')
-        .text(`${valueText} ${d.value.unit}`);
+        .append('title').text(`${valueText} ${d.value.unit}`);
 
       group.append('text')
         .attr('text-anchor', 'middle')
@@ -693,11 +627,10 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
         .text(name);
     });
 
-    // Regular node text
     nodeGroups.each(function (d: any) {
       const group = d3.select(this);
       const name = formatStockName(d.name);
-      const valueText = formatLargeNumber(animatedValues[d.id] ?? d.value.value, 2) // Changed from 0 to 2 decimal places
+      const valueText = formatLargeNumber(animatedValues[d.id] ?? d.value.value, 2);
 
       group.append('text')
         .attr('text-anchor', 'middle')
@@ -706,11 +639,10 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
         .style('fontFamily', 'Inter, system-ui, -apple-system, sans-serif')
         .style('fill', activeTheme.valueText(!!isDarkMode))
         .style('font-weight', '800')
-        .style('font-size', getFontSize(valueText, nodeRadius - 6, 13, 8))
+        .style('font-size', getValueSize(valueText, nodeRadius))
         .style('text-shadow', '2px 2px 4px rgba(0,0,0,0.8)')
         .text(valueText)
-        .append('title')
-        .text(`${valueText} ${d.value.unit}`);
+        .append('title').text(`${valueText} ${d.value.unit}`);
 
       group.append('text')
         .attr('text-anchor', 'middle')
@@ -724,7 +656,6 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
         .text(name);
     });
 
-    // Hover interactions
     nodeGroups.on('mouseenter', function () {
       d3.select(this).select('circle:first-child')
         .transition().duration(200)
@@ -753,104 +684,231 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
         .style('filter', nodeFilterStyle);
     });
 
-    // IMPROVED: Drag behavior with immediate position saving
+    const dragPoint = { x: 0, y: 0 };
+    const dragRepel = (() => {
+      let locals: any[] = [];
+      const radius = 150;
+      const base = 2.0;
+      function force(alpha: number) {
+        if (!currentDraggingId) return;
+        for (const n of locals) {
+          if ((n as any).isCenter || n.id === currentDraggingId) continue;
+          if (userPinned[n.id]) continue;
+          const dx = n.x - dragPoint.x;
+          const dy = n.y - dragPoint.y;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1e-6;
+          if (dist < radius) {
+            const t = 1 - dist / radius;
+            const k = base * t * alpha;
+            n.vx += (dx / dist) * k;
+            n.vy += (dy / dist) * k;
+          }
+        }
+      }
+      (force as any).initialize = (nl: any[]) => { locals = nl; };
+      return force as d3.Force<NodeData, any>;
+    })();
+
+    // The ideal link distance, consistent with the main link force, acting as a "leash".
+    const initialLinkDistance = 120;
+    const leashForce = ((alpha: number) => {
+      if (!currentDraggingId) return;
+      const draggedNode = (nodes as any[]).find(n => n.id === currentDraggingId);
+      if (!draggedNode) return;
+
+      for (const link of links as any[]) {
+        const isSourceDragged = link.source.id === currentDraggingId;
+        const isTargetDragged = link.target.id === currentDraggingId;
+
+        if (!isSourceDragged && !isTargetDragged) continue;
+
+        const otherNode = isSourceDragged ? link.target : link.source;
+
+        // This is the core logic:
+        // If the other node is pinned by the user, do nothing. This allows the edge to stretch.
+        // If the other node is NOT pinned, apply a strong "spring" force to drag it along.
+        if (userPinned[otherNode.id]) {
+          continue;
+        }
+
+        const dx = otherNode.x - draggedNode.x;
+        const dy = otherNode.y - draggedNode.y;
+        const distance = Math.hypot(dx, dy) || 1e-6; // Use 1e-6 to prevent division by zero
+
+        // This force tries to restore the link to its initial distance, making the unpinned cluster
+        // move along with the dragged node.
+        const difference = distance - initialLinkDistance;
+        
+        // The strength of the pull/push is proportional to the difference.
+        // A strength of 0.8 makes it a very strong, rigid connection during the drag.
+        const pullFactor = (difference / distance) * alpha * 0.8;
+
+        // Apply the corrective force to the other node's velocity.
+        otherNode.vx -= dx * pullFactor;
+        otherNode.vy -= dy * pullFactor;
+      }
+    }) as d3.Force<NodeData, any>;
+
+    const toGraphCoords = (ev: any) => {
+      if (!svgRef.current) return { x: 0, y: 0 };
+      const p = d3.pointer(ev, svgRef.current);
+      const t = zoomStateRef.current || d3.zoomIdentity;
+      return { x: (p[0] - t.x) / t.k, y: (p[1] - t.y) / t.k };
+    };
+
+    const beginGroupDrag = (draggedId: string) => {
+      (nodes as any[]).forEach((n: any) => {
+        if (n.id !== draggedId && !userPinned[n.id]) {
+          n.fx = null;
+          n.fy = null;
+        }
+      });
+      simulation.force('dragRepel', dragRepel);
+      simulation.force('leash', leashForce);
+      simulation.force('center', null);
+      simulation.force('charge', d3.forceManyBody().strength(-110));
+      simulation.alphaTarget(0.3).restart();
+    };
+
+    const persistAfterDrop = (draggedId: string) => {
+      const positions = loadPositions();
+      (nodes as any[]).forEach((n: any) => {
+        n.fx = n.x;
+        n.fy = n.y;
+        positions[n.id] = { x: n.x, y: n.y };
+      });
+      const up = { ...loadUserPinned(), [draggedId]: true };
+      saveUserPinned(up);
+      setUserPinned(up);
+      savePositions(positions);
+
+      simulation.force('dragRepel', null);
+      simulation.force('leash', null);
+      simulation.force('center', d3.forceCenter(width / 2, height / 2).strength(0.06));
+      simulation.force('charge', d3.forceManyBody().strength(-300));
+      simulation.alphaTarget(0).stop();
+    };
+
+    const cancelDragNoMove = () => {
+      simulation.alphaTarget(0);
+    };
+
     const drag = d3.drag<any, any>()
+      .filter((event: any) => !event.button && !event.ctrlKey && !event.metaKey && !event.altKey)
       .on('start', (event: any, d: any) => {
-        if (!event.active) simulation.alphaTarget(0.1).restart();
+        currentDraggingId = d.id;
+        if (!event.active) simulation.alphaTarget(0.3).restart();
         d.fx = d.x;
         d.fy = d.y;
+
+        const pt = toGraphCoords(event.sourceEvent || event);
+        (d as any).__dragStart__ = { x: pt.x, y: pt.y };
+        (d as any).__groupDragActive__ = false;
       })
       .on('drag', (event: any, d: any) => {
-        d.fx = event.x;
-        d.fy = event.y;
+        const pt = toGraphCoords(event.sourceEvent || event);
+
+        if (!(d as any).__groupDragActive__) {
+          const s = (d as any).__dragStart__;
+          const dx = pt.x - s.x;
+          const dy = pt.y - s.y;
+          if (Math.hypot(dx, dy) >= dragThresholdPx) {
+            (d as any).__groupDragActive__ = true;
+            beginGroupDrag(d.id);
+          }
+        }
+
+        d.fx = pt.x;
+        d.fy = pt.y;
+        dragPoint.x = pt.x;
+        dragPoint.y = pt.y;
       })
       .on('end', (event: any, d: any) => {
+        currentDraggingId = null;
         if (!event.active) simulation.alphaTarget(0);
 
-        // IMMEDIATE SAVE: Save position right after drag
-        const saved: Record<string, { x: number; y: number }> =
-          JSON.parse(sessionStorage.getItem('nodePositions') || '{}');
-        saved[d.id] = { x: d.fx, y: d.fy };
-        sessionStorage.setItem('nodePositions', JSON.stringify(saved));
+        const moved = !!(d as any).__groupDragActive__;
+        if (moved) {
+          persistAfterDrop(d.id);
+        } else {
+          d.fx = null;
+          d.fy = null;
+          cancelDragNoMove();
+        }
+        delete (d as any).__dragStart__;
+        delete (d as any).__groupDragActive__;
       });
 
     nodeGroups.call(drag as any);
     centerGroup.call(drag as any);
 
-    // Ticks
+    const safe = (v: any, fallback: number) => (Number.isFinite(v) ? v : fallback);
+
     simulation.on('tick', () => {
       link
         .attr('x1', (d: any) => {
-          const dx = d.target.x - d.source.x; const dy = d.target.y - d.source.y;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const sx = safe(d.source.x, width / 2), sy = safe(d.source.y, height / 2);
+          const tx = safe(d.target.x, width / 2), ty = safe(d.target.y, height / 2);
+          const dx = tx - sx, dy = ty - sy;
+          const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
           const r = d.source.isCenter ? centerNodeRadius + 2 : nodeRadius + 2;
-          return d.source.x + (dx / dist) * r;
+          return sx + (dx / dist) * r;
         })
         .attr('y1', (d: any) => {
-          const dx = d.target.x - d.source.x; const dy = d.target.y - d.source.y;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const sx = safe(d.source.x, width / 2), sy = safe(d.source.y, height / 2);
+          const tx = safe(d.target.x, width / 2), ty = safe(d.target.y, height / 2);
+          const dx = tx - sx, dy = ty - sy;
+          const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
           const r = d.source.isCenter ? centerNodeRadius + 2 : nodeRadius + 2;
-          return d.source.y + (dy / dist) * r;
+          return sy + (dy / dist) * r;
         })
         .attr('x2', (d: any) => {
-          const dx = d.target.x - d.source.x; const dy = d.target.y - d.source.y;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const sx = safe(d.source.x, width / 2), sy = safe(d.source.y, height / 2);
+          const tx = safe(d.target.x, width / 2), ty = safe(d.target.y, height / 2);
+          const dx = tx - sx, dy = ty - sy;
+          const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
           const r = d.target.isCenter ? centerNodeRadius + 2 : nodeRadius + 2;
-          return d.target.x - (dx / dist) * r;
+          return tx - (dx / dist) * r;
         })
         .attr('y2', (d: any) => {
-          const dx = d.target.x - d.source.x; const dy = d.target.y - d.source.y;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const sx = safe(d.source.x, width / 2), sy = safe(d.source.y, height / 2);
+          const tx = safe(d.target.x, width / 2), ty = safe(d.target.y, height / 2);
+          const dx = tx - sx, dy = ty - sy;
+          const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
           const r = d.target.isCenter ? centerNodeRadius + 2 : nodeRadius + 2;
-          return d.target.y - (dy / dist) * r;
+          return ty - (dy / dist) * r;
         });
 
-      nodeGroups.attr('transform', (d: any) => `translate(${d.x},${d.y})`);
-      centerGroup.attr('transform', (d: any) => `translate(${d.x},${d.y})`);
+      nodeGroups.attr('transform', (d: any) => `translate(${safe(d.x, width / 2)},${safe(d.y, height / 2)})`);
+      centerGroup.attr('transform', (d: any) => `translate(${safe(d.x, width / 2)},${safe(d.y, height / 2)})`);
     });
 
     return () => {
-      if (simulation) {
-        simulation.stop();
-        setIsSimulationActive(false);
-      }
+      simulation.stop();
     };
-  }, [graphData, nodeColors, links, setSelectedElement, nodes, containerDimensions, animatedValues, isDarkMode, activeTheme, positionsStable]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graphData, nodes, links, containerDimensions, isDarkMode, activeTheme, positionsStable, userPinned, setSelectedElement]);
 
-  // IMPROVED: Separate animation effect that doesn't trigger re-renders
   useEffect(() => {
-    if (initialRender) {
-      setInitialRender(false);
-      return;
-    }
-
+    if (initialRender) { setInitialRender(false); return; }
     if (!graphData || !runSimulation) return;
 
-    // DON'T restart position simulation - only animate values
     const startValues = nodes.reduce((acc, node) => {
-      acc[node.id] = node.value.value;
+      acc[node.id] = (node as any).value.value;
       return acc;
     }, {} as Record<string, number>);
 
     let yearEquivalent = 0;
     switch (simulationSettings.timeUnit) {
-      case 'days':
-        yearEquivalent = simulationValue / 365;
-        break;
-      case 'weeks':
-        yearEquivalent = simulationValue / 52;
-        break;
-      case 'months':
-        yearEquivalent = simulationValue / 12;
-        break;
-      case 'years':
-        yearEquivalent = simulationValue;
-        break;
+      case 'days': yearEquivalent = simulationValue / 365; break;
+      case 'weeks': yearEquivalent = simulationValue / 52; break;
+      case 'months': yearEquivalent = simulationValue / 12; break;
+      case 'years': yearEquivalent = simulationValue; break;
     }
 
     const targetValues = nodes.reduce((acc, node) => {
       const growth = 0.02;
-      acc[node.id] = node.value.value * Math.pow(1 + growth, yearEquivalent);
+      acc[node.id] = (node as any).value.value * Math.pow(1 + growth, yearEquivalent);
       return acc;
     }, {} as Record<string, number>);
 
@@ -868,18 +926,14 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
 
       setAnimatedValues(newValues);
 
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      }
+      if (progress < 1) requestAnimationFrame(animate);
     };
 
     requestAnimationFrame(animate);
-  }, [runSimulation, simulationValue, simulationSettings]); // Removed problematic dependencies
+  }, [runSimulation, simulationValue, simulationSettings, graphData, nodes]);
 
-  // Update text with animated values
   useEffect(() => {
     if (!svgRef.current) return;
-
     const svg = d3.select(svgRef.current);
     svg.selectAll('.node-value')
       .text((d: any) => {
@@ -889,21 +943,22 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
       });
   }, [animatedValues]);
 
-  // Optional: Add reset function for testing
   const resetNodePositions = useCallback(() => {
-    sessionStorage.removeItem('nodePositions');
-    sessionStorage.removeItem('zoomTransform');
+    sessionStorage.removeItem(NODE_POSITIONS_KEY);
+    sessionStorage.removeItem(USER_PINNED_KEY);
+    sessionStorage.removeItem(ZOOM_KEY);
+    setUserPinned({});
     setPositionsStable(false);
-    setZoomTransform(null);
-    setInitialRender(true);
   }, []);
 
   return (
-    <div ref={containerRef} className={`absolute inset-0 overflow-hidden ${isDarkMode
+    <div
+      ref={containerRef}
+      className={`absolute inset-0 overflow-hidden ${isDarkMode
         ? 'bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white'
         : 'bg-gradient-to-br from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
-      }`}>
-      {/* ORIGINAL LOADING EFFECT PRESERVED */}
+      }`}
+    >
       {isLoading && (
         <div className="flex flex-col items-center justify-center h-full p-6">
           <Loader className={`w-10 h-10 animate-spin ${isDarkMode ? 'text-red-400' : 'text-red-600'}`} />
@@ -913,19 +968,16 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
         </div>
       )}
 
-      {/* MAIN CONTENT - Only show when not loading */}
       {!isLoading && (
         <>
-          {/* Optional: Reset positions button for testing - hidden by default */}
           <button
             onClick={resetNodePositions}
             className="absolute top-4 right-4 z-10 px-3 py-1 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700"
-            style={{ display: 'none' }} // Hidden by default
+            style={{ display: 'none' }}
           >
             Reset Layout
           </button>
 
-          {/* SVG Container */}
           <div className="absolute inset-0">
             <svg
               ref={svgRef}
@@ -935,25 +987,21 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
             />
           </div>
 
-          {/* Reset Zoom Button */}
           <div className="absolute top-6 right-6 z-10">
             <button
               onClick={() => {
-                // Reset zoom logic
                 if (zoomBehaviorRef.current && svgRef.current) {
-                  d3.select(svgRef.current)
-                    .transition()
-                    .duration(500)
-                    .call(zoomBehaviorRef.current.transform, d3.zoomIdentity);
-
-                  sessionStorage.removeItem('zoomTransform');
-                  setZoomTransform(null);
+                  const svg = d3.select(svgRef.current);
+                  svg.transition().duration(500).call(zoomBehaviorRef.current.transform, d3.zoomIdentity);
+                  zoomStateRef.current = d3.zoomIdentity;
+                  sessionStorage.removeItem(ZOOM_KEY);
                 }
               }}
-              className={`w-12 h-12 rounded-lg flex items-center justify-center shadow-md transition-all duration-200 hover:shadow-lg group border backdrop-blur-sm ${isDarkMode
+              className={`w-12 h-12 rounded-lg flex items-center justify-center shadow-md transition-all duration-200 hover:shadow-lg group border backdrop-blur-sm ${
+                isDarkMode
                   ? 'bg-slate-800/90 border-slate-700/50 text-white/80 hover:bg-slate-700/90 hover:text-white'
                   : 'bg-white/90 border-neutral-200/60 text-neutral-600 hover:bg-white hover:text-neutral-900'
-                }`}
+              }`}
               title="Reset Zoom"
             >
               <RotateCcw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-300" />
