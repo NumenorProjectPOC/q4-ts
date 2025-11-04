@@ -38,7 +38,7 @@ const TWC = {
   warning: {
     '50': '#fffbeb', '100': '#fef3c7', '200': '#fde68a', '300': '#fcd34d',
     '400': '#fbbf24', '500': '#f59e0b', '600': '#d97706', '700': '#b45309',
-      '800': '#92400e', '900': '#78350f', '950': '#451a03'
+    '800': '#92400e', '900': '#78350f', '950': '#451a03'
   },
   error: {
     '50': '#fef2f2', '100': '#fee2e2', '200': '#fecaca', '300': '#fca5a5',
@@ -190,7 +190,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
   const simulationRef = useRef<d3.Simulation<any, any> | null>(null);
 
   const [nodeColors, setNodeColors] = useState<Record<string, string>>({});
-  const [containerDimensions, setContainerDimensions] =  useState({ width: 0, height: 0 });
+  const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
   const [animatedValues, setAnimatedValues] = useState<Record<string, number>>({});
   const [initialRender, setInitialRender] = useState(true);
 
@@ -348,7 +348,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
     const edgeColor = d3.scaleOrdinal<string>()
       .domain(['positive', 'negative', 'neutral'])
       .range(isDarkMode ? [TWC.success['400'], TWC.error['400'], TWC.neutral['400']]
-                        : [TWC.success['600'], TWC.error['600'], TWC.neutral['500']]);
+        : [TWC.success['600'], TWC.error['600'], TWC.neutral['500']]);
 
     const defs = svg.append('defs');
 
@@ -738,7 +738,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
         // This force tries to restore the link to its initial distance, making the unpinned cluster
         // move along with the dragged node.
         const difference = distance - initialLinkDistance;
-        
+
         // The strength of the pull/push is proportional to the difference.
         // A strength of 0.8 makes it a very strong, rigid connection during the drag.
         const pullFactor = (difference / distance) * alpha * 0.8;
@@ -957,7 +957,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
       className={`absolute inset-0 overflow-hidden ${isDarkMode
         ? 'bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white'
         : 'bg-gradient-to-br from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
-      }`}
+        }`}
     >
       {isLoading && (
         <div className="flex flex-col items-center justify-center h-full p-6">
@@ -997,11 +997,10 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
                   sessionStorage.removeItem(ZOOM_KEY);
                 }
               }}
-              className={`w-12 h-12 rounded-lg flex items-center justify-center shadow-md transition-all duration-200 hover:shadow-lg group border backdrop-blur-sm ${
-                isDarkMode
+              className={`w-12 h-12 rounded-lg flex items-center justify-center shadow-md transition-all duration-200 hover:shadow-lg group border backdrop-blur-sm ${isDarkMode
                   ? 'bg-slate-800/90 border-slate-700/50 text-white/80 hover:bg-slate-700/90 hover:text-white'
                   : 'bg-white/90 border-neutral-200/60 text-neutral-600 hover:bg-white hover:text-neutral-900'
-              }`}
+                }`}
               title="Reset Zoom"
             >
               <RotateCcw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-300" />

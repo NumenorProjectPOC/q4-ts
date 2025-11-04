@@ -55,12 +55,12 @@ const Item = ({
     >
       <div
         className={`p-2 rounded-lg ${variant === "danger"
-            ? isDarkMode
-              ? "bg-red-500/20 text-red-400"
-              : "bg-red-100 text-red-600"
-            : isDarkMode
-              ? "bg-neutral-700 text-neutral-300"
-              : "bg-neutral-100 text-neutral-600"
+          ? isDarkMode
+            ? "bg-red-500/20 text-red-400"
+            : "bg-red-100 text-red-600"
+          : isDarkMode
+            ? "bg-neutral-700 text-neutral-300"
+            : "bg-neutral-100 text-neutral-600"
           }`}
       >
         {icon}
@@ -68,12 +68,12 @@ const Item = ({
       <div className="flex-1">
         <span
           className={`block font-semibold tracking-tight ${variant === "danger"
-              ? isDarkMode
-                ? "text-red-300"
-                : "text-red-700"
-              : isDarkMode
-                ? "text-white"
-                : "text-neutral-900"
+            ? isDarkMode
+              ? "text-red-300"
+              : "text-red-700"
+            : isDarkMode
+              ? "text-white"
+              : "text-neutral-900"
             }`}
         >
           {label}
@@ -81,12 +81,12 @@ const Item = ({
         {description && (
           <span
             className={`block text-xs mt-0.5 ${variant === "danger"
-                ? isDarkMode
-                  ? "text-red-400/80"
-                  : "text-red-600/80"
-                : isDarkMode
-                  ? "text-neutral-400"
-                  : "text-neutral-600"
+              ? isDarkMode
+                ? "text-red-400/80"
+                : "text-red-600/80"
+              : isDarkMode
+                ? "text-neutral-400"
+                : "text-neutral-600"
               }`}
           >
             {description}
@@ -95,12 +95,12 @@ const Item = ({
       </div>
       <svg
         className={`h-4 w-4 transition-transform group-hover:translate-x-1 ${variant === "danger"
-            ? isDarkMode
-              ? "text-red-400"
-              : "text-red-600"
-            : isDarkMode
-              ? "text-neutral-500"
-              : "text-neutral-400"
+          ? isDarkMode
+            ? "text-red-400"
+            : "text-red-600"
+          : isDarkMode
+            ? "text-neutral-500"
+            : "text-neutral-400"
           }`}
         fill="none"
         stroke="currentColor"
@@ -149,15 +149,76 @@ export default function RightSidebar({ isOpen, onClose, customContent }: Props) 
   };
 
   const clearAllCaches = () => {
-    const lKeys = ['favorite_stocks', 'monitoring_data', 'monitoring_last_updated'];
-    const sKeys = ['favorite_stocks', 'monitoring_data', 'monitoring_last_updated',
-      'saved_models', 'selected_monitoring_data'];
+    // LocalStorage keys to clear
+    const localStorageKeys = [
+      'favorite_stocks',
+      'monitoring_data',
+      'monitoring_last_updated'
+    ];
 
-    lKeys.forEach(k => localStorage.removeItem(k));
-    sKeys.forEach(k => sessionStorage.removeItem(k));
-    onClose();           // close sidebar
-    window.location.reload(); // hard refresh UI state
+    // SessionStorage keys to clear - including patterns
+    const sessionStorageKeys = [
+      // User data
+      'favorite_stocks',
+      'monitoring_data',
+      'monitoring_last_updated',
+      'saved_models',
+      'selected_monitoring_data',
+
+      // Graph visualization state
+      'nodeColors',
+      'userPinnedNodes',
+      'nodePositions',
+      'zoomTransform',
+
+      // Alert and model data
+      'visualizing_model_id',
+    ];
+
+    // Clear specific keys from localStorage
+    localStorageKeys.forEach(key => {
+      try {
+        localStorage.removeItem(key);
+      } catch (error) {
+        console.error(`Failed to remove localStorage key: ${key}`, error);
+      }
+    });
+
+    // Clear specific keys from sessionStorage
+    sessionStorageKeys.forEach(key => {
+      try {
+        sessionStorage.removeItem(key);
+      } catch (error) {
+        console.error(`Failed to remove sessionStorage key: ${key}`, error);
+      }
+    });
+
+    // Clear ALL graph data caches (for all models)
+    // Pattern: visualization_graph_data_*
+    try {
+      const sessionKeys = Object.keys(sessionStorage);
+      sessionKeys.forEach(key => {
+        if (
+          key.startsWith('visualization_graph_data_') ||
+          key.startsWith('visualization_graph_data_timestamp_')
+        ) {
+          sessionStorage.removeItem(key);
+          console.log(`Cleared cache: ${key}`);
+        }
+      });
+    } catch (error) {
+      console.error('Failed to clear visualization graph data caches:', error);
+    }
+
+    console.log('✅ All caches cleared successfully');
+
+    // Close sidebar
+    onClose();
+
+    // Hard refresh to reset all UI state
+    window.location.reload();
   };
+
 
   // Mobile Menu
   const MobileMenu = () => (
@@ -193,8 +254,8 @@ export default function RightSidebar({ isOpen, onClose, customContent }: Props) 
           whileHover={{ rotate: 90, scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           className={`rounded-full p-2 transition-colors ${isDarkMode
-              ? "hover:bg-neutral-800 text-neutral-400 hover:text-white"
-              : "hover:bg-neutral-100 text-neutral-500 hover:text-neutral-700"
+            ? "hover:bg-neutral-800 text-neutral-400 hover:text-white"
+            : "hover:bg-neutral-100 text-neutral-500 hover:text-neutral-700"
             }`}
           onClick={onClose}
         >
@@ -230,8 +291,8 @@ export default function RightSidebar({ isOpen, onClose, customContent }: Props) 
         <motion.button
           onClick={() => setShowLogoutConfirm(true)}
           className={`w-full flex items-center gap-4 rounded-xl p-4 text-left transition-all duration-200 shadow-sm hover:shadow-md ${isDarkMode
-              ? "bg-red-800 text-white hover:bg-red-700"
-              : "bg-neutral-800 text-white hover:bg-neutral-700"
+            ? "bg-red-800 text-white hover:bg-red-700"
+            : "bg-neutral-800 text-white hover:bg-neutral-700"
             }`}
           whileTap={{ scale: 0.98 }}
         >
@@ -253,8 +314,8 @@ export default function RightSidebar({ isOpen, onClose, customContent }: Props) 
     <motion.aside
       key="desktop-sidebar"
       className={`fixed right-0 top-0 z-[90] flex h-full w-80 flex-col shadow-2xl border-l backdrop-blur-xl ${isDarkMode
-          ? "bg-slate-900/95 border-neutral-700"
-          : "bg-white/95 border-neutral-200"
+        ? "bg-slate-900/95 border-neutral-700"
+        : "bg-white/95 border-neutral-200"
         }`}
       initial={{ x: "100%" }}
       animate={{ x: 0 }}
@@ -272,8 +333,8 @@ export default function RightSidebar({ isOpen, onClose, customContent }: Props) 
           whileHover={{ rotate: 90, scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           className={`rounded-full p-2 transition-colors ${isDarkMode
-              ? "hover:bg-neutral-800 text-neutral-400 hover:text-white"
-              : "hover:bg-neutral-100 text-neutral-500 hover:text-neutral-700"
+            ? "hover:bg-neutral-800 text-neutral-400 hover:text-white"
+            : "hover:bg-neutral-100 text-neutral-500 hover:text-neutral-700"
             }`}
           onClick={onClose}
         >
@@ -287,14 +348,14 @@ export default function RightSidebar({ isOpen, onClose, customContent }: Props) 
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1, duration: 0.3 }}
           className={`rounded-2xl p-6 text-center border backdrop-blur-xl ${isDarkMode
-              ? "bg-gradient-to-br from-red-500/10 to-neutral-500/10 border-red-500/20"
-              : "bg-gradient-to-br from-neutral-100 to-neutral-50 border-neutral-200/60"
+            ? "bg-gradient-to-br from-red-500/10 to-neutral-500/10 border-red-500/20"
+            : "bg-gradient-to-br from-neutral-100 to-neutral-50 border-neutral-200/60"
             }`}
         >
           <div
             className={`mx-auto flex h-16 w-16 items-center justify-center rounded-2xl text-xl font-bold shadow-lg ${isDarkMode
-                ? "bg-red-800 text-white"
-                : "bg-neutral-800 text-white"
+              ? "bg-red-800 text-white"
+              : "bg-neutral-800 text-white"
               }`}
           >
             {initials}
@@ -304,8 +365,8 @@ export default function RightSidebar({ isOpen, onClose, customContent }: Props) 
           </p>
           <span
             className={`mt-1 inline-block rounded-full px-3 py-1 text-xs font-medium capitalize border ${isDarkMode
-                ? "bg-neutral-700/30 text-neutral-300 border-neutral-600/40"
-                : "bg-white text-neutral-600 border-neutral-200"
+              ? "bg-neutral-700/30 text-neutral-300 border-neutral-600/40"
+              : "bg-white text-neutral-600 border-neutral-200"
               }`}
           >
             {role}
@@ -367,8 +428,8 @@ export default function RightSidebar({ isOpen, onClose, customContent }: Props) 
         <motion.button
           onClick={() => setShowLogoutConfirm(true)}
           className={`w-full flex items-center gap-4 rounded-xl p-4 text-left transition-all duration-200 shadow-sm hover:shadow-md ${isDarkMode
-              ? "bg-red-800 text-white hover:bg-red-700"
-              : "bg-neutral-800 text-white hover:bg-neutral-700"
+            ? "bg-red-800 text-white hover:bg-red-700"
+            : "bg-neutral-800 text-white hover:bg-neutral-700"
             }`}
           whileTap={{ scale: 0.98 }}
         >

@@ -209,8 +209,8 @@ const LandingPage: React.FC = () => {
 
     return (
         <div className={`min-h-screen font-inter transition-all duration-500 ${isDarkMode
-                ? 'dark bg-gradient-to-br from-slate-900 via-slate-950 to-black'
-                : 'bg-gradient-to-br from-brand-secondary-950 via-white to-brand-secondary-900'
+            ? 'dark bg-gradient-to-br from-slate-900 via-slate-950 to-black'
+            : 'bg-gradient-to-br from-brand-secondary-950 via-white to-brand-secondary-900'
             }`}>
             {/* Video Hero Section */}
             <section className={`relative ${isMobile ? 'h-screen' : 'h-screen'} flex items-center justify-center overflow-hidden`}>
@@ -229,8 +229,8 @@ const LandingPage: React.FC = () => {
                         <source src={currentVideoSet[currentVideo]} type="video/mp4" />
                     </video>
                     <div className={`absolute inset-0 transition-all duration-500 ${isDarkMode
-                            ? 'bg-slate-950/75'
-                            : 'bg-brand-secondary-950/80'
+                        ? 'bg-slate-950/75'
+                        : 'bg-brand-secondary-950/80'
                         }`} />
                     {/* Reduce particles on mobile */}
                     <div className="absolute inset-0">
@@ -260,10 +260,10 @@ const LandingPage: React.FC = () => {
                 {/* NAVBAR - Different styles for mobile vs desktop */}
                 <motion.header
                     className={`absolute z-50 transition-all duration-500 backdrop-blur-md ${isMobile
-                            ? // Mobile: Attached header at top
-                            'top-0 left-0 right-0 border-b'
-                            : // Desktop: Detached floating header  
-                            'top-4 left-4 right-4 rounded-2xl navbar-detached border'
+                        ? // Mobile: Attached header at top
+                        'top-0 left-0 right-0 border-b'
+                        : // Desktop: Detached floating header  
+                        'top-4 left-4 right-4 rounded-2xl navbar-detached border'
                         } ${isDarkMode
                             ? 'bg-slate-900/80 border-slate-700/50 shadow-2xl'
                             : 'bg-brand-secondary-950/90 border-neutral-300/40 shadow-2xl'
@@ -274,16 +274,16 @@ const LandingPage: React.FC = () => {
                         left: '1rem',
                         right: '1rem',
                         zIndex: 9999,
-                        backdropFilter: 'blur(20px)',
-                        WebkitBackdropFilter: 'blur(20px)'
+                        backdropFilter: 'blur(4px)',
+                        WebkitBackdropFilter: 'blur(4px)'
                     } : {
                         position: 'fixed',
                         top: 0,
                         left: 0,
                         right: 0,
                         zIndex: 9999,
-                        backdropFilter: 'blur(20px)',
-                        WebkitBackdropFilter: 'blur(20px)'
+                        backdropFilter: 'blur(4px)',
+                        WebkitBackdropFilter: 'blur(4px)'
                     }}
                     initial={{ y: -100, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
@@ -341,10 +341,10 @@ const LandingPage: React.FC = () => {
                                 <motion.button
                                     onClick={handleLoginClick}
                                     className={`group relative ${isMobile
-                                            ? // Mobile: Icon only button
-                                            'p-2.5 rounded-lg backdrop-blur-sm border transition-all duration-300'
-                                            : // Desktop: Full button with text
-                                            'px-7 py-3.5 text-sm rounded-xl font-medium shadow-lg overflow-hidden transition-all duration-300'
+                                        ? // Mobile: Icon only button
+                                        'p-2.5 rounded-lg backdrop-blur-sm border transition-all duration-300'
+                                        : // Desktop: Full button with text
+                                        'px-7 py-3.5 text-sm rounded-xl font-medium shadow-lg overflow-hidden transition-all duration-300'
                                         } ${isDarkMode
                                             ? isMobile
                                                 ? 'bg-white/10 border-white/20 text-white hover:bg-white/20'
@@ -589,7 +589,7 @@ const LandingPage: React.FC = () => {
                     </div>
 
                     {/* Stats Section - Simplified for mobile */}
-                    <motion.div
+                    {/* <motion.div
                         className={`rounded-3xl ${isMobile ? 'p-8' : 'p-12'} shadow-xl border ${isDarkMode ? 'bg-gradient-to-r from-slate-900/80 to-slate-950/80 border-slate-700/50' : 'bg-gradient-to-r from-white/90 to-brand-secondary-900/90 border-neutral-200/50'
                             }`}
                         initial={{ opacity: 0, y: 50 }} whileInView={{ opacity: 1, y: 0 }}
@@ -633,7 +633,7 @@ const LandingPage: React.FC = () => {
                                 </motion.div>
                             ))}
                         </div>
-                    </motion.div>
+                    </motion.div> */}
                 </div>
             </section>
 
@@ -660,7 +660,7 @@ const LandingPage: React.FC = () => {
 
             {/* About Section */}
             <section id="about" className={`${isMobile ? 'py-16' : 'py-24'} transition-all duration-500 ${isDarkMode ? 'bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white'
-                    : 'bg-gradient-to-br from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
+                : 'bg-gradient-to-br from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
                 }`}>
                 <div className={`max-w-7xl mx-auto ${isMobile ? 'px-4' : 'px-4 sm:px-6 lg:px-8'}`}>
                     <div className={`grid ${isMobile ? 'grid-cols-1 gap-12' : 'lg:grid-cols-2 gap-16'} items-center`}>
@@ -680,9 +680,9 @@ const LandingPage: React.FC = () => {
                             </p>
                             <div className="space-y-4">
                                 {[
-                                    { icon: <Globe className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'}`} />, title: "Global Reach", desc: isMobile ? "10,000+ companies worldwide" : "Serving 10,000+ companies worldwide across 50+ countries" },
-                                    { icon: <Shield className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'}`} />, title: "Enterprise Security", desc: isMobile ? "SOC 2 compliant security" : "SOC 2 compliant with bank-level encryption and security" },
-                                    { icon: <Rocket className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'}`} />, title: "Rapid Deployment", desc: isMobile ? "Get started in minutes" : "Get started in minutes with our intuitive setup process" }
+                                    { icon: <Globe className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'}`} />, title: "Causal Foresight Engine", desc: "Model feedback loops and dynamic interdependencies to anticipate how today’s decisions shape tomorrow’s outcomes." },
+                                    { icon: <Shield className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'}`} />, title: "Adaptive Learning Models", desc: "Continuously refine predictive accuracy through evolving data patterns and contextual intelligence." },
+                                    { icon: <Rocket className={`${isMobile ? 'w-5 h-5' : 'w-6 h-6'}`} />, title: "Transparent Decision Framework", desc: "Reveal the “why” behind every insight through clear, explainable visual intelligence." }
                                 ].map((item, index) => (
                                     <motion.div key={item.title} className="flex items-start gap-3 group" initial={{ opacity: 0, x: -20 }} whileInView={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, delay: index * 0.15 }} viewport={{ once: true }}>
                                         <div className={`flex-shrink-0 p-2 rounded-lg text-white group-hover:scale-105 transition-all duration-300 shadow-md ${isDarkMode ? 'bg-sky-600 hover:bg-sky-700' : 'bg-neutral-800 hover:bg-neutral-700'}`}>{item.icon}</div>
@@ -729,7 +729,7 @@ const LandingPage: React.FC = () => {
 
             {/* Features Section */}
             <section id="features" className={`${isMobile ? 'py-16' : 'py-24'} transition-all duration-500 ${isDarkMode ? 'bg-gradient-to-tr from-slate-900 via-slate-950 to-black text-white'
-                    : 'bg-gradient-to-tr from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
+                : 'bg-gradient-to-tr from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
                 }`}>
                 <div className={`max-w-7xl mx-auto ${isMobile ? 'px-4' : 'px-4 sm:px-6 lg:px-8'}`}>
                     <motion.div className={`text-center ${isMobile ? 'mb-12' : 'mb-20'}`} initial={{ opacity: 0, y: 50 }} whileInView={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }} viewport={{ once: true }}>
@@ -759,8 +759,8 @@ const LandingPage: React.FC = () => {
 
             {/* Demo Section */}
             <section id="demo" className={`${isMobile ? 'py-16' : 'py-24'} overflow-hidden transition-all duration-500 ${isDarkMode
-                    ? 'bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white'
-                    : 'bg-gradient-to-br from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
+                ? 'bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white'
+                : 'bg-gradient-to-br from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
                 }`}>
                 <div className={`max-w-7xl mx-auto ${isMobile ? 'px-4' : 'px-4 sm:px-6 lg:px-8'}`}>
                     <div className={`grid ${isMobile ? 'grid-cols-1 gap-12' : 'lg:grid-cols-2 gap-16'} items-center`}>
@@ -813,8 +813,8 @@ const LandingPage: React.FC = () => {
 
             {/* CTA Section */}
             <section id="pricing" className={`${isMobile ? 'py-16' : 'py-24'} text-white relative overflow-hidden ${isDarkMode
-                    ? 'bg-gradient-to-tr from-slate-900 via-slate-950 to-black text-white'
-                    : 'bg-gradient-to-tr from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
+                ? 'bg-gradient-to-tr from-slate-900 via-slate-950 to-black text-white'
+                : 'bg-gradient-to-tr from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
                 }`}>
                 {/* Reduce particle count on mobile */}
                 <div className="absolute inset-0 opacity-20">

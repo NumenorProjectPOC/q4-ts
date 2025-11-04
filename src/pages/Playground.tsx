@@ -55,6 +55,14 @@ type NodeColorThemeName =
     | 'brand-light-minimal'
     | 'brand-gradient';
 
+const CACHE_EXPIRATION_MS = 30 * 60 * 1000;
+
+// Session storage keys
+const STORAGE_KEYS = {
+    GRAPH_DATA: 'visualization_graph_data',
+    GRAPH_DATA_TIMESTAMP: 'visualization_graph_data_timestamp'
+};
+
 const Playground: React.FC = () => {
     const { isDarkMode } = useTheme();
     const [graphData, setGraphData] = useState<GraphData | null>(null);
@@ -95,6 +103,71 @@ const Playground: React.FC = () => {
     const [showMobileControls, setShowMobileControls] = useState(false);
 
     const navigate = useNavigate();
+
+    // Helper function to check if cached data is still valid
+    const isCacheValid = (timestamp: string | null): boolean => {
+        if (!timestamp) return false;
+        const cacheTime = parseInt(timestamp, 10);
+        const now = Date.now();
+        return (now - cacheTime) < CACHE_EXPIRATION_MS;
+    };
+
+    // Helper function to get cached graph data
+    const getCachedGraphData = (modelName: string): GraphData | null => {
+        try {
+            const cacheKey = `${STORAGE_KEYS.GRAPH_DATA}_${modelName}`;
+            const timestampKey = `${STORAGE_KEYS.GRAPH_DATA_TIMESTAMP}_${modelName}`;
+
+            const cachedData = sessionStorage.getItem(cacheKey);
+            const timestamp = sessionStorage.getItem(timestampKey);
+
+            if (cachedData && isCacheValid(timestamp)) {
+                console.log(`Loading graph data for "${modelName}" from cache`);
+                return JSON.parse(cachedData);
+            }
+
+            // Clear expired cache
+            if (cachedData) {
+                sessionStorage.removeItem(cacheKey);
+                sessionStorage.removeItem(timestampKey);
+            }
+
+            return null;
+        } catch (error) {
+            console.error('Error reading cached graph data:', error);
+            return null;
+        }
+    };
+
+    // Helper function to cache graph data
+    const cacheGraphData = (modelName: string, data: GraphData): void => {
+        try {
+            const cacheKey = `${STORAGE_KEYS.GRAPH_DATA}_${modelName}`;
+            const timestampKey = `${STORAGE_KEYS.GRAPH_DATA_TIMESTAMP}_${modelName}`;
+
+            sessionStorage.setItem(cacheKey, JSON.stringify(data));
+            sessionStorage.setItem(timestampKey, Date.now().toString());
+
+            console.log(`Cached graph data for "${modelName}"`);
+        } catch (error) {
+            console.error('Error caching graph data:', error);
+        }
+    };
+
+    // Helper function to clear graph data cache for a specific model
+    const clearGraphDataCache = (modelName: string): void => {
+        try {
+            const cacheKey = `${STORAGE_KEYS.GRAPH_DATA}_${modelName}`;
+            const timestampKey = `${STORAGE_KEYS.GRAPH_DATA_TIMESTAMP}_${modelName}`;
+
+            sessionStorage.removeItem(cacheKey);
+            sessionStorage.removeItem(timestampKey);
+
+            console.log(`Cleared cache for "${modelName}"`);
+        } catch (error) {
+            console.error('Error clearing graph data cache:', error);
+        }
+    };
 
     // Responsive detection
     useEffect(() => {
@@ -186,22 +259,36 @@ const Playground: React.FC = () => {
     useEffect(() => {
         if (!currentStockName) return;
 
-        setIsLoading(true);
-        fetchGraphData(currentStockName)
-            .then((data: GraphData) => {
+        const loadGraphData = async () => {
+            try {
+                // First, try to load from cache
+                const cachedData = getCachedGraphData(currentStockName);
+
+                if (cachedData) {
+                    setGraphData(cachedData);
+                    setShowPlaceholder(false);
+                    setIsLoading(false);
+                    return;
+                }
+
+                // If no cache, fetch from API
+                setIsLoading(true);
+                const data: GraphData = await fetchGraphData(currentStockName);
+
+                // Cache the fetched data
+                cacheGraphData(currentStockName, data);
+
                 setGraphData(data);
                 setShowPlaceholder(false);
-            })
-            .catch((error) => {
-                console.error("Error fetching graph data:", error);
-                setToast({
-                    type: "error",
-                    message: "Failed to load graph data. Please try again.",
-                });
-            })
-            .finally(() => {
+            } catch (error) {
+                console.error('Error fetching graph data:', error);
+                setToast({ type: 'error', message: 'Failed to load graph data. Please try again.' });
+            } finally {
                 setIsLoading(false);
-            });
+            }
+        };
+
+        loadGraphData();
     }, [currentStockName]);
 
     // Handle visualization state changes
@@ -221,67 +308,50 @@ const Playground: React.FC = () => {
 
     const refreshSavedModels = useCallback(async () => {
         try {
-          // Fetch fresh saved models from API if you have an endpoint
-          // For now, we'll rely on session storage updates from AISearchComponent
-          const savedModels = sessionStorage.getItem("saved_models");
-          if (savedModels) {
-            const models = JSON.parse(savedModels);
-            // Update your saved models state here if you have one
-            // setSavedModels(models);
-          }
+            const savedModels = sessionStorage.getItem('saved_models');
+            if (savedModels) {
+                const models = JSON.parse(savedModels);
+                setSavedModels(models);
+            }
         } catch (error) {
-          console.error("Error refreshing saved models:", error);
+            console.error('Error refreshing saved models:', error);
         }
-      }, []);
+    }, []);
     //remove model
     const handleRemoveModel = useCallback(async (modelToRemove: Stock) => {
         try {
-            // Set loading state if you want to show loading during deletion
             setIsLoading(true);
 
-            // Call the API to retire/remove the model
             await removeSavedModel(modelToRemove.guid);
 
-            // Remove from session storage
-            const currentSavedModels = sessionStorage.getItem("saved_models");
+            // Clear the cache for this model
+            clearGraphDataCache(modelToRemove.name);
+
+            const currentSavedModels = sessionStorage.getItem('saved_models');
             if (currentSavedModels) {
                 const savedModels = JSON.parse(currentSavedModels);
                 const updatedModels = savedModels.filter((model: any) => model.guid !== modelToRemove.guid);
-                sessionStorage.setItem("saved_models", JSON.stringify(updatedModels));
+                sessionStorage.setItem('saved_models', JSON.stringify(updatedModels));
+                setSavedModels(prev => prev.filter(model => model.guid !== modelToRemove.guid));
             }
 
-            // Update local state
-            setSavedModels(prev => prev.filter(model => model.guid !== modelToRemove.guid));
-
-            // If currently visualizing this model, stop visualizing
             if (visualizingModelId === modelToRemove.name) {
                 setVisualizingModelId(null);
-                setCurrentStockName("");
+                setCurrentStockName('');
                 setGraphData(null);
                 setSelectedNode(null);
                 setSelectedEdge(null);
                 setShowPlaceholder(true);
             }
 
-            // Show success message
-            setToast({
-                type: 'success',
-                message: `${modelToRemove.name} has been removed successfully!`
-            });
-
-            // Close the confirmation popup
+            setToast({ type: 'success', message: `${modelToRemove.name} has been removed successfully!` });
             setConfirmPopup({ model: null });
-
         } catch (error) {
             console.error('Failed to remove model:', error);
-
-            // Show error message
             setToast({
                 type: 'error',
                 message: error instanceof Error ? error.message : 'Failed to remove model. Please try again.'
             });
-
-            // Close the confirmation popup anyway
             setConfirmPopup({ model: null });
         } finally {
             setIsLoading(false);
@@ -290,7 +360,7 @@ const Playground: React.FC = () => {
 
     const handleGoToDashboard = (targetTab?: "monitoring" | "visualization") => {
         if (targetTab) navigate(`/${targetTab}`);
-      };
+    };
 
     const setSelectedElement = useCallback((element: NodeData | LinkData | null) => {
         setEditedValue(null);
@@ -333,11 +403,18 @@ const Playground: React.FC = () => {
 
         setGraphData(newGraphData);
 
+        // Update cache with new data
+        if (currentStockName) {
+            cacheGraphData(currentStockName, newGraphData);
+        }
+
         if (selectedNode) {
             setSelectedNode(prev => prev ? { ...prev, value: { ...prev.value, value: newValue } } : null);
         } else {
-            // Update the main stock in graphData for the details panel
-            setGraphData(prev => prev ? { ...prev, stock: { ...prev.stock, value: { ...prev.stock.value, value: newValue } } } : null);
+            setGraphData(prev => prev ? {
+                ...prev,
+                stock: { ...prev.stock, value: { ...prev.stock.value, value: newValue } }
+            } : null);
         }
 
         setToast({ type: "success", message: "Changes have been saved!" });
@@ -1410,15 +1487,15 @@ const Playground: React.FC = () => {
                 onClose={() => setShowAISearch(false)}
                 onStockFound={(stock) => {
                     console.log("Data found:", stock);
-                  }}
+                }}
                 onAddToFavorites={() => {
                     refreshSavedModels();
-                  }}
+                }}
                 onRemoveFromFavorites={() => { }}
                 onShowToast={(type, message) => {
                     setToastSocket({ type, message });
-                  }}
-                  onGoToDashboard={handleGoToDashboard}
+                }}
+                onGoToDashboard={handleGoToDashboard}
                 currentTab="visualization"
             />
             <Dock />
