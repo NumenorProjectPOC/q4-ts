@@ -249,7 +249,7 @@ socket.onmessage = (event) => {
                 }
 
                 try {
-                    const accessToken = sessionStorage.getItem('access_token');
+                    const accessToken = localStorage.getItem('access_token');
                     const message = {
                         query: trimmedQuery,
                         token: accessToken

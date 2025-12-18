@@ -69,12 +69,12 @@ export default function LoginPage() {
         throw new Error(data.detail ?? "An unexpected error occurred. Please try again.");
       }
       const now = Date.now();
-      sessionStorage.setItem("access_token", data.access_token);
-      sessionStorage.setItem("org_id", data.org_id);
-      sessionStorage.setItem("username", data.username);
-      sessionStorage.setItem("organization_name", data.organization_name);
-      sessionStorage.setItem("role", data.role);
-      sessionStorage.setItem("login_time", now.toString());
+      localStorage.setItem("access_token", data.access_token);
+      localStorage.setItem("org_id", data.org_id);
+      localStorage.setItem("username", data.username);
+      localStorage.setItem("organization_name", data.organization_name);
+      localStorage.setItem("role", data.role);
+      localStorage.setItem("login_time", now.toString());
       navigate("/login-success");
     } catch (err: any) {
       setError(err.message);

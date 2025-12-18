@@ -120,8 +120,8 @@ export default function RightSidebar({ isOpen, onClose, customContent }: Props) 
   const [showClearCache, setShowClearCache] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
-  const username = sessionStorage.getItem("username") || "User";
-  const role = sessionStorage.getItem("role") || "Staff";
+  const username = localStorage.getItem("username") || "User";
+  const role = localStorage.getItem("role") || "Staff";
   const initials = username
     .split(" ")
     .map((w) => w[0]?.toUpperCase() || "")
@@ -136,7 +136,6 @@ export default function RightSidebar({ isOpen, onClose, customContent }: Props) 
   }, []);
 
   const handleLogout = useCallback(() => {
-    sessionStorage.clear();
     localStorage.clear();
     nav("/");
     setShowLogoutConfirm(false);
@@ -187,7 +186,7 @@ export default function RightSidebar({ isOpen, onClose, customContent }: Props) 
     // Clear specific keys from sessionStorage
     sessionStorageKeys.forEach(key => {
       try {
-        sessionStorage.removeItem(key);
+        localStorage.removeItem(key);
       } catch (error) {
         console.error(`Failed to remove sessionStorage key: ${key}`, error);
       }
@@ -196,13 +195,13 @@ export default function RightSidebar({ isOpen, onClose, customContent }: Props) 
     // Clear ALL graph data caches (for all models)
     // Pattern: visualization_graph_data_*
     try {
-      const sessionKeys = Object.keys(sessionStorage);
+      const sessionKeys = Object.keys(localStorage);
       sessionKeys.forEach(key => {
         if (
           key.startsWith('visualization_graph_data_') ||
           key.startsWith('visualization_graph_data_timestamp_')
         ) {
-          sessionStorage.removeItem(key);
+          localStorage.removeItem(key);
           console.log(`Cleared cache: ${key}`);
         }
       });

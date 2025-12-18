@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
+import {
   BarChart3,
-  Activity, 
-  Signal, 
-  Bell, 
+  Activity,
+  Signal,
+  Bell,
   Globe,
   Menu,
   ArrowRight,
@@ -19,7 +19,7 @@ import { useNavigate } from 'react-router-dom';
 export default function Dashboard() {
   const { isDarkMode } = useTheme();
   const navigate = useNavigate();
-  
+
   // Mobile responsive states
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
@@ -79,7 +79,7 @@ export default function Dashboard() {
       subtitle: 'Smart Notifications',
       icon: Bell,
       color: 'orange',
-      path: '/alerts',
+      path: '/alert',
       stats: { value: '0', label: 'Active Alerts' },
       features: ['Email Alerts', 'SMS', 'Real-time'],
       description: 'Configure intelligent alerts for stock price changes, market signals, and threshold breaches.'
@@ -92,27 +92,27 @@ export default function Dashboard() {
 
   return (
     <div className={`h-screen flex flex-col transition-all duration-500 font-inter antialiased relative overflow-hidden ${isDarkMode
-        ? 'bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white'
-        : 'bg-gradient-to-br from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
+      ? 'bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white'
+      : 'bg-gradient-to-br from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
       }`}>
 
       {/* Enhanced Professional Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className={`absolute -top-40 -right-40 w-96 h-96 rounded-full opacity-5 blur-3xl ${isDarkMode
-            ? 'bg-gradient-to-br from-red-500 to-neutral-600'
-            : 'bg-gradient-to-br from-red-400 to-neutral-400'
+          ? 'bg-gradient-to-br from-red-500 to-neutral-600'
+          : 'bg-gradient-to-br from-red-400 to-neutral-400'
           }`} />
         <div className={`absolute -bottom-40 -left-40 w-96 h-96 rounded-full opacity-5 blur-3xl ${isDarkMode
-            ? 'bg-gradient-to-tr from-neutral-600 to-red-500'
-            : 'bg-gradient-to-tr from-neutral-400 to-red-400'
+          ? 'bg-gradient-to-tr from-neutral-600 to-red-500'
+          : 'bg-gradient-to-tr from-neutral-400 to-red-400'
           }`} />
       </div>
 
       {/* MOBILE MINIMAL HEADER */}
       {isMobile ? (
         <header className={`flex items-center justify-between px-4 h-16 backdrop-blur-xl shadow-sm border-b flex-shrink-0 z-30 transition-all duration-500 ${isDarkMode
-            ? 'bg-slate-900/90 border-neutral-700/30'
-            : 'bg-white/90 border-neutral-200/60'
+          ? 'bg-slate-900/90 border-neutral-700/30'
+          : 'bg-white/90 border-neutral-200/60'
           }`}>
           {/* Q Logo */}
           <motion.div
@@ -137,8 +137,8 @@ export default function Dashboard() {
             <motion.button
               onClick={() => setIsPanelOpen(!isPanelOpen)}
               className={`rounded-lg p-2.5 transition-all duration-200 shadow-sm border backdrop-blur-sm ${isDarkMode
-                  ? 'text-white/80 hover:text-white hover:bg-white/10 bg-white/5 border-white/20'
-                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80 bg-white/60 border-neutral-200/60'
+                ? 'text-white/80 hover:text-white hover:bg-white/10 bg-white/5 border-white/20'
+                : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80 bg-white/60 border-neutral-200/60'
                 }`}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -150,8 +150,8 @@ export default function Dashboard() {
       ) : (
         /* DESKTOP HEADER */
         <header className={`flex items-center justify-between px-4 sm:px-8 lg:px-12 h-20 sm:h-24 backdrop-blur-xl shadow-sm border-b flex-shrink-0 z-30 transition-all duration-500 ${isDarkMode
-            ? 'bg-slate-900/90 border-neutral-700/30'
-            : 'bg-white/90 border-neutral-200/60'
+          ? 'bg-slate-900/90 border-neutral-700/30'
+          : 'bg-white/90 border-neutral-200/60'
           }`}>
           <motion.div
             className="flex items-center space-x-3 sm:space-x-5"
@@ -184,8 +184,8 @@ export default function Dashboard() {
           <div className="flex items-center space-x-3">
             {/* Live Connection Status */}
             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 ${isDarkMode
-                ? 'bg-white/5 text-emerald-400 border border-white/20'
-                : 'bg-white/60 text-emerald-700 border border-neutral-200/60'
+              ? 'bg-white/5 text-emerald-400 border border-white/20'
+              : 'bg-white/60 text-emerald-700 border border-neutral-200/60'
               }`}>
               <motion.div
                 className="w-1.5 h-1.5 bg-emerald-500 rounded-full"
@@ -205,8 +205,8 @@ export default function Dashboard() {
             <motion.button
               onClick={() => setIsPanelOpen(!isPanelOpen)}
               className={`rounded-lg sm:rounded-xl p-2 sm:p-3 transition-all duration-200 shadow-sm border backdrop-blur-sm ${isDarkMode
-                  ? 'text-white/80 hover:text-white hover:bg-white/10 bg-white/5 border-white/20'
-                  : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80 bg-white/60 border-neutral-200/60'
+                ? 'text-white/80 hover:text-white hover:bg-white/10 bg-white/5 border-white/20'
+                : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80 bg-white/60 border-neutral-200/60'
                 }`}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -232,8 +232,8 @@ export default function Dashboard() {
               >
                 <div className="text-center space-y-3">
                   <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto ${isDarkMode
-                      ? 'bg-red-500/20'
-                      : 'bg-gradient-to-tr from-red-400/20 to-red-500/20'
+                    ? 'bg-red-500/20'
+                    : 'bg-gradient-to-tr from-red-400/20 to-red-500/20'
                     }`}>
                     <Globe className={`w-8 h-8 ${isDarkMode ? 'text-red-400' : 'text-red-600'
                       }`} />
@@ -264,8 +264,8 @@ export default function Dashboard() {
               transition={{ duration: 0.6 }}
             >
               <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto ${isDarkMode
-                  ? 'bg-red-500/20'
-                  : 'bg-gradient-to-tr from-red-400/20 to-red-500/20'
+                ? 'bg-red-500/20'
+                : 'bg-gradient-to-tr from-red-400/20 to-red-500/20'
                 }`}>
                 <Globe className={`w-10 h-10 ${isDarkMode ? 'text-red-400' : 'text-red-600'
                   }`} />
@@ -289,14 +289,14 @@ export default function Dashboard() {
           <div className={`${isMobile ? 'space-y-4' : 'grid grid-cols-1 md:grid-cols-2 gap-6 w-full'}`}>
             {dashboardSections.map((section, index) => {
               const IconComponent = section.icon;
-              
+
               return (
                 <motion.div
                   key={section.id}
                   onClick={() => handleSectionClick(section.path)}
                   className={`group cursor-pointer rounded-2xl sm:rounded-3xl border shadow-lg hover:shadow-2xl backdrop-blur-xl overflow-hidden transition-all duration-300 hover:-translate-y-2 ${isDarkMode
-                      ? 'border-neutral-700/50 bg-slate-900/60 hover:bg-slate-900/80'
-                      : 'border-neutral-200/60 bg-white/95 hover:bg-white hover:shadow-xl'
+                    ? 'border-neutral-700/50 bg-slate-900/60 hover:bg-slate-900/80'
+                    : 'border-neutral-200/60 bg-white/95 hover:bg-white hover:shadow-xl'
                     } ${isMobile ? 'h-32' : 'h-full max-w-[500px] mx-auto'}`}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -306,31 +306,29 @@ export default function Dashboard() {
                 >
                   {/* Background Gradient */}
                   <div className={`absolute inset-0 bg-gradient-to-br from-${section.color}-500/10 to-${section.color}-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
-                  
+
                   <div className={`relative ${isMobile ? 'p-4 h-full flex items-center' : 'p-6 h-full flex flex-col justify-between'}`}
-                       style={!isMobile ? { minHeight: '220px', maxHeight: '220px' } : {}}>
-                    
+                    style={!isMobile ? { minHeight: '220px', maxHeight: '220px' } : {}}>
+
                     {isMobile ? (
                       /* MOBILE CARD LAYOUT - UNCHANGED */
                       <>
                         <div className="flex items-center space-x-4">
-                          <div className={`p-3 rounded-xl shadow-lg flex-shrink-0 ${
-                            isDarkMode 
+                          <div className={`p-3 rounded-xl shadow-lg flex-shrink-0 ${isDarkMode
                               ? section.color === 'red' ? 'bg-red-500/20' :
                                 section.color === 'blue' ? 'bg-blue-500/20' :
-                                section.color === 'green' ? 'bg-green-500/20' :
-                                'bg-orange-500/20'
+                                  section.color === 'green' ? 'bg-green-500/20' :
+                                    'bg-orange-500/20'
                               : section.color === 'red' ? 'bg-gradient-to-r from-red-400/20 to-red-500/20' :
                                 section.color === 'blue' ? 'bg-gradient-to-r from-blue-400/20 to-blue-500/20' :
-                                section.color === 'green' ? 'bg-gradient-to-r from-green-400/20 to-green-500/20' :
-                                'bg-gradient-to-r from-orange-400/20 to-orange-500/20'
-                          }`}>
-                            <IconComponent className={`w-6 h-6 ${
-                              section.color === 'red' ? 'text-red-500' :
-                              section.color === 'blue' ? 'text-blue-500' :
-                              section.color === 'green' ? 'text-green-500' :
-                              'text-orange-500'
-                            }`} />
+                                  section.color === 'green' ? 'bg-gradient-to-r from-green-400/20 to-green-500/20' :
+                                    'bg-gradient-to-r from-orange-400/20 to-orange-500/20'
+                            }`}>
+                            <IconComponent className={`w-6 h-6 ${section.color === 'red' ? 'text-red-500' :
+                                section.color === 'blue' ? 'text-blue-500' :
+                                  section.color === 'green' ? 'text-green-500' :
+                                    'text-orange-500'
+                              }`} />
                           </div>
                           <div className="flex-1 min-w-0">
                             <h3 className={`text-lg font-bold tracking-tight mb-1 ${isDarkMode ? 'text-white' : 'text-neutral-900'
@@ -345,12 +343,11 @@ export default function Dashboard() {
                         </div>
                         <div className="flex items-center flex-shrink-0">
                           <div className="text-right mr-3">
-                            <div className={`text-xl font-bold ${
-                              section.color === 'red' ? 'text-red-500' :
-                              section.color === 'blue' ? 'text-blue-500' :
-                              section.color === 'green' ? 'text-green-500' :
-                              'text-orange-500'
-                            }`}>
+                            <div className={`text-xl font-bold ${section.color === 'red' ? 'text-red-500' :
+                                section.color === 'blue' ? 'text-blue-500' :
+                                  section.color === 'green' ? 'text-green-500' :
+                                    'text-orange-500'
+                              }`}>
                               {section.stats.value}
                             </div>
                             <div className={`text-xs font-medium ${isDarkMode ? 'text-white/60' : 'text-neutral-500'
@@ -368,31 +365,28 @@ export default function Dashboard() {
                         <div>
                           {/* Header with reduced spacing */}
                           <div className="flex items-center justify-between mb-4">
-                            <div className={`p-3 rounded-xl shadow-lg ${
-                              isDarkMode 
+                            <div className={`p-3 rounded-xl shadow-lg ${isDarkMode
                                 ? section.color === 'red' ? 'bg-red-500/20' :
                                   section.color === 'blue' ? 'bg-blue-500/20' :
-                                  section.color === 'green' ? 'bg-green-500/20' :
-                                  'bg-orange-500/20'
+                                    section.color === 'green' ? 'bg-green-500/20' :
+                                      'bg-orange-500/20'
                                 : section.color === 'red' ? 'bg-gradient-to-r from-red-400/20 to-red-500/20' :
                                   section.color === 'blue' ? 'bg-gradient-to-r from-blue-400/20 to-blue-500/20' :
-                                  section.color === 'green' ? 'bg-gradient-to-r from-green-400/20 to-green-500/20' :
-                                  'bg-gradient-to-r from-orange-400/20 to-orange-500/20'
-                            }`}>
-                              <IconComponent className={`w-7 h-7 ${
-                                section.color === 'red' ? 'text-red-500' :
-                                section.color === 'blue' ? 'text-blue-500' :
-                                section.color === 'green' ? 'text-green-500' :
-                                'text-orange-500'
-                              }`} />
+                                    section.color === 'green' ? 'bg-gradient-to-r from-green-400/20 to-green-500/20' :
+                                      'bg-gradient-to-r from-orange-400/20 to-orange-500/20'
+                              }`}>
+                              <IconComponent className={`w-7 h-7 ${section.color === 'red' ? 'text-red-500' :
+                                  section.color === 'blue' ? 'text-blue-500' :
+                                    section.color === 'green' ? 'text-green-500' :
+                                      'text-orange-500'
+                                }`} />
                             </div>
                             <div className="text-right">
-                              <div className={`text-2xl font-bold ${
-                                section.color === 'red' ? 'text-red-500' :
-                                section.color === 'blue' ? 'text-blue-500' :
-                                section.color === 'green' ? 'text-green-500' :
-                                'text-orange-500'
-                              }`}>
+                              <div className={`text-2xl font-bold ${section.color === 'red' ? 'text-red-500' :
+                                  section.color === 'blue' ? 'text-blue-500' :
+                                    section.color === 'green' ? 'text-green-500' :
+                                      'text-orange-500'
+                                }`}>
                                 {section.stats.value}
                               </div>
                               <div className={`text-sm font-medium ${isDarkMode ? 'text-white/60' : 'text-neutral-500'
@@ -420,8 +414,8 @@ export default function Dashboard() {
                               <span
                                 key={featureIndex}
                                 className={`px-2.5 py-1 rounded-full text-xs font-bold ${isDarkMode
-                                    ? 'bg-white/10 text-white/80'
-                                    : 'bg-neutral-100/80 text-neutral-700'
+                                  ? 'bg-white/10 text-white/80'
+                                  : 'bg-neutral-100/80 text-neutral-700'
                                   }`}
                               >
                                 {feature}

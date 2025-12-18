@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import Dock from "../components/ui/Dock";
 import ThemeToggle from "../components/ui/ThemeToggle";
 import { useTheme } from '../context/ThemeContext';
+import Toast from "../components/ui/Toast";
 import {
   fetchFavoriteStocks,
   updateAlertStatus,
@@ -27,6 +28,9 @@ export default function AlertPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAlert, setEditingAlert] = useState<Alert | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+
+  const [isSaving, setIsSaving] = useState(false); // For button loading
+  const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // Mobile responsive states
   const [isMobile, setIsMobile] = useState(false);
@@ -53,6 +57,17 @@ export default function AlertPage() {
 
         const data = await fetchFavoriteStocks(true);
         setAlerts(data);
+
+        if (data) {
+          const cacheData = data.map(item => ({
+            guid: item.fav_stocks_guid,
+            label: item.stock_name,
+            name: item.stock_name
+          }));
+
+          localStorage.setItem('favorite_stocks', JSON.stringify(cacheData));
+        }
+
       } catch (err) {
         console.error("Error loading alerts:", err);
         setError(err instanceof Error ? err.message : "Failed to load alerts");
@@ -70,11 +85,12 @@ export default function AlertPage() {
   };
 
   const handleSaveAlert = async (alertData: Partial<Alert>) => {
+    setIsSaving(true);
+
     try {
-      // Determine GUID for setStockAlert and validate
       const guid = editingAlert ? editingAlert.fav_stocks_guid : alertData.fav_stocks_guid;
       if (!guid) {
-        setError('Stock GUID is required to create/update alert');
+        setError("Stock GUID is required to create/update alert");
         return;
       }
 
@@ -82,24 +98,37 @@ export default function AlertPage() {
         guid,
         alertData.upper_threshold ?? 0,
         alertData.lower_threshold ?? 0,
-        alertData.last_alert_frequency ?? 'daily',
+        alertData.last_alert_frequency ?? "daily",
         alertData.email_alert ?? [],
         alertData.sms_alert ?? []
       );
 
-      // Refresh alerts data
       const data = await fetchFavoriteStocks(true);
       setAlerts(data);
 
-      // Refresh monitoring data for main page
-      sessionStorage.removeItem('monitoring_data');
-      sessionStorage.removeItem('monitoring_last_updated');
+      if (data) {
+        const cacheData = data.map(item => ({
+          guid: item.fav_stocks_guid,
+          label: item.stock_name,
+          name: item.stock_name
+        }));
+        localStorage.setItem("favorite_stocks", JSON.stringify(cacheData));
+      }
 
+      localStorage.removeItem("monitoring_data");
+      localStorage.removeItem("monitoring_last_updated");
+
+      setIsModalOpen(false);
+      setToast({
+        type: "success",
+        message: editingAlert ? "Alert updated successfully!" : "Alert created successfully!",
+      });
     } catch (err) {
       console.error("Error saving alert:", err);
-      setError('Failed to save alert');
+      setToast({ type: "error", message: "Failed to save alert. Please try again." });
+    } finally {
+      setIsSaving(false);
     }
-    setIsModalOpen(false);
   };
 
 
@@ -854,9 +883,18 @@ export default function AlertPage() {
           alert={editingAlert}
           onClose={() => setIsModalOpen(false)}
           onSave={handleSaveAlert}
+          isSaving={isSaving}
         />
       )}
       <Dock />
+
+      {toast && (
+        <Toast
+          type={toast.type}
+          message={toast.message}
+          onClose={() => setToast(null)}
+        />
+      )}
 
       {/* Enhanced Custom Scrollbar Styles */}
       <style>{`
@@ -891,11 +929,13 @@ export default function AlertPage() {
 function AlertModal({
   alert,
   onClose,
-  onSave
+  onSave,
+  isSaving
 }: {
   alert: Alert | null;
   onClose: () => void;
   onSave: (data: Partial<Alert>) => void;
+  isSaving: boolean;
 }) {
   const { isDarkMode } = useTheme();
   const [availableStocks, setAvailableStocks] = useState<{ guid: string, label: string }[]>([]);
@@ -913,7 +953,7 @@ function AlertModal({
   // Load available stocks from session storage
   useEffect(() => {
     try {
-      const favoriteStocks = sessionStorage.getItem("favorite_stocks");
+      const favoriteStocks = localStorage.getItem("favorite_stocks");
       if (favoriteStocks) {
         const stocks = JSON.parse(favoriteStocks);
         const stockOptions = stocks.map((stock: any) => ({
@@ -972,6 +1012,9 @@ function AlertModal({
     onSave(processedData);
   };
 
+  // Helper class for options to ensure they have solid background
+  const optionClass = isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-neutral-900';
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <motion.div
@@ -1029,11 +1072,11 @@ function AlertModal({
                 } focus:outline-none focus:ring-2 focus:ring-red-500/20`}
               required
             >
-              <option value="" disabled>
+              <option value="" disabled className={optionClass}>
                 {availableStocks.length > 0 ? 'Select a stock...' : 'No stocks available'}
               </option>
               {availableStocks.map((stock) => (
-                <option key={stock.guid} value={stock.guid}>
+                <option key={stock.guid} value={stock.guid} className={optionClass}>
                   {stock.label}
                 </option>
               ))}
@@ -1134,10 +1177,11 @@ function AlertModal({
                 : 'bg-white/60 border-neutral-200/60 text-neutral-800 focus:bg-white/80 focus:border-neutral-300/80'
                 } focus:outline-none focus:ring-2 focus:ring-red-500/20`}
             >
-              <option value="immediate">Immediate</option>
-              <option value="hourly">Hourly</option>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
+              {/* Applied optionClass here as well */}
+              <option value="immediate" className={optionClass}>Immediate</option>
+              <option value="hourly" className={optionClass}>Hourly</option>
+              <option value="daily" className={optionClass}>Daily</option>
+              <option value="weekly" className={optionClass}>Weekly</option>
             </select>
           </div>
 
@@ -1145,6 +1189,7 @@ function AlertModal({
             <button
               type="button"
               onClick={onClose}
+              disabled={isSaving}
               className={`flex-1 px-4 py-3 rounded-xl font-medium transition-all ${isDarkMode
                 ? 'bg-white/10 text-white hover:bg-white/20'
                 : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
@@ -1154,14 +1199,23 @@ function AlertModal({
             </button>
             <button
               type="submit"
-              disabled={availableStocks.length === 0}
-              className={`flex-1 px-4 py-3 rounded-xl font-bold transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed ${isDarkMode
-                ? 'bg-red-800 text-white hover:bg-red-700'
-                : 'bg-neutral-800 text-white hover:bg-neutral-700'
+              disabled={availableStocks.length === 0 || isSaving}
+              aria-busy={isSaving}
+              className={`flex-1 px-4 py-3 rounded-xl font-bold transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${isDarkMode
+                  ? "bg-red-800 text-white hover:bg-red-700"
+                  : "bg-neutral-800 text-white hover:bg-neutral-700"
                 }`}
             >
-              {alert ? 'Update Alert' : 'Create Alert'}
+              {isSaving ? (
+                <>
+                  <Loader className="w-4 h-4 animate-spin" />
+                  <span>{alert ? "Updating..." : "Creating..."}</span>
+                </>
+              ) : (
+                <span>{alert ? "Update Alert" : "Create Alert"}</span>
+              )}
             </button>
+
           </div>
         </form>
       </motion.div>

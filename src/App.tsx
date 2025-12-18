@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext'; // Add this import
 import Login from './pages/LoginPage';
 import LandingPage from './pages/LandingPage';
@@ -17,7 +17,6 @@ import DashboardHome from './pages/Dashboard';
 import { AIWebSocketProvider } from './context/AIWebSocketContext';
 import WebSocketNotifications from './components/ui/WebSocketNotification';
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import LoginSuccessAnimation from './components/ui/LoginSuccessAnimation';
 
 const stepRoutes = ['/regions', '/frameworks', '/domains', '/stocks'];
@@ -50,7 +49,7 @@ class ErrorBoundary extends React.Component<
           <p className="text-red-600 dark:text-red-300 text-sm">
             {this.state.error?.message || 'An unexpected error occurred'}
           </p>
-          <button 
+          <button
             className="mt-2 px-4 py-2 bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600 text-white rounded transition-colors"
             onClick={() => this.setState({ hasError: false, error: undefined })}
           >
@@ -71,7 +70,7 @@ const ProtectedRoute: React.FC<{ element: React.ReactNode }> = ({ element }) => 
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = sessionStorage.getItem('access_token');
+    const token = localStorage.getItem('access_token');
     if (!token) {
       navigate('/login');
     }
@@ -93,17 +92,17 @@ const AuthenticatedApp: React.FC<{ showStepProgress: boolean }> = ({ showStepPro
   // Monitor session expiration for authenticated users
   useEffect(() => {
     const interval = setInterval(() => {
-      const token = sessionStorage.getItem('access_token');
-      const loginTime = sessionStorage.getItem('login_time');
+      const token = localStorage.getItem('access_token');
+      const loginTime = localStorage.getItem('login_time');
 
       if (token && loginTime) {
         const loginTimestamp = parseInt(loginTime, 10);
         const now = Date.now();
-        const twoHours = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
+        const twoHours = 2 * 60 * 60 * 1000;
 
         if (now - loginTimestamp > twoHours) {
           console.log('Session expired. Logging out...');
-          sessionStorage.clear();
+          localStorage.clear();
           navigate('/login');
         }
       } else {
@@ -121,10 +120,11 @@ const AuthenticatedApp: React.FC<{ showStepProgress: boolean }> = ({ showStepPro
     <AIWebSocketProvider wsUrl={wsUrl}>
       <ErrorBoundary>
         {showStepProgress && <StepProgress />}
-        
+
         {/* Protected Routes with WebSocket connection available */}
         <Routes>
-        <Route path="/login-success" element={<ProtectedRoute element={<LoginSuccessAnimation />} />} />
+          <Route path="/" element={<Navigate to="/home" replace />} />
+          <Route path="/login-success" element={<ProtectedRoute element={<LoginSuccessAnimation />} />} />
           <Route path="/regions" element={<ProtectedRoute element={<RegionSelectionPage />} />} />
           <Route path="/frameworks" element={<ProtectedRoute element={<FrameworkSelectionPage />} />} />
           <Route path="/domains" element={<ProtectedRoute element={<DomainSelectionPage />} />} />
@@ -135,6 +135,7 @@ const AuthenticatedApp: React.FC<{ showStepProgress: boolean }> = ({ showStepPro
           <Route path="/alert" element={<ProtectedRoute element={<AlertPage />} />} />
           <Route path="/signal" element={<ProtectedRoute element={<SignalTrackerPage />} />} />
           <Route path="/settings" element={<ProtectedRoute element={<SettingsPage />} />} />
+          <Route path="*" element={<Navigate to="/home" replace />} />
         </Routes>
 
         {/* WebSocket Notifications - Only available in authenticated context */}
@@ -161,7 +162,7 @@ const App: React.FC = () => {
     type: 'success' | 'error' | 'warning';
     message: string;
   } | null>(null);
-  
+
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null); // null = checking
   const location = useLocation();
   const navigate = useNavigate();
@@ -170,17 +171,17 @@ const App: React.FC = () => {
   // Check authentication status on app load and route changes
   useEffect(() => {
     const checkAuthentication = () => {
-      const token = sessionStorage.getItem('access_token');
-      const loginTime = sessionStorage.getItem('login_time');
-      
+      const token = localStorage.getItem('access_token');
+      const loginTime = localStorage.getItem('login_time');
+
       if (token && loginTime) {
         const loginTimestamp = parseInt(loginTime, 10);
         const now = Date.now();
         const twoHours = 2 * 60 * 60 * 1000;
-        
+
         if (now - loginTimestamp > twoHours) {
           // Session expired
-          sessionStorage.clear();
+          localStorage.clear();
           setIsAuthenticated(false);
           setToast({
             type: 'warning',
@@ -200,13 +201,44 @@ const App: React.FC = () => {
     checkAuthentication();
   }, [location.pathname, navigate]);
 
+ useEffect(() => {
+    const syncAuth = (event: StorageEvent) => {
+      // Check specifically for access_token changes
+      if (event.key === 'access_token') {
+        
+        // Scenario A: User logged OUT in another tab (newValue is null)
+        if (event.newValue === null) {
+          setIsAuthenticated(false);
+          navigate('/login');
+        } 
+        
+        // Scenario B: User logged IN in another tab (newValue exists)
+        // We check !isAuthenticated to prevent unnecessary updates if already logged in
+        else if (event.newValue && !isAuthenticated) {
+          // Verify we have the login_time to ensure the session is fully set
+          const loginTime = localStorage.getItem('login_time');
+          
+          if (loginTime) {
+             console.log("Login detected from another tab. Syncing...");
+             setIsAuthenticated(true);
+             // The main render logic below will pick up 'isAuthenticated: true' 
+             // and the AuthenticatedApp will handle the redirect to /home
+          }
+        }
+      }
+    };
+
+    window.addEventListener('storage', syncAuth);
+    return () => window.removeEventListener('storage', syncAuth);
+  }, [navigate, isAuthenticated]);
+
   // Show loading screen while checking authentication
   if (isAuthenticated === null) {
     return <LoadingScreen />;
   }
 
   // If user is authenticated and not on public routes, show authenticated app
-  if (isAuthenticated && !['/landing', '/login'].includes(location.pathname)) {
+  if (isAuthenticated) {
     return (
       <>
         <AuthenticatedApp showStepProgress={showStepProgress} />
@@ -229,9 +261,9 @@ const App: React.FC = () => {
         <Route path="/" element={<LandingPage />} />
         <Route path="/landing" element={<LandingPage />} />
         <Route path="/login" element={<Login />} />
-        {/* Redirect all other routes to landing if not authenticated */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
-      
+
       {toast && (
         <Toast
           type={toast.type}

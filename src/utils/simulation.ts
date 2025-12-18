@@ -1,247 +1,179 @@
-// Enhanced simulation.ts - matches Java simulation logic
-import { GraphData, NodeData } from "../services/types";
+// utils/simulation.ts
+import { GraphData } from "../services/types";
 
-interface SimulationNode {
-  id: string;
-  name: string;
-  value: number;
-  unit: string;
-}
+type TimeUnit = "hours" | "days" | "weeks" | "months" | "years";
 
-interface SimulationEffect {
-  nodeId: string;
-  nodeName: string;
-  impact: "positive" | "negative" | "neutral";
+type Relation = {
+  fromId: string;
+  toId: string;
+  sign: -1 | 0 | 1;
   weight: number;
-}
+  flow: number; // "time constant" in same chosen unit (acts like delay)
+};
 
-interface SimulationProcess {
-  name: string;
-  flow: number; // duration of one full cycle in seconds
-  effects: SimulationEffect[];
-}
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
-export function simulateStockGrowth(
-  graph: GraphData,
-  durationInSeconds: number,
-  startingValues: Record<string, number>
-): Record<string, number> {
-  console.log("Starting enhanced simulation...");
-  console.log("Duration:", durationInSeconds, "seconds");
-  console.log("Starting values:", startingValues);
+const stepsPerUnit = (unit: TimeUnit) => {
+  switch (unit) {
+    case "years": return 12;   // monthly steps
+    case "months": return 4;   // weekly steps
+    case "weeks": return 7;    // daily steps
+    case "days": return 24;    // hourly steps
+    case "hours": return 60;   // minute steps
+    default: return 12;
+  }
+};
 
-  // Convert GraphData to simulation format
-  const nodes: SimulationNode[] = [];
-  
-  // Add main stock
-  nodes.push({
-    id: graph.stock.guid,
-    name: graph.stock.name || "main_stock",
-    value: startingValues[graph.stock.guid] || graph.stock.value.value,
-    unit: graph.stock.value.unit
+// Heuristic: keep weights stable even if backend sends "10 / 100 / 1000" style weights.
+const normalizeWeight = (w: number) => {
+  const a = Math.abs(w);
+  if (a >= 100) return w / 1000; // 100 -> 0.1
+  if (a >= 10) return w / 100;   // 10  -> 0.1
+  if (a > 1) return w / 10;      // 2   -> 0.2
+  return w;                       // 0.5 stays 0.5
+};
+
+function buildIdResolvers(graph: GraphData) {
+  const nameToId = new Map<string, string>();
+  const ids = new Set<string>();
+
+  ids.add(graph.stock.guid);
+  nameToId.set(graph.stock.name, graph.stock.guid);
+
+  graph.nodes.forEach((n) => {
+    ids.add(n.id);
+    nameToId.set(n.name, n.id);
   });
 
-  // Add related nodes
-  graph.nodes.forEach(node => {
-    nodes.push({
-      id: node.id,
-      name: node.name,
-      value: startingValues[node.id] || node.value.value,
-      unit: node.value.unit
+  const resolveId = (key?: string | null) => {
+    if (!key) return undefined;
+    if (ids.has(key)) return key;
+    const direct = nameToId.get(key);
+    if (direct) return direct;
+
+    // case-insensitive fallback
+    const lower = key.toLowerCase();
+    for (const [name, id] of nameToId.entries()) {
+      if (name.toLowerCase() === lower) return id;
+    }
+    return undefined;
+  };
+
+  return { resolveId, ids };
+}
+
+function extractRelations(graph: GraphData): Relation[] {
+  const { resolveId } = buildIdResolvers(graph);
+  const rels: Relation[] = [];
+
+  (graph.edges ?? []).forEach((edge) => {
+    (edge.relationshipList ?? []).forEach((r) => {
+      const fromId = resolveId((r as any).fromName);
+      const toId = resolveId((r as any).toName);
+      if (!fromId || !toId || fromId === toId) return;
+
+      const impact = (r as any).impact as "positive" | "negative" | "neutral" | undefined;
+      const sign: -1 | 0 | 1 =
+        impact === "negative" ? -1 : impact === "positive" ? 1 : 0;
+
+      let weight = Number((r as any).weight ?? 0);
+      let flow = Number((r as any).flow ?? 1);
+
+      if (!Number.isFinite(weight)) weight = 0;
+      if (!Number.isFinite(flow) || flow <= 0) flow = 1;
+
+      weight = normalizeWeight(weight);
+
+      rels.push({ fromId, toId, sign, weight, flow });
     });
   });
 
-  // Create processes from relationships
-  const processes: SimulationProcess[] = [];
-  
-  // Process relationships from edges
-  if (graph.edges && graph.edges.length > 0) {
-    graph.edges.forEach((edge, index) => {
-      if (edge.relationshipList && edge.relationshipList.length > 0) {
-        edge.relationshipList.forEach((rel, relIndex) => {
-          const processName = `Process_${index}_${relIndex}`;
-          const flow = rel.flow || 12.0; // default flow time
-          
-          const process: SimulationProcess = {
-            name: processName,
-            flow: flow,
-            effects: []
-          };
+  return rels;
+}
 
-          // From node (source) - negative effect (consumption)
-          if (rel.fromName) {
-            const fromNode = nodes.find(n => n.name === rel.fromName || n.id === rel.fromName);
-            if (fromNode) {
-              process.effects.push({
-                nodeId: fromNode.id,
-                nodeName: fromNode.name,
-                impact: "negative",
-                weight: rel.weight || 1.0
-              });
-            }
-          }
+function buildBaseValues(graph: GraphData, startingValues: Record<string, number>) {
+  const base: Record<string, number> = {};
+  base[graph.stock.guid] = startingValues[graph.stock.guid] ?? graph.stock.value.value;
 
-          // To node (target) - positive effect (production)
-          if (rel.toName) {
-            const toNode = nodes.find(n => n.name === rel.toName || n.id === rel.toName);
-            if (toNode) {
-              process.effects.push({
-                nodeId: toNode.id,
-                nodeName: toNode.name,
-                impact: rel.impact === "negative" ? "negative" : "positive",
-                weight: rel.weight || 1.0
-              });
-            }
-          }
+  graph.nodes.forEach((n) => {
+    base[n.id] = startingValues[n.id] ?? n.value.value;
+  });
 
-          if (process.effects.length > 0) {
-            processes.push(process);
-          }
-        });
-      }
-    });
+  // If center node is not included inside graph.nodes (some models do this), still ensure it exists
+  if (base[graph.stock.guid] == null) {
+    base[graph.stock.guid] = graph.stock.value.value;
   }
 
-  // If no processes from edges, create from node relationships (fallback)
-  if (processes.length === 0) {
-    graph.nodes.forEach(node => {
-      if (node.relationship) {
-        const rel = node.relationship;
-        const process: SimulationProcess = {
-          name: `${node.name}_process`,
-          flow: rel.flow || 12.0,
-          effects: [{
-            nodeId: node.id,
-            nodeName: node.name,
-            impact: rel.impact,
-            weight: rel.weight
-          }]
-        };
-        processes.push(process);
-      }
-    });
-  }
-
-  console.log("Created processes:", processes);
-
-  // Run simulation using the same logic as Java
-  return runSimulation(nodes, processes, durationInSeconds);
+  return base;
 }
 
-function runSimulation(
-  nodes: SimulationNode[],
-  processes: SimulationProcess[],
-  totalTime: number
-): Record<string, number> {
-  console.log("Running simulation with processes:", processes.length);
-  
-  const timeStep = 1.0; // 1 second steps
-  const nodeMap = new Map<string, SimulationNode>();
-  
-  // Initialize node map
-  nodes.forEach(node => {
-    nodeMap.set(node.id, { ...node });
-  });
-
-  // Main simulation loop
-  for (let currentTime = 0; currentTime < totalTime; currentTime += timeStep) {
-    const deltas = new Map<string, number>();
-    
-    // Initialize deltas
-    nodes.forEach(node => {
-      deltas.set(node.id, 0);
-    });
-
-    // Process each process
-    processes.forEach(process => {
-      let maxPossibleRate = 1.0;
-
-      // Check resource constraints for negative effects (consumption)
-      for (const effect of process.effects) {
-        if (effect.impact === "negative") {
-          const node = nodeMap.get(effect.nodeId);
-          if (!node) continue;
-
-          const amountNeededPerSec = effect.weight / process.flow;
-
-          // If we need resources but have none, rate is 0
-          if (amountNeededPerSec > 0 && node.value <= 0) {
-            maxPossibleRate = 0;
-            break;
-          }
-
-          // If we don't have enough resources for full time step
-          if (amountNeededPerSec > 0) {
-            const secondsOfResource = node.value / amountNeededPerSec;
-            if (secondsOfResource < timeStep) {
-              maxPossibleRate = Math.min(maxPossibleRate, secondsOfResource / timeStep);
-            }
-          }
-        }
-      }
-
-      // If no resources available, skip this process
-      if (maxPossibleRate <= 0) {
-        return;
-      }
-
-      // Apply effects
-      process.effects.forEach(effect => {
-        const changePerSec = effect.weight / process.flow;
-        const changeThisStep = changePerSec * timeStep * maxPossibleRate;
-        const currentDelta = deltas.get(effect.nodeId) || 0;
-
-        if (effect.impact === "negative") {
-          deltas.set(effect.nodeId, currentDelta - changeThisStep);
-        } else if (effect.impact === "positive") {
-          deltas.set(effect.nodeId, currentDelta + changeThisStep);
-        }
-      });
-    });
-
-    // Apply deltas to nodes
-    nodes.forEach(node => {
-      const delta = deltas.get(node.id) || 0;
-      const nodeRef = nodeMap.get(node.id);
-      if (nodeRef) {
-        nodeRef.value += delta;
-        // Prevent negative values
-        if (nodeRef.value < 0) {
-          nodeRef.value = 0;
-        }
-      }
-    });
-  }
-
-  // Convert back to result format
-  const result: Record<string, number> = {};
-  nodeMap.forEach((node, id) => {
-    result[id] = Math.max(0, Math.round(node.value * 100) / 100); // Round to 2 decimals
-  });
-
-  console.log("Simulation completed. Final values:", result);
-  return result;
-}
-
-// Helper function to convert time units to seconds
-export function convertTimeToSeconds(value: number, unit: "hours" | "days" | "weeks" | "months" | "years"): number {
+// Keep this helper (you already export it)
+export function convertTimeToSeconds(value: number, unit: TimeUnit): number {
   switch (unit) {
     case "hours": return value * 3600;
     case "days": return value * 86400;
     case "weeks": return value * 604800;
-    case "months": return value * 2629746; // average seconds in a month
-    case "years": return value * 31556952; // average seconds in a year
+    case "months": return value * 2629746;
+    case "years": return value * 31556952;
     default: return 0;
   }
 }
 
-// Enhanced version that matches your front-end usage
+// ✅ Main entry used by GraphComponent
 export function enhancedSimulateStockGrowth(
   graph: GraphData,
   timeValue: number,
-  timeUnit: "hours" | "days" | "weeks" | "months" | "years",
+  timeUnit: TimeUnit,
   startingValues: Record<string, number>
 ): Record<string, number> {
-  const durationInSeconds = convertTimeToSeconds(timeValue, timeUnit);
-  return simulateStockGrowth(graph, durationInSeconds, startingValues);
+  const relations = extractRelations(graph);
+  const base = buildBaseValues(graph, startingValues);
+
+  // Start from the latest values (from startingValues)
+  let current: Record<string, number> = { ...base };
+
+  // no time => no change
+  if (!timeValue || timeValue <= 0 || relations.length === 0) {
+    return Object.fromEntries(Object.entries(current).map(([k, v]) => [k, Math.round(v * 100) / 100]));
+  }
+
+  const perUnit = stepsPerUnit(timeUnit);
+  const stepsRaw = Math.max(1, Math.round(timeValue * perUnit));
+  const steps = Math.min(240, stepsRaw); // cap for speed
+  const dt = timeValue / steps; // dt in "timeUnit"
+
+  for (let s = 0; s < steps; s++) {
+    const deltas: Record<string, number> = {};
+
+    // accumulate deltas from all edges using the CURRENT values
+    for (const rel of relations) {
+      if (rel.sign === 0 || rel.weight === 0) continue;
+
+      const src = current[rel.fromId] ?? 0;
+      const tgt = current[rel.toId] ?? 0;
+
+      // rate per unit time: (weight * source) / flow
+      const rate = (rel.sign * rel.weight * src) / Math.max(1e-6, rel.flow);
+
+      // apply for dt
+      let delta = rate * dt;
+
+      // stability clamp: max 20% change per step (prevents runaway explosions)
+      const maxDelta = Math.max(Math.abs(tgt) * 0.2, 1e-6);
+      delta = clamp(delta, -maxDelta, maxDelta);
+
+      deltas[rel.toId] = (deltas[rel.toId] ?? 0) + delta;
+    }
+
+    // apply deltas
+    for (const [id, d] of Object.entries(deltas)) {
+      const next = (current[id] ?? 0) + d;
+      current[id] = next < 0 ? 0 : next;
+    }
+  }
+
+  // round
+  const out: Record<string, number> = {};
+  for (const [id, v] of Object.entries(current)) out[id] = Math.round(v * 100) / 100;
+  return out;
 }

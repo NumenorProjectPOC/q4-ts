@@ -63,6 +63,43 @@ const STORAGE_KEYS = {
     GRAPH_DATA_TIMESTAMP: 'visualization_graph_data_timestamp'
 };
 
+// ORIGINAL (baseline) cache keys
+const ORIGINAL_KEYS = {
+    GRAPH_DATA_ORIGINAL: 'visualization_graph_data_original',
+    GRAPH_DATA_ORIGINAL_TIMESTAMP: 'visualization_graph_data_original_timestamp',
+};
+
+const getOriginalGraphData = (modelName: string): GraphData | null => {
+    try {
+        const key = `${ORIGINAL_KEYS.GRAPH_DATA_ORIGINAL}_${modelName}`;
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : null;
+    } catch {
+        return null;
+    }
+};
+
+const cacheOriginalGraphData = (modelName: string, data: GraphData): void => {
+    try {
+        const key = `${ORIGINAL_KEYS.GRAPH_DATA_ORIGINAL}_${modelName}`;
+        const tsKey = `${ORIGINAL_KEYS.GRAPH_DATA_ORIGINAL_TIMESTAMP}_${modelName}`;
+        localStorage.setItem(key, JSON.stringify(data));
+        localStorage.setItem(tsKey, Date.now().toString());
+    } catch (e) {
+        console.error("Error caching original graph data:", e);
+    }
+};
+
+const clearOriginalGraphDataCache = (modelName: string): void => {
+    try {
+        localStorage.removeItem(`${ORIGINAL_KEYS.GRAPH_DATA_ORIGINAL}_${modelName}`);
+        localStorage.removeItem(`${ORIGINAL_KEYS.GRAPH_DATA_ORIGINAL_TIMESTAMP}_${modelName}`);
+    } catch (e) {
+        console.error("Error clearing original graph data cache:", e);
+    }
+};
+
+
 const Playground: React.FC = () => {
     const { isDarkMode } = useTheme();
     const [graphData, setGraphData] = useState<GraphData | null>(null);
@@ -74,8 +111,10 @@ const Playground: React.FC = () => {
     });
     const [simulationValue, setSimulationValue] = useState<number>(0);
     const sidebarWidthRef = useRef(0);
-    const [sidebarWidth, setSidebarWidth] = useState(0);
     const sidebarRef = useRef<HTMLDivElement>(null);
+    const originalGraphDataRef = useRef<GraphData | null>(null);
+    const originalModelNameRef = useRef<string>("");
+    const [sidebarWidth, setSidebarWidth] = useState(0);
     const [isPaused, setIsPaused] = useState(false);
     const [editedValue, setEditedValue] = useState<number | string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -118,8 +157,8 @@ const Playground: React.FC = () => {
             const cacheKey = `${STORAGE_KEYS.GRAPH_DATA}_${modelName}`;
             const timestampKey = `${STORAGE_KEYS.GRAPH_DATA_TIMESTAMP}_${modelName}`;
 
-            const cachedData = sessionStorage.getItem(cacheKey);
-            const timestamp = sessionStorage.getItem(timestampKey);
+            const cachedData = localStorage.getItem(cacheKey);
+            const timestamp = localStorage.getItem(timestampKey);
 
             if (cachedData && isCacheValid(timestamp)) {
                 console.log(`Loading graph data for "${modelName}" from cache`);
@@ -128,8 +167,8 @@ const Playground: React.FC = () => {
 
             // Clear expired cache
             if (cachedData) {
-                sessionStorage.removeItem(cacheKey);
-                sessionStorage.removeItem(timestampKey);
+                localStorage.removeItem(cacheKey);
+                localStorage.removeItem(timestampKey);
             }
 
             return null;
@@ -145,8 +184,8 @@ const Playground: React.FC = () => {
             const cacheKey = `${STORAGE_KEYS.GRAPH_DATA}_${modelName}`;
             const timestampKey = `${STORAGE_KEYS.GRAPH_DATA_TIMESTAMP}_${modelName}`;
 
-            sessionStorage.setItem(cacheKey, JSON.stringify(data));
-            sessionStorage.setItem(timestampKey, Date.now().toString());
+            localStorage.setItem(cacheKey, JSON.stringify(data));
+            localStorage.setItem(timestampKey, Date.now().toString());
 
             console.log(`Cached graph data for "${modelName}"`);
         } catch (error) {
@@ -160,8 +199,9 @@ const Playground: React.FC = () => {
             const cacheKey = `${STORAGE_KEYS.GRAPH_DATA}_${modelName}`;
             const timestampKey = `${STORAGE_KEYS.GRAPH_DATA_TIMESTAMP}_${modelName}`;
 
-            sessionStorage.removeItem(cacheKey);
-            sessionStorage.removeItem(timestampKey);
+            localStorage.removeItem(cacheKey);
+            localStorage.removeItem(timestampKey);
+            clearOriginalGraphDataCache(modelName);
 
             console.log(`Cleared cache for "${modelName}"`);
         } catch (error) {
@@ -218,7 +258,7 @@ const Playground: React.FC = () => {
     useEffect(() => {
         const loadSavedModels = async () => {
             try {
-                const cached = sessionStorage.getItem("saved_models");
+                const cached = localStorage.getItem("saved_models");
                 if (cached) {
                     try {
                         const parsed = JSON.parse(cached);
@@ -227,7 +267,7 @@ const Playground: React.FC = () => {
                             return;
                         }
                     } catch (parseError) {
-                        sessionStorage.removeItem("saved_models");
+                        localStorage.removeItem("saved_models");
                     }
                 }
 
@@ -240,7 +280,7 @@ const Playground: React.FC = () => {
                 }));
 
                 if (formatted.length > 0) {
-                    sessionStorage.setItem("saved_models", JSON.stringify(formatted));
+                    localStorage.setItem("saved_models", JSON.stringify(formatted));
                     setSavedModels(formatted);
                 }
             } catch (error) {
@@ -268,7 +308,14 @@ const Playground: React.FC = () => {
                     setGraphData(cachedData);
                     setShowPlaceholder(false);
                     setIsLoading(false);
-                    return;
+
+                    const storedOriginal = getOriginalGraphData(currentStockName);
+
+                    if (storedOriginal) {
+                        originalGraphDataRef.current = JSON.parse(JSON.stringify(storedOriginal));
+                        originalModelNameRef.current = currentStockName;
+                        return;
+                    }
                 }
 
                 // If no cache, fetch from API
@@ -277,6 +324,13 @@ const Playground: React.FC = () => {
 
                 // Cache the fetched data
                 cacheGraphData(currentStockName, data);
+                if (!getOriginalGraphData(currentStockName)) {
+                    cacheOriginalGraphData(currentStockName, data);
+                }
+
+                const original = getOriginalGraphData(currentStockName) ?? data;
+                originalGraphDataRef.current = JSON.parse(JSON.stringify(original));
+                originalModelNameRef.current = currentStockName;
 
                 setGraphData(data);
                 setShowPlaceholder(false);
@@ -294,10 +348,10 @@ const Playground: React.FC = () => {
     // Handle visualization state changes
     useEffect(() => {
         if (visualizingModelId) {
-            sessionStorage.setItem("visualizing_model_id", visualizingModelId);
+            localStorage.setItem("visualizing_model_id", visualizingModelId);
             setShowPlaceholder(false);
         } else {
-            sessionStorage.removeItem("visualizing_model_id");
+            localStorage.removeItem("visualizing_model_id");
             setShowPlaceholder(true);
             setCurrentStockName("");
             setGraphData(null);
@@ -308,7 +362,7 @@ const Playground: React.FC = () => {
 
     const refreshSavedModels = useCallback(async () => {
         try {
-            const savedModels = sessionStorage.getItem('saved_models');
+            const savedModels = localStorage.getItem('saved_models');
             if (savedModels) {
                 const models = JSON.parse(savedModels);
                 setSavedModels(models);
@@ -327,11 +381,11 @@ const Playground: React.FC = () => {
             // Clear the cache for this model
             clearGraphDataCache(modelToRemove.name);
 
-            const currentSavedModels = sessionStorage.getItem('saved_models');
+            const currentSavedModels = localStorage.getItem('saved_models');
             if (currentSavedModels) {
                 const savedModels = JSON.parse(currentSavedModels);
                 const updatedModels = savedModels.filter((model: any) => model.guid !== modelToRemove.guid);
-                sessionStorage.setItem('saved_models', JSON.stringify(updatedModels));
+                localStorage.setItem('saved_models', JSON.stringify(updatedModels));
                 setSavedModels(prev => prev.filter(model => model.guid !== modelToRemove.guid));
             }
 
@@ -380,54 +434,65 @@ const Playground: React.FC = () => {
         }
     }, [isMobile]);
 
-    const handleSave = useCallback(() => {
-        if (!graphData || editedValue === null || editedValue === '' || editedValue === '-') return;
+const handleSave = useCallback(() => {
+  if (!graphData || editedValue === null || editedValue === '' || editedValue === '-') return;
 
-        const newValue = typeof editedValue === 'string' ? parseInt(editedValue, 10) : editedValue;
-        if (isNaN(newValue)) return;
+  const newValue =
+    typeof editedValue === 'string'
+      ? parseFloat(editedValue.replace(/,/g, ''))
+      : editedValue;
 
-        const newGraphData = JSON.parse(JSON.stringify(graphData));
+  if (!Number.isFinite(newValue) || isNaN(newValue)) return;
 
-        if (selectedNode) {
-            const nodeToUpdate = newGraphData.nodes.find((n: NodeData) => n.id === selectedNode.id);
-            if (nodeToUpdate) {
-                nodeToUpdate.value.value = newValue;
-            }
-        } else {
-            newGraphData.stock.value.value = newValue;
-            const mainStockNode = newGraphData.nodes.find((n: NodeData) => n.id === newGraphData.stock.guid);
-            if (mainStockNode) {
-                mainStockNode.value.value = newValue;
-            }
-        }
+  const newGraphData: GraphData = JSON.parse(JSON.stringify(graphData));
 
-        setGraphData(newGraphData);
+  const targetId = selectedNode ? selectedNode.id : newGraphData.stock.guid;
+  const isCenter = targetId === newGraphData.stock.guid;
 
-        // Update cache with new data
-        if (currentStockName) {
-            cacheGraphData(currentStockName, newGraphData);
-        }
+  // ✅ update node value
+  const nodeToUpdate = newGraphData.nodes.find((n: NodeData) => n.id === targetId);
+  if (nodeToUpdate) {
+    nodeToUpdate.value.value = newValue;
+  }
 
-        if (selectedNode) {
-            setSelectedNode(prev => prev ? { ...prev, value: { ...prev.value, value: newValue } } : null);
-        } else {
-            setGraphData(prev => prev ? {
-                ...prev,
-                stock: { ...prev.stock, value: { ...prev.stock.value, value: newValue } }
-            } : null);
-        }
+  // ✅ if it's center node, also update graphData.stock.value
+  if (isCenter) {
+    newGraphData.stock.value.value = newValue;
 
-        setToast({ type: "success", message: "Changes have been saved!" });
-        setEditedValue(null);
-    }, [selectedNode, editedValue, graphData]);
+    const mainStockNode = newGraphData.nodes.find((n: NodeData) => n.id === newGraphData.stock.guid);
+    if (mainStockNode) mainStockNode.value.value = newValue;
+  }
+
+  setGraphData(newGraphData);
+
+  if (currentStockName) {
+    cacheGraphData(currentStockName, newGraphData);
+  }
+
+  // keep selected node UI in sync
+  if (selectedNode) {
+    setSelectedNode(prev => prev ? { ...prev, value: { ...prev.value, value: newValue } } : null);
+  }
+
+  setToast({ type: "success", message: "Changes have been saved!" });
+  setEditedValue(null);
+}, [graphData, editedValue, selectedNode, currentStockName]);
+
 
     const handleValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
         if (val === '' || val === '-') {
             setEditedValue(val);
         } else {
-            const num = parseInt(val.replace(/,/g, ''), 10);
-            if (!isNaN(num)) {
+            const cleaned = val.replace(/,/g, '');
+
+            if (cleaned === '' || cleaned === '-' || cleaned === '.') {
+                setEditedValue(cleaned);
+                return;
+            }
+
+            const num = parseFloat(cleaned);
+            if (!Number.isNaN(num)) {
                 setEditedValue(num);
             }
         }
@@ -441,9 +506,74 @@ const Playground: React.FC = () => {
     const handleSliderChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => setSimulationValue(parseInt(e.target.value)), []);
 
     const handleReset = useCallback(() => {
+        // Reset sim UI state
         setSimulationValue(0);
         setIsPaused(false);
-    }, []);
+        setRunSimulation(false);
+        setIsSimulating(false);
+        setEditedValue(null);
+
+        if (!currentStockName) return;
+
+        // get original baseline snapshot
+        const original =
+            (originalModelNameRef.current === currentStockName ? originalGraphDataRef.current : null)
+            ?? getOriginalGraphData(currentStockName);
+
+        if (!original) return;
+
+        const restored: GraphData = JSON.parse(JSON.stringify(original));
+
+        // Restore model values
+        setGraphData(restored);
+
+        // Optional: restore working cache too (so refresh doesn't re-show edited values)
+        cacheGraphData(currentStockName, restored);
+
+        // clear selections
+        setSelectedNode(null);
+        setSelectedEdge(null);
+
+        setToast({ type: "success", message: "Reset to original values." });
+    }, [currentStockName]);
+
+    const handleSimulationComplete = useCallback((values: Record<string, number>) => {
+        setGraphData(prev => {
+            if (!prev) return prev;
+
+            const updated: GraphData = JSON.parse(JSON.stringify(prev));
+
+            // update all nodes
+            updated.nodes.forEach((n: any) => {
+                if (values[n.id] != null) n.value.value = values[n.id];
+            });
+
+            // update main stock
+            if (values[updated.stock.guid] != null) {
+                updated.stock.value.value = values[updated.stock.guid];
+
+                const mainNode = updated.nodes.find((n: any) => n.id === updated.stock.guid);
+                if (mainNode) mainNode.value.value = values[updated.stock.guid];
+            }
+
+            // persist working cache so next sim starts from last sim
+            if (currentStockName) {
+                cacheGraphData(currentStockName, updated);
+            }
+
+            return updated;
+        });
+
+        // keep selected node UI in sync
+        setSelectedNode(prev =>
+            prev && values[prev.id] != null
+                ? { ...prev, value: { ...prev.value, value: values[prev.id] } }
+                : prev
+        );
+
+        setToast({ type: "success", message: "Simulation completed and values persisted." });
+    }, [currentStockName]);
+
 
     const animateSimulation = useCallback(() => {
         setRunSimulation(true);
@@ -594,6 +724,8 @@ const Playground: React.FC = () => {
                                         <div className="relative">
                                             <input
                                                 type="number"
+                                                step="any"
+                                                inputMode="decimal"
                                                 value={editedValue !== null ? editedValue : Number((selectedNode?.value.value ?? graphData?.stock.value.value ?? 0).toFixed(2))}
                                                 onChange={handleValueChange}
                                                 className={`w-full p-3 pr-24 border rounded-lg font-bold transition-all ${isDarkMode
@@ -1249,6 +1381,7 @@ const Playground: React.FC = () => {
                                 runSimulation={runSimulation}
                                 isDarkMode={isDarkMode}
                                 nodeTheme={nodeTheme}
+                                onSimulationComplete={handleSimulationComplete}
                             />
 
                             {/* Mobile Controls Button - Floating */}
@@ -1299,6 +1432,8 @@ const Playground: React.FC = () => {
                                         <div className="relative">
                                             <input
                                                 type="number"
+                                                step="any"
+                                                inputMode="decimal"
                                                 value={editedValue !== null ? editedValue : Number((selectedNode?.value.value ?? graphData?.stock.value.value ?? 0).toFixed(2))}
                                                 onChange={handleValueChange}
                                                 className={`w-full p-2 pr-24 border rounded-lg font-bold transition-all ${isDarkMode

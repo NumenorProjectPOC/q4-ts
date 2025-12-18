@@ -106,7 +106,7 @@ const MainPage: React.FC = () => {
 
   const saveToStorage = (key: string, data: any) => {
     try {
-      sessionStorage.setItem(key, JSON.stringify(data));
+      localStorage.setItem(key, JSON.stringify(data));
       // Also save to localStorage for persistence across sessions
       localStorage.setItem(key, JSON.stringify(data));
     } catch (error) {
@@ -117,7 +117,7 @@ const MainPage: React.FC = () => {
   const loadFromStorage = (key: string) => {
     try {
       // Try sessionStorage first, then localStorage as fallback
-      const sessionData = sessionStorage.getItem(key);
+      const sessionData = localStorage.getItem(key);
       if (sessionData) {
         return JSON.parse(sessionData);
       }
@@ -126,7 +126,7 @@ const MainPage: React.FC = () => {
       if (localData) {
         const parsed = JSON.parse(localData);
         // Copy to sessionStorage for faster access
-        sessionStorage.setItem(key, localData);
+        localStorage.setItem(key, localData);
         return parsed;
       }
     } catch (error) {
@@ -142,7 +142,6 @@ const MainPage: React.FC = () => {
 
     if (!lastUpdated || (now - lastUpdated) > CACHE_DURATION) {
       // Clear old monitoring data
-      sessionStorage.removeItem(STORAGE_KEYS.MONITORING_DATA);
       localStorage.removeItem(STORAGE_KEYS.MONITORING_DATA);
       saveToStorage(STORAGE_KEYS.LAST_UPDATED, now);
     }

@@ -14,7 +14,7 @@ const Navbar: React.FC<{ showLogo?: boolean; showTabs?: boolean }> = ({
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const username = sessionStorage.getItem("username") || "Guest";
+  const username = localStorage.getItem("username") || "Guest";
 
   const handleSignOutClick = () => {
     setDropdownOpen(false);
@@ -22,7 +22,7 @@ const Navbar: React.FC<{ showLogo?: boolean; showTabs?: boolean }> = ({
   };
 
   const confirmSignOutHandler = () => {
-    sessionStorage.clear();
+    localStorage.clear();
     navigate("/");
   };
 

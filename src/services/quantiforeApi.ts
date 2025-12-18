@@ -35,7 +35,7 @@ export interface ComprehensiveAlertPayload {
 }
 
 const removeOrgUser = async (userId: string): Promise<void> => {
-  const token = sessionStorage.getItem("access_token");
+  const token = localStorage.getItem("access_token");
   const response = await fetch(`${API_BASE_URL}/org/org/remove-user`, {
     method: "POST",
     headers: {
@@ -51,7 +51,7 @@ const removeOrgUser = async (userId: string): Promise<void> => {
 };
 
 const addOrgUser = async (name: string, email: string): Promise<any> => {
-  const token = sessionStorage.getItem("access_token");
+  const token = localStorage.getItem("access_token");
   const response = await fetch(`${API_BASE_URL}/org/org/add-user`, {
     method: "POST",
     headers: {
@@ -170,7 +170,7 @@ async function fetchFavoriteStocks(fullData?: boolean): Promise<FavoriteStock[] 
 
 // Implementation
 async function fetchFavoriteStocks(fullData: boolean = false): Promise<FavoriteStock[] | FavoriteStockFull[]> {
-  const token = sessionStorage.getItem("access_token");
+  const token = localStorage.getItem("access_token");
   const response = await fetch(`${API_BASE_URL}/org/user/favorites`, {
     method: "GET",
     headers: {
@@ -204,7 +204,7 @@ async function fetchFavoriteStocks(fullData: boolean = false): Promise<FavoriteS
 
 // --- New API functions for AlertPage ---
 const updateAlertStatus = async (guid: string, monitored: boolean): Promise<void> => {
-  const token = sessionStorage.getItem("access_token");
+  const token = localStorage.getItem("access_token");
   const response = await fetch(`${API_BASE_URL}/org/user/favorites/${guid}`, {
     method: "PATCH",
     headers: {
@@ -220,7 +220,7 @@ const updateAlertStatus = async (guid: string, monitored: boolean): Promise<void
 };
 
 const deleteAlert = async (guid: string): Promise<void> => {
-  const token = sessionStorage.getItem("access_token");
+  const token = localStorage.getItem("access_token");
   const response = await fetch(`${API_BASE_URL}/org/user/favorites/${guid}`, {
     method: "DELETE",
     headers: {
@@ -235,7 +235,7 @@ const deleteAlert = async (guid: string): Promise<void> => {
 };
 
 const createAlert = async (alertData: Partial<FavoriteStockFull>): Promise<void> => {
-  const token = sessionStorage.getItem("access_token");
+  const token = localStorage.getItem("access_token");
   const response = await fetch(`${API_BASE_URL}/org/user/favorites`, {
     method: "POST",
     headers: {
@@ -251,7 +251,7 @@ const createAlert = async (alertData: Partial<FavoriteStockFull>): Promise<void>
 };
 
 const updateAlert = async (guid: string, alertData: Partial<FavoriteStockFull>): Promise<void> => {
-  const token = sessionStorage.getItem("access_token");
+  const token = localStorage.getItem("access_token");
   const response = await fetch(`${API_BASE_URL}/org/user/favorites/${guid}`, {
     method: "PUT",
     headers: {
@@ -267,7 +267,7 @@ const updateAlert = async (guid: string, alertData: Partial<FavoriteStockFull>):
 };
 
 const fetchSavedModel = async (): Promise<Model[]> => {
-  const token = sessionStorage.getItem("access_token");
+  const token = localStorage.getItem("access_token");
 
   try {
     const response = await fetch(`${API_BASE_URL}/org/user/saved-models`, {
@@ -292,7 +292,7 @@ const fetchSavedModel = async (): Promise<Model[]> => {
 };
 
 const fetchMonitoredStockData = async (guids: string[], days: number = 6000): Promise<any[]> => {
-  const token = sessionStorage.getItem("access_token");
+  const token = localStorage.getItem("access_token");
 
   try {
     const responses = await Promise.all(
@@ -323,7 +323,7 @@ const fetchMonitoredStockData = async (guids: string[], days: number = 6000): Pr
 };
 
 const fetchOrgUsers = async (signal?: AbortSignal): Promise<OrgUser[]> => {
-  const token = sessionStorage.getItem("access_token");
+  const token = localStorage.getItem("access_token");
   const response = await fetch(`${API_BASE_URL}/org/org/users`, {
     method: "GET",
     signal,
@@ -341,7 +341,7 @@ const fetchOrgUsers = async (signal?: AbortSignal): Promise<OrgUser[]> => {
 };
 
 const shareStockWithUser = async (userId: string, stockGuid: string): Promise<void> => {
-  const token = sessionStorage.getItem("access_token");
+  const token = localStorage.getItem("access_token");
   const response = await fetch(`${API_BASE_URL}/org/share-stock`, {
     method: "POST",
     headers: {
@@ -360,7 +360,7 @@ const shareStockWithUser = async (userId: string, stockGuid: string): Promise<vo
 };
 
 const removeFavoriteStock = async (favStocksGuid: string): Promise<void> => {
-  const token = sessionStorage.getItem("access_token");
+  const token = localStorage.getItem("access_token");
 
   try {
     const response = await fetch(`${API_BASE_URL}/org/user/retire-stock`, {
@@ -389,7 +389,7 @@ const removeFavoriteStock = async (favStocksGuid: string): Promise<void> => {
 };
 
 const removeSavedModel = async (guid: string): Promise<void> => {
-  const token = sessionStorage.getItem("access_token");
+  const token = localStorage.getItem("access_token");
 
   if (!token) {
     throw new Error("No access token found");
@@ -415,7 +415,7 @@ const removeSavedModel = async (guid: string): Promise<void> => {
 
 
 const shareSavedModel = async (userId: string, modelGuid: string): Promise<void> => {
-  const token = sessionStorage.getItem("access_token");
+  const token = localStorage.getItem("access_token");
   const res = await fetch(`${API_BASE_URL}/org/share-model`, {
     method: "POST",
     headers: {
@@ -440,7 +440,7 @@ const setStockAlert = async (
   email_notifications?: string[],
   phone_notifications?: string[]
 ): Promise<void> => {
-  const token = sessionStorage.getItem("access_token");
+  const token = localStorage.getItem("access_token");
 
   try {
     // For now, only send the original 3 parameters to match your existing API
@@ -480,7 +480,7 @@ const setStockAlert = async (
 };
 
 const toggleStockMonitoring = async (stock_guid: string, monitored: boolean): Promise<void> => {
-  const token = sessionStorage.getItem("access_token");
+  const token = localStorage.getItem("access_token");
 
   try {
     const response = await fetch(`${API_BASE_URL}/org/user/monitoring/toggle`, {
@@ -506,7 +506,7 @@ const toggleStockMonitoring = async (stock_guid: string, monitored: boolean): Pr
 };
 
 const addFavoriteStock = async (favStocksGuid: string): Promise<void> => {
-  const token = sessionStorage.getItem("access_token");
+  const token = localStorage.getItem("access_token");
 
   try {
     const response = await fetch(`${API_BASE_URL}/org/favorites/add`, {
@@ -534,7 +534,7 @@ const addFavoriteStock = async (favStocksGuid: string): Promise<void> => {
 };
 
 const addSavedModel = async (savedModelGuid: string): Promise<void> => {
-  const token = sessionStorage.getItem("access_token");
+  const token = localStorage.getItem("access_token");
 
   try {
     const response = await fetch(`${API_BASE_URL}/org/models/save`, {

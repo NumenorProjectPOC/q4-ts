@@ -40,9 +40,9 @@ const ShareModal: React.FC<ShareModalProps> = ({
         const fetched = await fetchOrgUsers();
 
         // Get current user info from multiple possible sessionStorage keys
-        const currentUserName = sessionStorage.getItem("username")?.trim();
-        const currentUserEmail = sessionStorage.getItem("email")?.trim() || sessionStorage.getItem("user_email")?.trim();
-        const currentUserId = sessionStorage.getItem("user_id")?.trim() || sessionStorage.getItem("userId")?.trim();
+        const currentUserName = localStorage.getItem("username")?.trim();
+        const currentUserEmail = localStorage.getItem("email")?.trim() || localStorage.getItem("user_email")?.trim();
+        const currentUserId = localStorage.getItem("user_id")?.trim() || localStorage.getItem("userId")?.trim();
 
         console.log("Current user info from sessionStorage:", {
           username: currentUserName,

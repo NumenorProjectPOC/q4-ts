@@ -3,6 +3,7 @@ import * as d3 from 'd3';
 import { GraphData, NodeData, LinkData } from '../services/types';
 import { formatLargeNumber, formatStockName } from '../utils/utility';
 import { Loader, RotateCcw } from 'lucide-react';
+import { enhancedSimulateStockGrowth } from '../utils/simulation';
 
 const TWC = {
   brand: {
@@ -149,6 +150,7 @@ interface GraphComponentProps {
   isLoading: boolean;
   isDarkMode?: boolean;
   nodeTheme?: NodeColorThemeName;
+  onSimulationComplete?: (values: Record<string, number>) => void;
 }
 
 const NODE_POSITIONS_KEY = 'nodePositions';
@@ -156,16 +158,16 @@ const USER_PINNED_KEY = 'userPinnedNodes';
 const ZOOM_KEY = 'zoomTransform';
 
 const loadPositions = (): Record<string, { x: number; y: number }> => {
-  try { return JSON.parse(sessionStorage.getItem(NODE_POSITIONS_KEY) || '{}'); } catch { return {}; }
+  try { return JSON.parse(localStorage.getItem(NODE_POSITIONS_KEY) || '{}'); } catch { return {}; }
 };
 const savePositions = (map: Record<string, { x: number; y: number }>) => {
-  sessionStorage.setItem(NODE_POSITIONS_KEY, JSON.stringify(map));
+  localStorage.setItem(NODE_POSITIONS_KEY, JSON.stringify(map));
 };
 const loadUserPinned = (): Record<string, boolean> => {
-  try { return JSON.parse(sessionStorage.getItem(USER_PINNED_KEY) || '{}'); } catch { return {}; }
+  try { return JSON.parse(localStorage.getItem(USER_PINNED_KEY) || '{}'); } catch { return {}; }
 };
 const saveUserPinned = (map: Record<string, boolean>) => {
-  sessionStorage.setItem(USER_PINNED_KEY, JSON.stringify(map));
+  localStorage.setItem(USER_PINNED_KEY, JSON.stringify(map));
 };
 
 const GraphComponent: React.FC<GraphComponentProps> = ({
@@ -179,20 +181,23 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
   simulationValue,
   runSimulation,
   isDarkMode = false,
+  onSimulationComplete,
   nodeTheme = 'realistic-dark'
 }) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-
   const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const zoomStateRef = useRef<d3.ZoomTransform>(d3.zoomIdentity);
-
   const simulationRef = useRef<d3.Simulation<any, any> | null>(null);
+  const committedRef = useRef(false);
+  const isAnimatingRef = useRef(false);
 
   const [nodeColors, setNodeColors] = useState<Record<string, string>>({});
   const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
   const [animatedValues, setAnimatedValues] = useState<Record<string, number>>({});
   const [initialRender, setInitialRender] = useState(true);
+
+  const animatedValuesRef = useRef(animatedValues);
 
   const [positionsStable, setPositionsStable] = useState(false);
   const [userPinned, setUserPinned] = useState<Record<string, boolean>>(() => loadUserPinned());
@@ -230,6 +235,10 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
   }, []);
 
   useEffect(() => {
+    animatedValuesRef.current = animatedValues;
+  }, [animatedValues]);
+
+  useEffect(() => {
     if (!containerRef.current) return;
     const update = () => {
       if (!containerRef.current) return;
@@ -263,8 +272,24 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
   }, [graphData]);
 
   useEffect(() => {
+  if (!graphData) return;
+
+  // Don't override the animation while simulation is running
+  if (isAnimatingRef.current) return;
+
+  const values: Record<string, number> = {};
+  graphData.nodes.forEach((n) => {
+    values[n.id] = n.value.value;
+  });
+  values[graphData.stock.guid] = graphData.stock.value.value;
+
+  setAnimatedValues(values);
+}, [graphData]);
+
+
+  useEffect(() => {
     if (!graphData || !containerDimensions.width) return;
-    const storedPositionsRaw = sessionStorage.getItem(NODE_POSITIONS_KEY);
+    const storedPositionsRaw = localStorage.getItem(NODE_POSITIONS_KEY);
 
     if (!storedPositionsRaw && nodes.length > 0) {
       const positions = calculateStablePositions(nodes, containerDimensions.width, containerDimensions.height);
@@ -302,7 +327,7 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
       }
     });
     setNodeColors(map);
-    sessionStorage.setItem('nodeColors', JSON.stringify(map));
+    localStorage.setItem('nodeColors', JSON.stringify(map));
   }, [nodes, graphData, activeTheme]);
 
   function getFontSize(text: string, radius: number, maxFont: number, minFont: number) {
@@ -329,12 +354,12 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
       .on('zoom', (event) => {
         zoomStateRef.current = event.transform;
         g.attr('transform', `translate(${event.transform.x},${event.transform.y}) scale(${event.transform.k})`);
-        sessionStorage.setItem(ZOOM_KEY, JSON.stringify({ x: event.transform.x, y: event.transform.y, k: event.transform.k }));
+        localStorage.setItem(ZOOM_KEY, JSON.stringify({ x: event.transform.x, y: event.transform.y, k: event.transform.k }));
       });
     zoomBehaviorRef.current = zoom;
     svg.call(zoom as any);
 
-    const savedZoomRaw = sessionStorage.getItem(ZOOM_KEY);
+    const savedZoomRaw = localStorage.getItem(ZOOM_KEY);
     if (savedZoomRaw) {
       try {
         const t = JSON.parse(savedZoomRaw);
@@ -551,7 +576,8 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
       .style('cursor', 'pointer')
       .on('click', (event: any, d: any) => {
         event.stopPropagation();
-        setSelectedElement(d);
+        const currentVal = animatedValuesRef.current[d.id] ?? d.value.value;
+        setSelectedElement({ ...d, value: { ...d.value, value: currentVal } });
       });
 
     const nodeGroups = g.append('g')
@@ -590,7 +616,8 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
       .style('cursor', 'pointer')
       .on('click', (event: any, d: any) => {
         event.stopPropagation();
-        setSelectedElement(d);
+        const currentVal = animatedValuesRef.current[d.id] ?? d.value.value;
+        setSelectedElement({ ...d, value: { ...d.value, value: currentVal } });
       });
 
     const labelColor = isDarkMode ? TWC.brand.secondary['50'] : TWC.brand.primary['900'];
@@ -889,64 +916,105 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graphData, nodes, links, containerDimensions, isDarkMode, activeTheme, positionsStable, userPinned, setSelectedElement]);
 
+  // --- Simulation & Animation Logic ---
   useEffect(() => {
     if (initialRender) { setInitialRender(false); return; }
     if (!graphData || !runSimulation) return;
+
+    isAnimatingRef.current = true;
+    committedRef.current = false;
 
     const startValues = nodes.reduce((acc, node) => {
       acc[node.id] = (node as any).value.value;
       return acc;
     }, {} as Record<string, number>);
 
-    let yearEquivalent = 0;
-    switch (simulationSettings.timeUnit) {
-      case 'days': yearEquivalent = simulationValue / 365; break;
-      case 'weeks': yearEquivalent = simulationValue / 52; break;
-      case 'months': yearEquivalent = simulationValue / 12; break;
-      case 'years': yearEquivalent = simulationValue; break;
+    // ensure center exists
+    if (startValues[graphData.stock.guid] == null) {
+      startValues[graphData.stock.guid] = graphData.stock.value.value;
     }
 
-    const targetValues = nodes.reduce((acc, node) => {
-      const growth = 0.02;
-      acc[node.id] = (node as any).value.value * Math.pow(1 + growth, yearEquivalent);
-      return acc;
-    }, {} as Record<string, number>);
+    const runCalculation = async () => {
+      await new Promise(resolve => setTimeout(resolve, 10));
 
-    const startTime = performance.now();
-    const duration = 2000;
+      const simulationResults = enhancedSimulateStockGrowth(
+        graphData,
+        simulationValue,
+        simulationSettings.timeUnit as any,
+        startValues
+      );
 
-    const animate = (now: number) => {
-      const elapsed = now - startTime;
-      const progress = Math.min(elapsed / duration, 1);
+      const startTime = performance.now();
+      const duration = 2000;
 
-      const newValues = nodes.reduce((acc, node) => {
-        acc[node.id] = startValues[node.id] + (targetValues[node.id] - startValues[node.id]) * progress;
-        return acc;
-      }, {} as Record<string, number>);
+      const ease = (t: number) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t);
 
-      setAnimatedValues(newValues);
+      const animate = (now: number) => {
+        const progress = Math.min((now - startTime) / duration, 1);
+        const eased = ease(progress);
 
-      if (progress < 1) requestAnimationFrame(animate);
+        const newValues = nodes.reduce((acc, node) => {
+          const start = startValues[node.id] ?? 0;
+          const target = simulationResults[node.id] ?? start;
+          acc[node.id] = start + (target - start) * eased;
+          return acc;
+        }, {} as Record<string, number>);
+
+        // include center too
+        if (newValues[graphData.stock.guid] == null) {
+          const start = startValues[graphData.stock.guid] ?? 0;
+          const target = simulationResults[graphData.stock.guid] ?? start;
+          newValues[graphData.stock.guid] = start + (target - start) * eased;
+        }
+
+        setAnimatedValues(newValues);
+
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          // ✅ persist results back to parent
+          if (!committedRef.current) {
+            committedRef.current = true;
+            isAnimatingRef.current = false;
+            onSimulationComplete?.(simulationResults);
+          }
+        }
+      };
+
+      requestAnimationFrame(animate);
     };
 
-    requestAnimationFrame(animate);
-  }, [runSimulation, simulationValue, simulationSettings, graphData, nodes]);
+    runCalculation();
+  }, [runSimulation, simulationValue, simulationSettings, graphData, nodes, onSimulationComplete]);
+
+
 
   useEffect(() => {
     if (!svgRef.current) return;
     const svg = d3.select(svgRef.current);
+
     svg.selectAll('.node-value')
-      .text((d: any) => {
+      .each(function (d: any) {
+        const el = d3.select(this);
+        // Get current value
         const v = animatedValues[d.id];
-        const rounded = v !== undefined ? Number(v.toFixed(2)) : Number(d.value.value.toFixed(2));
-        return formatLargeNumber(rounded, 2);
+        const finalVal = v !== undefined ? Number(v) : Number(d.value.value);
+        const formattedVal = formatLargeNumber(finalVal, 2);
+
+        // 1. Update the visible text number
+        el.text(formattedVal);
+
+        // 2. Update the Tooltip (Title) to show Value + Unit
+        // We remove the old title and append a new one to ensure it updates
+        el.select('title').remove();
+        el.append('title').text(`${formattedVal} ${d.value.unit}`);
       });
   }, [animatedValues]);
 
   const resetNodePositions = useCallback(() => {
-    sessionStorage.removeItem(NODE_POSITIONS_KEY);
-    sessionStorage.removeItem(USER_PINNED_KEY);
-    sessionStorage.removeItem(ZOOM_KEY);
+    localStorage.removeItem(NODE_POSITIONS_KEY);
+    localStorage.removeItem(USER_PINNED_KEY);
+    localStorage.removeItem(ZOOM_KEY);
     setUserPinned({});
     setPositionsStable(false);
   }, []);
@@ -994,12 +1062,12 @@ const GraphComponent: React.FC<GraphComponentProps> = ({
                   const svg = d3.select(svgRef.current);
                   svg.transition().duration(500).call(zoomBehaviorRef.current.transform, d3.zoomIdentity);
                   zoomStateRef.current = d3.zoomIdentity;
-                  sessionStorage.removeItem(ZOOM_KEY);
+                  localStorage.removeItem(ZOOM_KEY);
                 }
               }}
               className={`w-12 h-12 rounded-lg flex items-center justify-center shadow-md transition-all duration-200 hover:shadow-lg group border backdrop-blur-sm ${isDarkMode
-                  ? 'bg-slate-800/90 border-slate-700/50 text-white/80 hover:bg-slate-700/90 hover:text-white'
-                  : 'bg-white/90 border-neutral-200/60 text-neutral-600 hover:bg-white hover:text-neutral-900'
+                ? 'bg-slate-800/90 border-slate-700/50 text-white/80 hover:bg-slate-700/90 hover:text-white'
+                : 'bg-white/90 border-neutral-200/60 text-neutral-600 hover:bg-white hover:text-neutral-900'
                 }`}
               title="Reset Zoom"
             >

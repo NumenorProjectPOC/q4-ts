@@ -31,7 +31,7 @@ interface OrgUser {
 
 const SettingsPage: React.FC = () => {
   const { isDarkMode } = useTheme();
-  const userRole = sessionStorage.getItem("role");
+  const userRole = localStorage.getItem("role");
   const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   return (
@@ -413,7 +413,7 @@ const AdminSettings: React.FC = () => {
   const [newUserEmail, setNewUserEmail] = useState("");
   const [adding, setAdding] = useState(false);
 
-  const organizationName = sessionStorage.getItem("organization_name") || "Organization";
+  const organizationName = localStorage.getItem("organization_name") || "Organization";
 
   useEffect(() => {
     const controller = new AbortController();

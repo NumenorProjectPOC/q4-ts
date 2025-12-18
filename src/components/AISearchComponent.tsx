@@ -93,7 +93,7 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
     // Get current favorites from session storage
     const getCurrentFavorites = () => {
         try {
-            const cached = sessionStorage.getItem("favorite_stocks");
+            const cached = localStorage.getItem("favorite_stocks");
             if (cached) {
                 return JSON.parse(cached);
             }
@@ -268,7 +268,7 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                 await addSavedModel(stock.guid);
 
                 // Update saved models in session storage
-                const cachedModels = sessionStorage.getItem("saved_models");
+                const cachedModels = localStorage.getItem("saved_models");
                 let savedModels = cachedModels ? JSON.parse(cachedModels) : [];
 
                 const newSavedModel = {
@@ -282,7 +282,7 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                 const exists = savedModels.some((model: any) => model.guid === stock.guid);
                 if (!exists) {
                     savedModels.unshift(newSavedModel);
-                    sessionStorage.setItem("saved_models", JSON.stringify(savedModels));
+                    localStorage.setItem("saved_models", JSON.stringify(savedModels));
                 }
 
                 onShowToast?.('completed', `${stock.name} saved to models successfully!`);
@@ -291,7 +291,7 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                 // Save to favorite stocks (existing functionality)
                 await addFavoriteStock(stock.guid);
 
-                const cached = sessionStorage.getItem("favorite_stocks");
+                const cached = localStorage.getItem("favorite_stocks");
                 let favorites = cached ? JSON.parse(cached) : [];
 
                 const newFavorite = {
@@ -305,7 +305,7 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
                 const exists = favorites.some((fav: any) => fav.guid === stock.guid);
                 if (!exists) {
                     favorites.unshift(newFavorite);
-                    sessionStorage.setItem("favorite_stocks", JSON.stringify(favorites));
+                    localStorage.setItem("favorite_stocks", JSON.stringify(favorites));
                 }
 
                 onShowToast?.('completed', `${stock.name} added to favorites successfully!`);
@@ -331,11 +331,11 @@ const AISearchComponent: React.FC<AISearchComponentProps> = ({
         try {
             await removeFavoriteStock(stock.guid);
 
-            const cached = sessionStorage.getItem("favorite_stocks");
+            const cached = localStorage.getItem("favorite_stocks");
             if (cached) {
                 const favorites = JSON.parse(cached);
                 const updatedFavorites = favorites.filter((fav: any) => fav.guid !== stock.guid);
-                sessionStorage.setItem("favorite_stocks", JSON.stringify(updatedFavorites));
+                localStorage.setItem("favorite_stocks", JSON.stringify(updatedFavorites));
             }
 
             onRemoveFromFavorites?.(stock);

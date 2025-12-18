@@ -22,14 +22,14 @@ export const StockProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     const loadStocks = async () => {
       try {
-        const cached = sessionStorage.getItem("favoriteStocks");
+        const cached = localStorage.getItem("favoriteStocks");
         if (cached) {
           setStockOptions(JSON.parse(cached));
           setLoading(false);
         } else {
           const fetched = await fetchFavoriteStocks();
           setStockOptions(fetched);
-          sessionStorage.setItem("favoriteStocks", JSON.stringify(fetched));
+          localStorage.setItem("favoriteStocks", JSON.stringify(fetched));
         }
       } catch (err) {
         console.error("Error loading stocks", err);

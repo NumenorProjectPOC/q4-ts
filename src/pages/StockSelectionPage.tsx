@@ -56,7 +56,7 @@ const StockSelectionPage: React.FC = () => {
   };
 
   const handleNext = () => {
-    sessionStorage.setItem('selectedStocks', JSON.stringify(selectedStocks));
+    localStorage.setItem('selectedStocks', JSON.stringify(selectedStocks));
     navigate('/monitoring'); // Changed to /main
   };
 
