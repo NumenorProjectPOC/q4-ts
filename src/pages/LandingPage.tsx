@@ -36,10 +36,10 @@ const LandingPage: React.FC = () => {
 
     const navItems = [
         { name: 'About', href: '#about' },
-        { name: 'Features', href: '#features' },
         { name: 'Solutions', href: '#solutions' },
-        { name: 'Demo', href: '#demo' },
-        { name: 'Pricing', href: '#pricing' }
+        { name: 'Features', href: '#features' },
+        // { name: 'Demo', href: '#demo' },
+        // { name: 'Pricing', href: '#pricing' }
     ];
 
     // Responsive breakpoint detection
@@ -55,24 +55,24 @@ const LandingPage: React.FC = () => {
         return () => window.removeEventListener('resize', checkScreenSize);
     }, []);
 
-    useEffect(() => {
-        const handleSmoothScroll = (e: Event) => {
-            const target = e.target as HTMLAnchorElement;
-            if (target.tagName === 'A' && target.getAttribute('href')?.startsWith('#')) {
-                const id = target.getAttribute('href');
-                if (id && id.length > 1) {
-                    const element = document.querySelector(id);
-                    if (element) {
-                        e.preventDefault();
-                        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        setIsMobileMenuOpen(false);
-                    }
-                }
-            }
-        };
-        document.addEventListener('click', handleSmoothScroll);
-        return () => document.removeEventListener('click', handleSmoothScroll);
-    }, []);
+    // useEffect(() => {
+    //     const handleSmoothScroll = (e: Event) => {
+    //         const target = e.target as HTMLAnchorElement;
+    //         if (target.tagName === 'A' && target.getAttribute('href')?.startsWith('#')) {
+    //             const id = target.getAttribute('href');
+    //             if (id && id.length > 1) {
+    //                 const element = document.querySelector(id);
+    //                 if (element) {
+    //                     e.preventDefault();
+    //                     element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    //                     setIsMobileMenuOpen(false);
+    //                 }
+    //             }
+    //         }
+    //     };
+    //     document.addEventListener('click', handleSmoothScroll);
+    //     return () => document.removeEventListener('click', handleSmoothScroll);
+    // }, []);
 
     // Reduce animation frequency on mobile for performance
     useEffect(() => {
@@ -117,6 +117,18 @@ const LandingPage: React.FC = () => {
     const handleLoginClick = () => {
         navigate('/login');
     };
+
+    const scrollToSection = (href: string) => {
+        const el = document.querySelector(href) as HTMLElement | null;
+        if (!el) return;
+
+        // your header is fixed: mobile h-16 (64px), desktop h-20 (80px)
+        const headerOffset = isMobile ? 72 : 96; // give a bit of breathing space
+        const top = el.getBoundingClientRect().top + window.scrollY - headerOffset;
+
+        window.scrollTo({ top, behavior: "smooth" });
+    };
+
 
     const currentYear = new Date().getFullYear();
 
@@ -317,7 +329,12 @@ const LandingPage: React.FC = () => {
                             <div className="hidden md:flex items-center space-x-8">
                                 {navItems.map((item, index) => (
                                     <motion.a
-                                        key={item.name} href={item.href}
+                                        key={item.name}
+                                        href={item.href}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            scrollToSection(item.href);
+                                        }}
                                         className={`relative px-5 py-3 rounded-lg text-sm font-medium transition-all duration-300 group ${isDarkMode ? 'text-white/85 hover:text-white' : 'text-neutral-700/90 hover:text-neutral-900'
                                             }`}
                                         initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
@@ -393,7 +410,15 @@ const LandingPage: React.FC = () => {
                             <div className="px-4 py-4 space-y-1">
                                 {navItems.map((item, index) => (
                                     <motion.a
-                                        key={item.name} href={item.href}
+                                        key={item.name}
+                                        href={item.href}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            setIsMobileMenuOpen(false);
+
+                                            // wait a tick so menu starts closing, then scroll
+                                            setTimeout(() => scrollToSection(item.href), 50);
+                                        }}
                                         className={`block px-4 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${isDarkMode ? 'text-white/85 hover:text-white hover:bg-white/10' : 'text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100/60'
                                             }`}
                                         initial={{ opacity: 0, x: -20 }} animate={{ opacity: isMobileMenuOpen ? 1 : 0, x: isMobileMenuOpen ? 0 : -20 }}
@@ -659,7 +684,7 @@ const LandingPage: React.FC = () => {
             )}
 
             {/* About Section */}
-            <section id="about" className={`${isMobile ? 'py-16' : 'py-24'} transition-all duration-500 ${isDarkMode ? 'bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white'
+            <section id="about" className={`scroll-mt-16 ${isMobile ? 'py-16' : 'py-24'} transition-all duration-500 ${isDarkMode ? 'bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white'
                 : 'bg-gradient-to-br from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
                 }`}>
                 <div className={`max-w-7xl mx-auto ${isMobile ? 'px-4' : 'px-4 sm:px-6 lg:px-8'}`}>
@@ -728,7 +753,7 @@ const LandingPage: React.FC = () => {
             </section>
 
             {/* Features Section */}
-            <section id="features" className={`${isMobile ? 'py-16' : 'py-24'} transition-all duration-500 ${isDarkMode ? 'bg-gradient-to-tr from-slate-900 via-slate-950 to-black text-white'
+            <section id="features" className={`scroll-mt-20 ${isMobile ? 'py-16' : 'py-24'} transition-all duration-500 ${isDarkMode ? 'bg-gradient-to-tr from-slate-900 via-slate-950 to-black text-white'
                 : 'bg-gradient-to-tr from-brand-secondary-950 via-white to-brand-secondary-900 text-gray-900'
                 }`}>
                 <div className={`max-w-7xl mx-auto ${isMobile ? 'px-4' : 'px-4 sm:px-6 lg:px-8'}`}>
@@ -847,13 +872,20 @@ const LandingPage: React.FC = () => {
             </section>
 
             {/* Footer */}
-            <footer className={`${isMobile ? 'py-16' : 'py-20'} transition-all duration-500 ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-brand-secondary-950 text-neutral-800 border-t border-neutral-200'
-                }`}>
+            <footer className={`${isMobile ? 'py-16' : 'pt-18 pb-4'} transition-all duration-500 ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-brand-secondary-950 text-neutral-800 border-t border-neutral-200'}`}>
                 <div className={`max-w-7xl mx-auto ${isMobile ? 'px-4' : 'px-4 sm:px-6 lg:px-8'}`}>
-                    <div className={`grid ${isMobile ? 'grid-cols-1 gap-8' : 'md:grid-cols-4 gap-12'}`}>
+                    {/* Grid Container */}
+                    <div className={`grid ${isMobile ? 'grid-cols-1 gap-12' : 'md:grid-cols-2 gap-12'}`}>
+
+                        {/* Left Side: Logo and Intro */}
                         <div className={isMobile ? 'text-center' : ''}>
-                            <img src={isDarkMode ? "/qf-logo-light.svg" : "/qf-logo-dark.svg"} alt="Quantifore" className={`h-10 ${isMobile ? 'mx-auto' : ''} mb-4 drop-shadow-sm`} loading="lazy" />
-                            <p className={`leading-relaxed font-medium ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'} ${isMobile ? 'text-sm' : 'text-base'}`} style={{ lineHeight: 1.6 }}>
+                            <img
+                                src={isDarkMode ? "/qf-logo-light.svg" : "/qf-logo-dark.svg"}
+                                alt="Quantifore"
+                                className={`h-10 ${isMobile ? 'mx-auto' : ''} mb-4 drop-shadow-sm`}
+                                loading="lazy"
+                            />
+                            <p className={`leading-relaxed font-medium ${isDarkMode ? 'text-neutral-400' : 'text-neutral-600'} ${isMobile ? 'text-sm' : 'text-base'}`} style={{ maxWidth: '400px', margin: isMobile ? '0 auto' : '0' }}>
                                 {isMobile
                                     ? "Transform your data into intelligence with AI-powered analytics."
                                     : "Transform your data into intelligence with AI-powered analytics and predictive insights for better business decisions."
@@ -861,32 +893,35 @@ const LandingPage: React.FC = () => {
                             </p>
                         </div>
 
-                        {!isMobile && (
-                            <>
-                                <div>
-                                    <h4 className={`font-bold text-lg mb-6 leading-tight ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>Product</h4>
-                                    <div className="space-y-3">
-                                        {['Features', 'Pricing', 'API', 'Integration'].map(link => (<a key={link} href="#" className={`block transition-all hover:translate-x-1 leading-relaxed ${isDarkMode ? 'text-neutral-400 hover:text-white' : 'text-neutral-600 hover:text-neutral-900'}`}>{link}</a>))}
-                                    </div>
-                                </div>
-                                <div>
-                                    <h4 className={`font-bold text-lg mb-6 leading-tight ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>Company</h4>
-                                    <div className="space-y-3">
-                                        {['About', 'Careers', 'Blog', 'Contact'].map(link => (<a key={link} href="#" className={`block transition-all hover:translate-x-1 leading-relaxed ${isDarkMode ? 'text-neutral-400 hover:text-white' : 'text-neutral-600 hover:text-neutral-900'}`}>{link}</a>))}
-                                    </div>
-                                </div>
-                                <div>
-                                    <h4 className={`font-bold text-lg mb-6 leading-tight ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>Support</h4>
-                                    <div className="space-y-3">
-                                        {['Help Center', 'Documentation', 'Status', 'Security'].map(link => (<a key={link} href="#" className={`block transition-all hover:translate-x-1 leading-relaxed ${isDarkMode ? 'text-neutral-400 hover:text-white' : 'text-neutral-600 hover:text-neutral-900'}`}>{link}</a>))}
-                                    </div>
-                                </div>
-                            </>
-                        )}
+                        {/* Right Side: Navigation Links (Visible on mobile too based on your request) */}
+                        <div className={isMobile ? 'text-center' : 'md:pl-20'}>
+                            <h4 className={`font-bold text-lg mb-6 leading-tight ${isDarkMode ? 'text-white' : 'text-neutral-900'}`}>
+                                Product
+                            </h4>
+                            <nav className={`flex flex-col space-y-3 ${isMobile ? 'items-center' : ''}`}>
+                                {['About', 'Solutions', 'Features'].map((link) => (
+                                    <a
+                                        key={link}
+                                        href={`#${link.toLowerCase()}`}
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            document.getElementById(link.toLowerCase())?.scrollIntoView({ behavior: 'smooth' });
+                                        }}
+                                        className={`block transition-all hover:translate-x-1 leading-relaxed cursor-pointer ${isDarkMode ? 'text-neutral-400 hover:text-white' : 'text-neutral-600 hover:text-neutral-900'
+                                            }`}
+                                    >
+                                        {link}
+                                    </a>
+                                ))}
+                            </nav>
+                        </div>
                     </div>
 
-                    <div className={`border-t ${isMobile ? 'mt-8 pt-6' : 'mt-16 pt-8'} text-center ${isDarkMode ? 'border-slate-700/30 text-neutral-400' : 'border-neutral-200 text-neutral-600'}`}>
-                        <p className={`leading-relaxed ${isMobile ? 'text-sm' : 'text-base'}`}>© {currentYear} Quantifore. All rights reserved. Built with passion for data-driven teams.</p>
+                    {/* Bottom Copyright Section */}
+                    <div className={`border-t ${isMobile ? 'mt-12 pt-6' : 'mt-16 pt-8'} text-center ${isDarkMode ? 'border-slate-700/30 text-neutral-400' : 'border-neutral-200 text-neutral-600'}`}>
+                        <p className={`leading-relaxed ${isMobile ? 'text-sm' : 'text-base'}`}>
+                            © {new Date().getFullYear()} Quantifore. All rights reserved. Built with passion for data-driven teams.
+                        </p>
                     </div>
                 </div>
             </footer>
