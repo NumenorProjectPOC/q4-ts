@@ -1,7 +1,6 @@
 import { Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext'; // Add this import
 import Login from './pages/LoginPage';
-import LandingPage from './pages/LandingPage';
 import RegionSelectionPage from './pages/RegionSelectionPage';
 import MainPage from './pages/MainPage';
 import Playground from './pages/Playground';
@@ -187,7 +186,7 @@ const App: React.FC = () => {
             type: 'warning',
             message: 'Session expired. Please log in again.',
           });
-          navigate('/landing');
+          navigate('/login');
         } else {
           // Valid session
           setIsAuthenticated(true);
@@ -257,12 +256,13 @@ const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <Routes>
-        {/* Landing page as default route */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/landing" element={<LandingPage />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
+          {/* Change the default path to redirect to Login */}
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/login" element={<Login />} />
+          {/* If someone hits /landing, send them to the external site */}
+          <Route path="/landing" element={<ExternalRedirect url={import.meta.env.VITE_LANDING_PAGE_URL} />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
 
       {toast && (
         <Toast
@@ -273,6 +273,14 @@ const App: React.FC = () => {
       )}
     </ErrorBoundary>
   );
+};
+
+// Simple helper component for external redirects
+const ExternalRedirect = ({ url }: { url: string }) => {
+    useEffect(() => {
+        window.location.href = url;
+    }, [url]);
+    return null;
 };
 
 /**

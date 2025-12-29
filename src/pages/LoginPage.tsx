@@ -83,9 +83,9 @@ export default function LoginPage() {
     }
   };
 
-  const handleBackToHome = () => {
-    navigate("/");
-  };
+const handleBackToHome = () => {
+    window.location.href = import.meta.env.VITE_LANDING_PAGE_URL;
+};
 
   // PROFESSIONAL & NEUTRAL: Updated background effect configuration
   const backgroundEffectConfig = useMemo(() => ({
