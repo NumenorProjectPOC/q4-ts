@@ -115,7 +115,8 @@ const LandingPage: React.FC = () => {
     };
 
     const handleLoginClick = () => {
-        navigate('/login');
+        // This takes the user to the other domain
+        window.location.href = `${import.meta.env.VITE_PRODUCT_APP_URL}/login`;
     };
 
     const scrollToSection = (href: string) => {
